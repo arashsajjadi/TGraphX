@@ -1,0 +1,16 @@
+name: tgraphx
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pyyaml
+  - jupyterlab
+  - notebook
+  - ipykernel
+  - matplotlib
+  - pandas
+  - pip
+  - pip:
+      - pytest
+      - tqdm
