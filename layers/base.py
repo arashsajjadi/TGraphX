@@ -16,11 +16,18 @@ class TensorMessagePassingLayer(nn.Module):
     The default aggregation is implemented using index_add.
     """
 
-    def __init__(self, in_shape, out_shape, aggr='sum'):
+    def __init__(self, in_shape, out_shape, aggr='sum', dropout_prob=0.0, residual=False, use_batchnorm=False):
         super().__init__()
-        self.in_shape = in_shape  # e.g., (C,) or (C, H, W) etc.
-        self.out_shape = out_shape  # similar structure as in_shape but possibly different channels
+        self.in_shape = in_shape
+        self.out_shape = out_shape
         self.aggr = aggr
+        self.dropout_prob = dropout_prob
+        self.residual = residual
+        self.use_batchnorm = use_batchnorm
+        if use_batchnorm:
+            self.bn = nn.BatchNorm1d(out_shape[0])  # for flattened node features
+        self.dropout = nn.Dropout(p=dropout_prob) if dropout_prob > 0 else None
+
 
     def message(self, src, dest, edge_attr):
         r"""Compute message for each edge.
@@ -60,31 +67,18 @@ class TensorMessagePassingLayer(nn.Module):
         return aggregated
 
     def update(self, node_feature, aggregated_message):
-        r"""Update node features given the aggregated messages.
-
-        Default implementation simply returns the aggregated message.
-        Subclasses can override this (e.g., adding residual connections).
-
-        Args:
-            node_feature (Tensor): Original node features.
-            aggregated_message (Tensor): Aggregated message for each node.
-
-        Returns:
-            Tensor: Updated node features.
-        """
-        return aggregated_message
+        out = aggregated_message
+        if self.use_batchnorm:
+            out = self.bn(out)
+        if self.dropout:
+            out = self.dropout(out)
+        if self.residual:
+            # Only add skip connection if dimensions match
+            if node_feature.shape == out.shape:
+                out = node_feature + out
+        return out
 
     def forward(self, node_features, edge_index, edge_features=None):
-        r"""Forward pass for message passing.
-
-        Args:
-            node_features (Tensor): Node features of shape [N, ...].
-            edge_index (LongTensor): Edge indices of shape [2, E].
-            edge_features (Tensor, optional): Edge features of shape [E, ...].
-
-        Returns:
-            Tensor: Updated node features.
-        """
         src_idx = edge_index[0]
         dest_idx = edge_index[1]
         src_features = node_features[src_idx]
@@ -103,15 +97,12 @@ class LinearMessagePassing(TensorMessagePassingLayer):
     edge features) then passes the result through a learnable linear module.
     """
 
-    def __init__(self, in_shape, out_shape, aggr='sum', use_edge_features=False):
-        super().__init__(in_shape, out_shape, aggr)
+    def __init__(self, in_shape, out_shape, aggr='sum', use_edge_features=False,
+                 dropout_prob=0.0, residual=False, use_batchnorm=False):
+        super().__init__(in_shape, out_shape, aggr, dropout_prob=dropout_prob, residual=residual, use_batchnorm=use_batchnorm)
         self.use_edge_features = use_edge_features
-        # in_shape is expected to be a tuple like (C,)
         in_dim = in_shape[0]
-        if self.use_edge_features:
-            linear_in_dim = in_dim * 3  # source, destination, edge features
-        else:
-            linear_in_dim = in_dim * 2  # source and destination only
+        linear_in_dim = in_dim * 3 if use_edge_features else in_dim * 2
         self.message_linear = nn.Linear(linear_in_dim, out_shape[0])
 
     def message(self, src, dest, edge_attr):

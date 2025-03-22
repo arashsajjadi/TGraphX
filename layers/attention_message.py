@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -5,59 +6,50 @@ from .base import TensorMessagePassingLayer
 
 
 class AttentionMessagePassing(TensorMessagePassingLayer):
-    r"""Attention-based message passing layer.
-
-    This layer computes attention coefficients for each edge based on projected and
-    flattened node features. Optionally, edge features can be included.
-    """
-    def __init__(self, in_shape, out_shape, aggr='sum', use_edge_features=False):
-        super().__init__(in_shape, out_shape, aggr)
+    def __init__(self, in_shape, out_shape, aggr='sum', use_edge_features=False,
+                 dropout_prob=0.0, residual=False, use_batchnorm=False):
+        super().__init__(in_shape, out_shape, aggr, dropout_prob=dropout_prob,
+                         residual=residual, use_batchnorm=use_batchnorm)
         self.use_edge_features = use_edge_features
-        # Flatten the input tensor shape (excluding batch) to a single dimension.
-        self.flatten_dim = 1
-        for d in in_shape:
-            self.flatten_dim *= d
-        self.query_proj = nn.Linear(self.flatten_dim, out_shape[0])
-        self.key_proj = nn.Linear(self.flatten_dim, out_shape[0])
-        self.value_proj = nn.Linear(self.flatten_dim, out_shape[0])
-        if self.use_edge_features:
-            self.edge_proj = nn.Linear(self.flatten_dim, out_shape[0])
+        self.out_dim = out_shape[0]
+        # Scaling factor: 1/sqrt(d)
+        self.scale = math.sqrt(self.out_dim)
+
+        # If the input is multi-dimensional (e.g. (C, H, W)) then use 1x1 convolutions;
+        # otherwise (if it's a vector) use Linear layers.
+        if len(in_shape) > 1:
+            # in_shape example: (C, H, W)
+            self.query_proj = nn.Conv2d(in_shape[0], self.out_dim, kernel_size=1)
+            self.key_proj = nn.Conv2d(in_shape[0], self.out_dim, kernel_size=1)
+            self.value_proj = nn.Conv2d(in_shape[0], self.out_dim, kernel_size=1)
+            if self.use_edge_features:
+                self.edge_proj = nn.Conv2d(in_shape[0], self.out_dim, kernel_size=1)
+        else:
+            self.flatten_dim = in_shape[0]
+            self.query_proj = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+            self.key_proj = nn.Linear(self.flatten_dim, self.out_dim)
+            self.value_proj = nn.Linear(self.flatten_dim, self.out_dim)
+            if self.use_edge_features:
+                self.edge_proj = nn.Linear(self.flatten_dim, self.out_dim)
 
     def message(self, src, dest, edge_attr):
-        # Flatten node features (for each edge)
+        # Flatten node features for each edge
         src_flat = src.view(src.size(0), -1)
         dest_flat = dest.view(dest.size(0), -1)
-        query = self.query_proj(dest_flat)  # query from destination node
-        key = self.key_proj(src_flat)         # key from source node
-        value = self.value_proj(src_flat)       # value from source node
+        # Compute projections
+        query = self.query_proj(dest_flat)
+        key = self.key_proj(src_flat)
+        value = self.value_proj(src_flat)
         if self.use_edge_features and edge_attr is not None:
             edge_flat = edge_attr.view(edge_attr.size(0), -1)
             edge_value = self.edge_proj(edge_flat)
             value = value + edge_value
-        # Compute raw attention scores (dot product)
-        attn_scores = (query * key).sum(dim=-1, keepdim=True)
-        attn_scores = F.leaky_relu(attn_scores)
-        # Concatenate attention score and value so that aggregation can compute a weighted sum.
-        return torch.cat([attn_scores, value], dim=-1)
+        # Compute raw attention scores with scaling
+        raw_scores = (query * key).sum(dim=-1, keepdim=True) / self.scale
+        attn_scores = F.leaky_relu(raw_scores)
+        # Instead of concatenating, apply a sigmoid to get attention coefficients
+        attn = torch.sigmoid(attn_scores)
+        # Weight the value with the attention coefficients.
+        # This keeps the output dimension the same as out_dim.
+        return value * attn
 
-    def aggregate(self, messages, edge_index, num_nodes):
-        r"""Aggregate messages using attention.
-
-        The first column of `messages` contains the raw attention scores, and the remaining
-        columns contain the corresponding value vectors. A softmax is computed per destination node.
-        """
-        target = edge_index[1]
-        attn_scores = messages[:, 0:1]  # shape: [E, 1]
-        values = messages[:, 1:]        # shape: [E, out_channels]
-        # Compute normalized attention per destination node.
-        exp_scores = torch.exp(attn_scores)
-        denom = torch.zeros(num_nodes, 1, device=messages.device)
-        denom = denom.index_add(0, target, exp_scores)
-        norm_attn = exp_scores / (denom[target] + 1e-16)
-        weighted_values = norm_attn * values
-        aggregated = torch.zeros(num_nodes, values.size(1), device=messages.device)
-        aggregated = aggregated.index_add(0, target, weighted_values)
-        return aggregated
-
-    def update(self, node_feature, aggregated_message):
-        return aggregated_message

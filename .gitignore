@@ -1,0 +1,12 @@
+# Ignore IDE and cache
+.idea/
+__pycache__/
+*.pyc
+
+# Ignore data files
+examples/CIFAR10/data/
+*.tar.gz
+*.png
+
+# Ignore Jupyter checkpoints
+.ipynb_checkpoints/
