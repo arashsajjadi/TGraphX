@@ -32,14 +32,24 @@ class CNN_GNN_Model(nn.Module):
 
     def forward(self, raw_node_data, edge_index, edge_features=None, batch=None):
         # Process raw node data through the CNN encoder (and optional pre-encoder).
-        node_features = self.encoder(raw_node_data)
-        x = node_features
+        cnn_out = self.encoder(raw_node_data)  # This is the spatial feature map [N, C, H, W]
+        x = cnn_out  # Start GNN processing with the CNN output.
+
+        # Pass through the GNN layers.
         for layer in self.gnn_layers:
             x = layer(x, edge_index, edge_features)
             x = torch.relu(x)
-        # If x is multi-dimensional (e.g. [N, C, H, W]), average over spatial dimensions.
+
+        # Optional extra skip connection: combine GNN output with raw CNN output.
+        if hasattr(self, 'skip_cnn_to_classifier') and self.skip_cnn_to_classifier:
+            # Make sure cnn_out and x have the same dimensions.
+            # For example, if they differ only by a residual connection, you can simply sum them:
+            x = x + cnn_out
+
+        # Spatial pooling: average over spatial dimensions (H, W).
         if x.dim() > 2:
             x = x.mean(dim=tuple(range(2, x.dim())))
+
         # For graph-level tasks, aggregate nodes by batch.
         if batch is not None:
             num_graphs = batch.max().item() + 1
@@ -52,3 +62,4 @@ class CNN_GNN_Model(nn.Module):
             logits = self.classifier(pooled)
             return logits
         return self.classifier(x)
+
