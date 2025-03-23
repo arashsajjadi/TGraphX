@@ -1,0 +1,38 @@
+# IDE and Python cache
+.idea/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Model files and large data
+*.pt
+*.ckpt
+*.tar.gz
+*.zip
+*.h5
+*.pkl
+*.npy
+
+# Image and result files
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tiff
+
+# XML annotations or temp files
+*.xml
+
+# Ignore any data folders anywhere under examples/
+examples/**/data/
+examples/**/Full_Object_Detection_Graph_Modeling_YOLOv11_RetinaNet_TGraphX_files/
+
+# Specific unneeded files
+examples/Object_Detection/Full_Object_Detection_Graph_Modeling_YOLOv11_RetinaNet_TGraphX.md
+
+# Ignore any future submodules or folders we don’t want to track
+examples/Object_Detection/**/.git
