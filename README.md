@@ -1,23 +1,26 @@
-<<<<<<< HEAD
+
+
 # TGraphX
 
-TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNNs) that work with node and edge features of any dimension. The code is designed for flexibility, easy GPU-acceleration, and rapid prototyping of new GNN ideas.
+TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNNs) that work with node and edge features of any dimension while retaining their **spatial layout**. The code is designed for flexibility, easy GPU-acceleration, and rapid prototyping of new GNN ideas, **especially** those that need to preserve local spatial details (e.g., image or volumetric patches).  
 
-> **Note:** The current architecture is new and under active development. Some features (like the skip connection and spatial message passing via CNN aggregators) are experimental.
+> **Note:** The current architecture is new and under active development. Some features (like the skip connection and spatial message passing via CNN aggregators) are **experimental**. The overall design, however, is rooted in rigorous theoretical and practical foundations aiming to unify convolutional neural networks (CNNs) with GNN-based relational reasoning.  
 
----
-
+---  
 ## Table of Contents
 
 - [Overview](#overview)
 - [Key Features](#key-features)
+- [Architecture Highlights](#architecture-highlights)
 - [Installation](#installation)
 - [Folder Structure](#folder-structure)
 - [Core Components](#core-components)
 - [Layers](#layers)
 - [Models](#models)
 - [Configuration Options](#configuration-options)
+- [Advanced Topics](#advanced-topics)
 - [Examples](#examples)
+- [Novelties and Contributions](#novelties-and-contributions)
 - [License](#license)
 
 ---
@@ -26,68 +29,93 @@ TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNN
 
 TGraphX provides a modular way to create GNNs by combining several components:
 
-1. **Graph Representation:**  
-   A `Graph` class holds node features, edge indices, and optional edge features.
+1. **Graph Representation**  
+   A `Graph` class holds node features, edge indices, and optional edge features. Unlike traditional GNNs where node features are vectors, TGraphX supports multi-dimensional features such as `[C, H, W]` tensors—making it particularly effective for vision tasks.
 
-2. **Message Passing Layers:**  
-   Customizable layers that process messages between nodes while preserving the spatial layout of features. New updates allow the message passing to treat node features as spatial maps (e.g., image patches) rather than flattening them into vectors. This is achieved with:
-   - **ConvMessagePassing:** Uses 1×1 convolutions on concatenated spatial features.
-   - **DeepCNNAggregator:** A deep CNN (by default 4 layers) that aggregates spatial messages, keeping full spatial structure intact.
+2. **Message Passing Layers**  
+   Customizable layers process messages between nodes *while preserving the spatial layout of features*. In TGraphX:
+   - **ConvMessagePassing** uses `1×1` convolutions on concatenated spatial features (e.g., `Conv1×1(Concat(Xi, Xj, Eij))`).
+   - **DeepCNNAggregator** is a deep CNN (default 4 layers) that refines aggregated messages, keeping their spatial structure intact (i.e., `[C, H, W]` shape).
 
-3. **Models:**  
+3. **Models**  
    Pre-built models combine a CNN encoder with GNN layers:
-   - **CNN Encoder:** Processes raw image patches into spatial feature maps.
-   - **Optional Pre‑Encoder:** Pre-processes patches using a ResNet‑like network (with an option to use pretrained ResNet‑18).
-   - **Unified CNN‑GNN Model:** Passes spatial features through GNN message passing layers and then pools them for final classification.
-   - An extra skip connection (if enabled) can merge the raw CNN patch output with the GNN output for better gradient flow.
+   - **CNN Encoder** processes raw image patches into spatial feature maps (e.g., `[C, H, W]`).
+   - **Optional Pre-Encoder** (e.g., ResNet-like) can be enabled to further refine raw patches before the main CNN encoder.
+   - **Unified CNN‑GNN Model** uses CNN encoders for local features and GNN layers for global relational reasoning, then pools the result for final classification.
+   - An extra *skip connection* (if enabled) merges the raw CNN patch output with the GNN output for better gradient flow and more stable learning.
+
+---  
+## Key Features
+
+- **Support for Arbitrary Dimensions**  
+  Handle vectors, 2D images, or even volumetric 3D patches as node features.  
+
+- **Spatial Message Passing**  
+  Messages preserve spatial dimensions (e.g., `[C, H, W]`), letting convolutional filters capture local patterns and avoid destructive flattening of features.
+
+- **Deep Aggregation**  
+  A deep CNN aggregator (with multiple `3×3` convolutions, batch normalization, dropout, and ReLU) refines messages across multiple hops, enabling better local–global fusion.
+
+- **Optional Pre‑Encoder**  
+  Pre-process raw patches with a ResNet-like module (or even load a pretrained ResNet-18) to enrich features before the main GNN pipeline.
+
+- **Flexible Data Loading**  
+  TGraphX includes custom dataset and data loader classes (`GraphDataset` and `GraphDataLoader`) for direct graph-based batching.
+
+- **Configurable Skip Connections**  
+  Enable or disable skip connections that pass CNN outputs directly into the final stages, improving gradient flow.
 
 ---
 
-## Key Features
+## Architecture Highlights
 
-- **Support for Arbitrary Dimensions:**  
-  Work with vectors, images, or even volumetric data.
-- **Spatial Message Passing:**  
-  Processes each node’s feature map as an image. Pairwise messages preserve the spatial dimensions, so convolutional filters can capture local patterns.
-- **Deep Aggregation:**  
-  Uses a deep CNN aggregator that applies multiple 3×3 convolutions (with batch normalization, ReLU, and dropout) on the spatial messages.
-- **Optional Pre‑Encoder:**  
-  Pre-processes raw image patches with a ResNet‑like module. You can load pretrained ResNet‑18 weights or use a custom module.
-- **Flexible Data Loading:**  
-  Includes custom dataset and data loader classes for graphs.
-- **Configurable Skip Connections:**  
-  Optionally pass raw CNN features directly to the classifier, enhancing gradient flow and preserving fine spatial details.
+### Preserving Spatial Fidelity
+Unlike conventional GNNs that flatten node features into vectors, TGraphX retains the full spatial layout `[C, H, W]` at each node. This ensures that local pixel-level (or voxel-level) structure, which is crucial for vision tasks, remains intact throughout the message passing process.
+
+### Convolution-Based Message Passing
+TGraphX implements message passing via `Conv1×1(Concat(Xi, Xj, Eij))`. This approach:
+- Respects spatial alignment (i.e., each spatial location in one node’s feature map can directly interact with the same location in its neighbors’ feature maps).
+- Preserves the dimension `[C, H, W]`, avoiding vector flattening.
+- Optionally incorporates edge features `Eij` for more advanced relational cues (e.g., distances, bounding-box overlaps).
+
+### Deep CNN Aggregator with Residuals
+Messages from neighbors are aggregated (summed or averaged) and then passed to a **deep CNN aggregator** that uses multiple `3×3` convolutions with *residual skips*. This design:
+- Prevents the overwriting of original features by always adding `Aggregator(mj)` to the old node state `Xj`.
+- Facilitates stable gradient flow in deep GNN stacks.
+- Broadens the effective receptive field in feature space, capturing both local patches and more distant interactions.
+
+### End-to-End Differentiability
+Every stage of TGraphX—patch extraction, optional pre-encoder, CNN encoder, graph construction, message passing, aggregation, and classification—remains **fully differentiable** in PyTorch. This end-to-end design simplifies model development, parameter tuning, and experimentation with novel GNN layers.
 
 ---
 
 ## Installation
 
-1. **Clone the Repository:**
+1. **Clone the Repository**  
    ```bash
    git clone https://github.com/YourUsername/TGraphX.git
    cd TGraphX
    ```
 
-2. **Set Up the Environment:**  
+2. **Set Up the Environment**  
    Use the provided `environment.yml` to create a conda environment:
    ```bash
    conda env create -f environment.yml
    conda activate tgraphx
    ```
 
-3. **Install PyTorch:**  
-   Install a recent version of [PyTorch](https://pytorch.org/) (use the GPU version if available).
+3. **Install PyTorch**  
+   Install a recent version of [PyTorch](https://pytorch.org/) (GPU version if possible).  
 
-4. **Install Additional Dependencies:**  
-   For example, run:
+4. **Install Additional Dependencies**  
    ```bash
    pip install -r requirements.txt
    ```
 
-5. **Editable Mode (Optional):**
+5. **Editable Mode (Optional)**  
    ```bash
    pip install -e .
-   ```
+   ```  
 
 ---
 
@@ -97,22 +125,22 @@ TGraphX provides a modular way to create GNNs by combining several components:
 TGraphX/
 ├── __init__.py
 ├── core/
-│   ├── dataloader.py      # Dataset and DataLoader classes for graph data.
-│   ├── graph.py           # Graph and GraphBatch data structures.
-│   └── utils.py           # Utility functions (e.g., load_config, get_device).
+│   ├── dataloader.py        # Dataset and DataLoader classes for graph data.
+│   ├── graph.py             # Graph and GraphBatch data structures.
+│   └── utils.py             # Utility functions (e.g., load_config, get_device).
 ├── layers/
-│   ├── aggregator.py      # Deep CNN aggregator to combine spatial messages.
-│   ├── attention_message.py  # Attention-based message passing layer.
-│   ├── base.py           # Base class for all message passing layers.
-│   ├── conv_message.py    # Convolution-based message passing that keeps spatial maps.
-│   └── safe_pool.py       # Safe max pooling module for small spatial sizes.
+│   ├── aggregator.py        # Deep CNN aggregator to combine spatial messages.
+│   ├── attention_message.py # Attention-based message passing layer.
+│   ├── base.py              # Base class for all message passing layers.
+│   ├── conv_message.py      # Convolution-based message passing that keeps spatial maps.
+│   └── safe_pool.py         # Safe max pooling module for small spatial sizes.
 ├── models/
-│   ├── cnn_encoder.py     # CNN encoder with optional residual connections and safe pooling.
-│   ├── cnn_gnn_model.py   # Unified CNN‑GNN model that integrates the CNN encoder and GNN layers.
+│   ├── cnn_encoder.py       # CNN encoder with optional residual connections and safe pooling.
+│   ├── cnn_gnn_model.py     # Unified CNN‑GNN model integrating CNN encoder + GNN layers.
 │   ├── graph_classifier.py  # Model for graph-level classification.
 │   ├── node_classifier.py   # Model for node-level classification.
-│   └── pre_encoder.py     # Optional pre‑encoder module (ResNet‑18 or custom).
-├── examples/              # Jupyter notebooks demonstrating TGraphX usage.
+│   └── pre_encoder.py       # Optional pre‑encoder module (ResNet‑18 or custom).
+├── examples/                # Jupyter notebooks demonstrating TGraphX usage.
 │   ├── node_classification_tensor.ipynb
 │   ├── graph_classification_volumetric.ipynb
 │   ├── graph_to_image_ssim.ipynb
@@ -126,92 +154,99 @@ TGraphX/
 ## Core Components
 
 ### Graph and Data Loading
-- **`Graph` & `GraphBatch`:**  
-  Represent individual graphs and batches of graphs.
-- **`GraphDataset` & `GraphDataLoader`:**  
-  Simplify data loading and batching of graph data.
+
+- **`Graph` & `GraphBatch`**  
+  Represent individual graphs (nodes, edges) and batches of graphs. The batch version offsets node indices to avoid collisions, allowing parallel processing in PyTorch.
+
+- **`GraphDataset` & `GraphDataLoader`**  
+  Custom dataset and data loader classes that streamline the creation of graph batches from a set of images, patches, or other structured data.
 
 ### Utility Functions
-- **`load_config`:** Load YAML/JSON configuration files.
-- **`get_device`:** Returns the available device (GPU or CPU).
+
+- **`load_config`**  
+  Load YAML/JSON configuration files to keep hyperparameters consistent across experiments.
+
+- **`get_device`**  
+  Utility to automatically detect and return the correct device (GPU or CPU).
 
 ---
 
 ## Layers
 
 ### Base Layer
-- **`TensorMessagePassingLayer`:**  
-  The abstract base class for message passing layers. It defines the interface for the message, aggregation, and update steps while preserving spatial dimensions.
+
+- **`TensorMessagePassingLayer`**  
+  An abstract base class that defines the interface (message, aggregate, update steps) for all message passing. Crucially, it handles multi-dimensional node features (e.g., `[C, H, W]`).
 
 ### Convolution-Based Message Passing
-- **`ConvMessagePassing`:**  
-  Concatenates source and destination node feature maps (and optional edge features) along the channel dimension and applies a 1×1 convolution.  
-  - **Message Phase:**  
-    Processes each pair of node features as a spatial map.
-  - **Update Phase:**  
-    Uses the **DeepCNNAggregator** to aggregate these spatial messages with multiple convolutional layers.
+
+- **`ConvMessagePassing`**  
+  Concatenates source and target node feature maps (plus optional edge features) along the channel dimension and applies a `1×1` convolution:
+  ```python
+  Mij = Conv1×1(Concat(Xi, Xj, Eij))
+  ```
+  - **Message Phase**: Each pair `(i, j)` of nodes exchanges messages computed by a `1×1` conv.
+  - **Aggregation + Residual Update**: After summing messages from neighbors, a deep CNN aggregator processes the sum, and the original node features are updated via a **residual skip**.
 
 ### Deep CNN Aggregator
-- **`DeepCNNAggregator`:**  
-  A series of convolutional layers (default 4 layers) that operate on spatial feature maps. Each layer uses a 3×3 kernel, batch normalization, ReLU activation, and dropout to preserve spatial details and ensure good gradient flow.
+
+- **`DeepCNNAggregator`**  
+  A stack of `3×3` convolutional layers with batch normalization, ReLU, and dropout. It refines the aggregated messages:
+  ```python
+  X'_j = X_j + A( m_j )
+  ```
+  where `m_j = sum of messages to node j`. Residual connections ensure stable gradient flow.
 
 ### Attention-Based Message Passing
-- **`AttentionMessagePassing`:**  
-  Uses attention mechanisms on spatial maps by applying 1×1 convolutions to compute query, key, and value maps while preserving the spatial structure.
+
+- **`AttentionMessagePassing`**  
+  An alternative that uses `1×1` convolutions to compute query, key, and value maps for each node. Spatial alignment is preserved while attention weights scale incoming messages. Useful for tasks needing dynamic connectivity or weighting.
 
 ### Safe Pooling
-- **`SafeMaxPool2d`:**  
-  A pooling layer that checks if the input’s spatial dimensions are large enough before applying max pooling.
+
+- **`SafeMaxPool2d`**  
+  A robust pooling module that checks if spatial dimensions `[H, W]` are large enough before applying max pooling. Prevents dimension mismatch errors in deeper aggregator stacks.
 
 ---
 
 ## Models
 
 ### CNN Encoder and Pre-Encoder
-- **`CNNEncoder`:**  
-  Converts raw node image patches into spatial feature maps using several convolutional layers.  
-  - **Optional Pre‑Encoder:**  
-    If provided, the pre‑encoder (from `pre_encoder.py`) pre-processes raw image patches. This module can load a pretrained ResNet‑18 or use a custom architecture.
-  
+
+- **`CNNEncoder`**  
+  Converts raw patches (`[C_in, patch_H, patch_W]`) into *spatial feature maps* (e.g., `[C_out, H2, W2]`). Includes:
+  - Multiple 3×3 conv blocks with BN, ReLU, and dropout.
+  - Optional residual connections.
+  - Safe max pooling if the spatial size remains large.
+
+- **Optional Pre‑Encoder**  
+  - If `use_preencoder` is `True`, a **ResNet‑like** (or fully custom) module first processes each patch, returning refined features with the same spatial structure.  
+  - `pretrained_resnet` can load weights from a standard ResNet‑18 for transfer learning.
+
 ### Unified CNN‑GNN Model
-- **`CNN_GNN_Model`:**  
-  Combines a CNN encoder (with optional pre‑encoder) with GNN message passing layers.  
-  - The CNN encoder produces spatial feature maps from image patches.
-  - The GNN layers (using `ConvMessagePassing`) process these spatial maps without flattening.
-  - An optional skip connection can merge raw CNN outputs with GNN outputs for better gradient flow.
-  - Final spatial pooling is applied before classification.
+
+- **`CNN_GNN_Model`**  
+  A single pipeline that:
+  1. Splits the image into patches, optionally uses `PreEncoder`.
+  2. Feeds patches into `CNNEncoder` to get `[C, H, W]` maps.
+  3. Builds a graph where each node holds a `[C, H, W]` map.
+  4. Applies multiple GNN layers (like `ConvMessagePassing` + `DeepCNNAggregator`).
+  5. Optionally uses a skip connection to combine CNN outputs with GNN outputs.
+  6. Performs final spatial pooling before classification.
 
 ### Graph & Node Classification Models
-- **`GraphClassifier`:**  
-  Uses GNN message passing and pooling to perform graph-level classification.
-- **`NodeClassifier`:**  
-  Stacks simple message passing layers (using linear transformations) for node-level classification.
+
+- **`GraphClassifier`**  
+  Intended for graph-level tasks (e.g., classification of an entire image or object ensemble). Combines message passing with a final pooling layer (mean, max, or attention) over nodes, then feeds the result into a classifier.
+
+- **`NodeClassifier`**  
+  Suitable for node-level tasks (e.g., labeling each patch or region). Stacks simpler message passing layers for classification on each node separately.
 
 ---
 
 ## Configuration Options
 
-The framework is highly configurable. Key options include:
-
-- **CNN Encoder Settings (`cnn_params`):**  
-  Control the number of layers, channels, dropout, and whether to use batch normalization or residual connections.
-
-- **Pre‑Encoder Settings:**  
-  - `use_preencoder`: Enable or disable the pre‑encoder stage.
-  - `pretrained_resnet`: Choose to load pretrained ResNet‑18 weights.
-  - `preencoder_params`: Parameters for the pre‑encoder (e.g., number of channels).
-
-- **GNN Settings:**  
-  - `gnn_in_dim` and `gnn_hidden_dim`: Define the input and hidden dimensions for GNN layers.
-  - `num_gnn_layers`: How many GNN message passing layers to stack.
-  - `gnn_dropout` and `residual`: Dropout rate and whether to use skip connections in GNN layers.
-
-- **Aggregator Settings (`aggregator_params`):**  
-  Define the number of layers, dropout, and batch normalization options for the deep CNN aggregator.
-
----
-
-## Sample Configuration
+TGraphX is highly configurable. Some key parameters include:
 
 ```python
 config = {
@@ -248,414 +283,92 @@ config = {
 }
 ```
 
-To disable the pre‑encoder or ResNet‑18, set `"use_preencoder": False` or `"pretrained_resnet": False` accordingly.
+- **`cnn_params`**: Controls the CNN encoder architecture (e.g., channels, dropout, pooling).
+- **`use_preencoder`**: Boolean indicating whether to preprocess patches with a custom or pretrained module.  
+- **`pretrained_resnet`**: If `True`, loads pretrained ResNet-18 weights in the pre-encoder.  
+- **`gnn_in_dim`, `gnn_hidden_dim`**: Shapes of the node features in GNN layers. Each dimension can be `[C, H, W]`.  
+- **`num_gnn_layers`**: How many message passing layers to stack.  
+- **`aggregator_params`**: Depth, dropout, and BN usage in the aggregator.  
+- **`residual`**: Enables skip connections in the GNN layers.  
 
 ---
-## Visual Summary (Just an Example – e.g., Conceptual Diagram)
 
-```
-+-------------------------------+
-| Raw Node Image Patch (3x8x8)   |  <-- Each patch is an image-like tensor.
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|       Pre-Encoder             |  <-- Optional: Preprocess patch using ResNet-like (or custom) module.
-| (if enabled, maintains spatial|
-|  structure; output shape:      |
-|    [N, 32, H, W])              |
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|         CNN Encoder           |  <-- Processes the (preprocessed) patch into a spatial feature map.
-| (Multiple conv layers, with    |
-|  residual connections; output: |
-|   [N, 64, 5, 5])               |
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|    GNN Layers (Message       |  <-- For each pair (edge) of nodes, features are concatenated 
-|    Passing using ConvMessage  |      spatially (keeping [C, H, W] format) and processed via 1×1 conv.
-|    Passing)                   |      Then aggregated using a deep CNN aggregator.
-| (Output: [N, 128, 5, 5])       |
-+-------------------------------+
-             │
-             ▼
-+------------------------------------------+
-| Optional Skip Connection:                |  <-- If enabled, add original CNN encoder output (patch features)
-| Combine (sum or concatenate) CNN output    |      to GNN output for richer gradient flow.
-| with GNN output.                         |
-+------------------------------------------+
-             │
-             ▼
-+-------------------------------+
-|   Spatial Pooling             |  <-- Average over spatial dimensions (H, W) to get a vector.
-|   (Output: [N, 128])           |
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|       Classifier              |  <-- Fully connected layer maps pooled features to class logits.
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|         Final Decision        |  <-- Predicted class labels.
-+-------------------------------+
-```
+## Advanced Topics
 
-![mermaid-ai-diagram-2025-03-23-002525.png](examples/mermaid-ai-diagram-2025-03-23-002525.png)
+### Theoretical Insights
+
+1. **Universal Approximation via Deep CNN**  
+   Stacking multiple convolutional layers with residual skips (in both the CNN encoder and the aggregator) enhances the effective receptive field and helps approximate complex local feature maps.
+
+2. **Residual Learning for Gradient Flow**  
+   Residual connections in both the CNN encoder and aggregator mitigate vanishing gradients, allowing deeper structures to train effectively end-to-end.
+
+3. **Spatial vs. Flattened Features**  
+   Preserving the `[C, H, W]` layout at each node addresses a key limitation in conventional GNNs—loss of local spatial semantics. TGraphX’s design is grounded in the observation that many vision tasks require capturing fine-grained local details alongside global relational structures.
+
+### Possible Extensions
+
+- **Adaptive Edge Construction**  
+  Dynamically compute adjacency based on patch similarity or learned attention, rather than fixed proximity thresholds.
+
+- **Mixed Modalities**  
+  Combine image data with textual or numerical features by storing them as separate channels or separate GNN streams.
+
+- **Task-Specific Losses**  
+  Add auxiliary losses (e.g., bounding-box IoU or segmentation overlap) for detection or segmentation tasks, integrated into the GNN training loop.
+
+- **Performance Optimizations**  
+  Use group convolutions or low-rank factorization in the aggregator to reduce memory and computational overhead.
+
 ---
 
 ## Examples
 
-Check the `examples/` folder for Jupyter notebooks that demonstrate:
-- Node classification using image patches as graph nodes.
-- Graph classification with volumetric data.
-- Image reconstruction from graphs using SSIM loss.
+Several Jupyter notebooks in `examples/` demonstrate:
+
+1. **Node Classification with Image Patches**  
+   - `node_classification_tensor.ipynb` – Shows how to treat each patch as a node and classify nodes individually.
+
+2. **Graph Classification with Volumetric Data**  
+   - `graph_classification_volumetric.ipynb` – Illustrates how TGraphX handles volumetric patches (e.g., `[C, D, H, W]`) and aggregates them using 3D convolutions or custom aggregator modules.
+
+3. **Image-to-Graph Reconstruction using SSIM**  
+   - `graph_to_image_ssim.ipynb` – Demonstrates how TGraphX can reconstruct images from patch-level graphs via a structural similarity (SSIM) loss, highlighting the benefits of preserving spatial detail.
+
+For a *visual summary* of the pipeline, see `comparison.png` or the block diagram in the main paper.
+
+---
+
+## Novelties and Contributions
+
+TGraphX departs from traditional GNN designs in several ways:
+
+1. **Full Spatial Fidelity**  
+   Each node in the graph remains a *multi-dimensional* feature map rather than a flattened vector, preserving local spatial relationships crucial for vision tasks.
+
+2. **Convolution-Based Message Passing**  
+   Employing `1×1` convolutions on `[C, H, W]` feature maps lets neighboring patches exchange information at *every pixel location*, ensuring alignment and detail retention.
+
+3. **Deep Residual Aggregation**  
+   Multiple `3×3` CNN layers in the aggregator—complete with batch normalization, ReLU, dropout, and skip connections—allow the model to fuse multi-hop messages in a stable, expressive manner.
+
+4. **End-to-End Differentiable**  
+   From raw image patches to final classification or detection outputs, **all** steps—CNN feature extraction, graph construction, message passing, and aggregator updates—are trained jointly, strengthening synergy between local feature extraction and relational reasoning.
+
+5. **Modular & Extensible**  
+   - Allows easy substitution of the aggregator or attention-based message passing layers.
+   - Accommodates multiple data modalities (image, volumetric, or otherwise).
+   - Scales from small graphs (few patches) to larger patch partitions for high-resolution images.
+
+These innovations build on earlier GNN research while pushing further to **retain** all the valuable local details that are typically lost in flattened GNN nodes.
 
 ---
 
 ## License
 
-TGraphX is released under the [MIT License](https://opensource.org/licenses/MIT). See the LICENSE file for more details.
+TGraphX is released under the [MIT License](https://opensource.org/licenses/MIT). See the `LICENSE` file for more details.
 
 ---
 
-**Enjoy exploring and developing your graph neural networks with TGraphX!**  
-If you have any questions or suggestions, please feel free to open an issue or submit a pull request.
-
-=======
-# TGraphX
-
-TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNNs) that work with node and edge features of any dimension. The code is designed for flexibility, easy GPU-acceleration, and rapid prototyping of new GNN ideas.
-
-> **Note:** The current architecture is new and under active development. Some features (like the skip connection and spatial message passing via CNN aggregators) are experimental.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Installation](#installation)
-- [Folder Structure](#folder-structure)
-- [Core Components](#core-components)
-- [Layers](#layers)
-- [Models](#models)
-- [Configuration Options](#configuration-options)
-- [Examples](#examples)
-- [License](#license)
-
----
-
-## Overview
-
-TGraphX provides a modular way to create GNNs by combining several components:
-
-1. **Graph Representation:**  
-   A `Graph` class holds node features, edge indices, and optional edge features.
-
-2. **Message Passing Layers:**  
-   Customizable layers that process messages between nodes while preserving the spatial layout of features. New updates allow the message passing to treat node features as spatial maps (e.g., image patches) rather than flattening them into vectors. This is achieved with:
-   - **ConvMessagePassing:** Uses 1×1 convolutions on concatenated spatial features.
-   - **DeepCNNAggregator:** A deep CNN (by default 4 layers) that aggregates spatial messages, keeping full spatial structure intact.
-
-3. **Models:**  
-   Pre-built models combine a CNN encoder with GNN layers:
-   - **CNN Encoder:** Processes raw image patches into spatial feature maps.
-   - **Optional Pre‑Encoder:** Pre-processes patches using a ResNet‑like network (with an option to use pretrained ResNet‑18).
-   - **Unified CNN‑GNN Model:** Passes spatial features through GNN message passing layers and then pools them for final classification.
-   - An extra skip connection (if enabled) can merge the raw CNN patch output with the GNN output for better gradient flow.
-
----
-
-## Key Features
-
-- **Support for Arbitrary Dimensions:**  
-  Work with vectors, images, or even volumetric data.
-- **Spatial Message Passing:**  
-  Processes each node’s feature map as an image. Pairwise messages preserve the spatial dimensions, so convolutional filters can capture local patterns.
-- **Deep Aggregation:**  
-  Uses a deep CNN aggregator that applies multiple 3×3 convolutions (with batch normalization, ReLU, and dropout) on the spatial messages.
-- **Optional Pre‑Encoder:**  
-  Pre-processes raw image patches with a ResNet‑like module. You can load pretrained ResNet‑18 weights or use a custom module.
-- **Flexible Data Loading:**  
-  Includes custom dataset and data loader classes for graphs.
-- **Configurable Skip Connections:**  
-  Optionally pass raw CNN features directly to the classifier, enhancing gradient flow and preserving fine spatial details.
-
----
-
-## Installation
-
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/YourUsername/TGraphX.git
-   cd TGraphX
-   ```
-
-2. **Set Up the Environment:**  
-   Use the provided `environment.yml` to create a conda environment:
-   ```bash
-   conda env create -f environment.yml
-   conda activate tgraphx
-   ```
-
-3. **Install PyTorch:**  
-   Install a recent version of [PyTorch](https://pytorch.org/) (use the GPU version if available).
-
-4. **Install Additional Dependencies:**  
-   For example, run:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-5. **Editable Mode (Optional):**
-   ```bash
-   pip install -e .
-   ```
-
----
-
-## Folder Structure
-
-```
-TGraphX/
-├── __init__.py
-├── core/
-│   ├── dataloader.py      # Dataset and DataLoader classes for graph data.
-│   ├── graph.py           # Graph and GraphBatch data structures.
-│   └── utils.py           # Utility functions (e.g., load_config, get_device).
-├── layers/
-│   ├── aggregator.py      # Deep CNN aggregator to combine spatial messages.
-│   ├── attention_message.py  # Attention-based message passing layer.
-│   ├── base.py           # Base class for all message passing layers.
-│   ├── conv_message.py    # Convolution-based message passing that keeps spatial maps.
-│   └── safe_pool.py       # Safe max pooling module for small spatial sizes.
-├── models/
-│   ├── cnn_encoder.py     # CNN encoder with optional residual connections and safe pooling.
-│   ├── cnn_gnn_model.py   # Unified CNN‑GNN model that integrates the CNN encoder and GNN layers.
-│   ├── graph_classifier.py  # Model for graph-level classification.
-│   ├── node_classifier.py   # Model for node-level classification.
-│   └── pre_encoder.py     # Optional pre‑encoder module (ResNet‑18 or custom).
-├── examples/              # Jupyter notebooks demonstrating TGraphX usage.
-│   ├── node_classification_tensor.ipynb
-│   ├── graph_classification_volumetric.ipynb
-│   ├── graph_to_image_ssim.ipynb
-│   └── comparison.png
-├── environment.yml
-└── README.md
-```
-
----
-
-## Core Components
-
-### Graph and Data Loading
-- **`Graph` & `GraphBatch`:**  
-  Represent individual graphs and batches of graphs.
-- **`GraphDataset` & `GraphDataLoader`:**  
-  Simplify data loading and batching of graph data.
-
-### Utility Functions
-- **`load_config`:** Load YAML/JSON configuration files.
-- **`get_device`:** Returns the available device (GPU or CPU).
-
----
-
-## Layers
-
-### Base Layer
-- **`TensorMessagePassingLayer`:**  
-  The abstract base class for message passing layers. It defines the interface for the message, aggregation, and update steps while preserving spatial dimensions.
-
-### Convolution-Based Message Passing
-- **`ConvMessagePassing`:**  
-  Concatenates source and destination node feature maps (and optional edge features) along the channel dimension and applies a 1×1 convolution.  
-  - **Message Phase:**  
-    Processes each pair of node features as a spatial map.
-  - **Update Phase:**  
-    Uses the **DeepCNNAggregator** to aggregate these spatial messages with multiple convolutional layers.
-
-### Deep CNN Aggregator
-- **`DeepCNNAggregator`:**  
-  A series of convolutional layers (default 4 layers) that operate on spatial feature maps. Each layer uses a 3×3 kernel, batch normalization, ReLU activation, and dropout to preserve spatial details and ensure good gradient flow.
-
-### Attention-Based Message Passing
-- **`AttentionMessagePassing`:**  
-  Uses attention mechanisms on spatial maps by applying 1×1 convolutions to compute query, key, and value maps while preserving the spatial structure.
-
-### Safe Pooling
-- **`SafeMaxPool2d`:**  
-  A pooling layer that checks if the input’s spatial dimensions are large enough before applying max pooling.
-
----
-
-## Models
-
-### CNN Encoder and Pre-Encoder
-- **`CNNEncoder`:**  
-  Converts raw node image patches into spatial feature maps using several convolutional layers.  
-  - **Optional Pre‑Encoder:**  
-    If provided, the pre‑encoder (from `pre_encoder.py`) pre-processes raw image patches. This module can load a pretrained ResNet‑18 or use a custom architecture.
-  
-### Unified CNN‑GNN Model
-- **`CNN_GNN_Model`:**  
-  Combines a CNN encoder (with optional pre‑encoder) with GNN message passing layers.  
-  - The CNN encoder produces spatial feature maps from image patches.
-  - The GNN layers (using `ConvMessagePassing`) process these spatial maps without flattening.
-  - An optional skip connection can merge raw CNN outputs with GNN outputs for better gradient flow.
-  - Final spatial pooling is applied before classification.
-
-### Graph & Node Classification Models
-- **`GraphClassifier`:**  
-  Uses GNN message passing and pooling to perform graph-level classification.
-- **`NodeClassifier`:**  
-  Stacks simple message passing layers (using linear transformations) for node-level classification.
-
----
-
-## Configuration Options
-
-The framework is highly configurable. Key options include:
-
-- **CNN Encoder Settings (`cnn_params`):**  
-  Control the number of layers, channels, dropout, and whether to use batch normalization or residual connections.
-
-- **Pre‑Encoder Settings:**  
-  - `use_preencoder`: Enable or disable the pre‑encoder stage.
-  - `pretrained_resnet`: Choose to load pretrained ResNet‑18 weights.
-  - `preencoder_params`: Parameters for the pre‑encoder (e.g., number of channels).
-
-- **GNN Settings:**  
-  - `gnn_in_dim` and `gnn_hidden_dim`: Define the input and hidden dimensions for GNN layers.
-  - `num_gnn_layers`: How many GNN message passing layers to stack.
-  - `gnn_dropout` and `residual`: Dropout rate and whether to use skip connections in GNN layers.
-
-- **Aggregator Settings (`aggregator_params`):**  
-  Define the number of layers, dropout, and batch normalization options for the deep CNN aggregator.
-
----
-
-## Sample Configuration
-
-```python
-config = {
-    "cnn_params": {
-         "in_channels": 3,
-         "out_features": 64,
-         "num_layers": 2,
-         "hidden_channels": 64,
-         "dropout_prob": 0.3,
-         "use_batchnorm": True,
-         "use_residual": True,
-         "pool_layers": 2,
-         "debug": False,
-         "return_feature_map": True
-    },
-    "use_preencoder": False,
-    "pretrained_resnet": False,
-    "preencoder_params": {
-         "in_channels": 3,
-         "out_channels": 32,
-         "hidden_channels": 32
-    },
-    "gnn_in_dim": (64, 5, 5),
-    "gnn_hidden_dim": (128, 5, 5),
-    "num_classes": 10,
-    "num_gnn_layers": 4,
-    "gnn_dropout": 0.3,
-    "residual": True,
-    "aggregator_params": {
-         "num_layers": 4,
-         "dropout_prob": 0.3,
-         "use_batchnorm": True
-    }
-}
-```
-
-To disable the pre‑encoder or ResNet‑18, set `"use_preencoder": False` or `"pretrained_resnet": False` accordingly.
-
----
-## Visual Summary (Just an Example – e.g., Conceptual Diagram)
-
-```
-+-------------------------------+
-| Raw Node Image Patch (3x8x8)   |  <-- Each patch is an image-like tensor.
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|       Pre-Encoder             |  <-- Optional: Preprocess patch using ResNet-like (or custom) module.
-| (if enabled, maintains spatial|
-|  structure; output shape:      |
-|    [N, 32, H, W])              |
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|         CNN Encoder           |  <-- Processes the (preprocessed) patch into a spatial feature map.
-| (Multiple conv layers, with    |
-|  residual connections; output: |
-|   [N, 64, 5, 5])               |
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|    GNN Layers (Message       |  <-- For each pair (edge) of nodes, features are concatenated 
-|    Passing using ConvMessage  |      spatially (keeping [C, H, W] format) and processed via 1×1 conv.
-|    Passing)                   |      Then aggregated using a deep CNN aggregator.
-| (Output: [N, 128, 5, 5])       |
-+-------------------------------+
-             │
-             ▼
-+------------------------------------------+
-| Optional Skip Connection:                |  <-- If enabled, add original CNN encoder output (patch features)
-| Combine (sum or concatenate) CNN output    |      to GNN output for richer gradient flow.
-| with GNN output.                         |
-+------------------------------------------+
-             │
-             ▼
-+-------------------------------+
-|   Spatial Pooling             |  <-- Average over spatial dimensions (H, W) to get a vector.
-|   (Output: [N, 128])           |
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|       Classifier              |  <-- Fully connected layer maps pooled features to class logits.
-+-------------------------------+
-             │
-             ▼
-+-------------------------------+
-|         Final Decision        |  <-- Predicted class labels.
-+-------------------------------+
-```
-
-![mermaid-ai-diagram-2025-03-23-002525.png](examples/mermaid-ai-diagram-2025-03-23-002525.png)
----
-
-## Examples
-
-Check the `examples/` folder for Jupyter notebooks that demonstrate:
-- Node classification using image patches as graph nodes.
-- Graph classification with volumetric data.
-- Image reconstruction from graphs using SSIM loss.
-
----
-
-## License
-
-TGraphX is released under the [MIT License](https://opensource.org/licenses/MIT). See the LICENSE file for more details.
-
----
-
-**Enjoy exploring and developing your graph neural networks with TGraphX!**  
-If you have any questions or suggestions, please feel free to open an issue or submit a pull request.
-
-#   C l e a n   s y n c   f i n a l i z e d  
- 
->>>>>>> e99e0ab (Fresh initial commit after reinit)
+**Enjoy exploring and developing your spatially-aware graph neural networks with TGraphX!**  
+If you have any questions, suggestions, or want to contribute, feel free to open an issue or submit a pull request.
