@@ -125,26 +125,21 @@ Every stage of TGraphX—patch extraction, optional pre-encoder, CNN encoder, gr
 TGraphX/
 ├── __init__.py
 ├── core/
-│   ├── dataloader.py        # Dataset and DataLoader classes for graph data.
-│   ├── graph.py             # Graph and GraphBatch data structures.
-│   └── utils.py             # Utility functions (e.g., load_config, get_device).
+│   ├── dataloader.py
+│   ├── graph.py
+│   └── utils.py
 ├── layers/
-│   ├── aggregator.py        # Deep CNN aggregator to combine spatial messages.
-│   ├── attention_message.py # Attention-based message passing layer.
-│   ├── base.py              # Base class for all message passing layers.
-│   ├── conv_message.py      # Convolution-based message passing that keeps spatial maps.
-│   └── safe_pool.py         # Safe max pooling module for small spatial sizes.
+│   ├── aggregator.py
+│   ├── attention_message.py
+│   ├── base.py
+│   ├── conv_message.py
+│   └── safe_pool.py
 ├── models/
-│   ├── cnn_encoder.py       # CNN encoder with optional residual connections and safe pooling.
-│   ├── cnn_gnn_model.py     # Unified CNN‑GNN model integrating CNN encoder + GNN layers.
-│   ├── graph_classifier.py  # Model for graph-level classification.
-│   ├── node_classifier.py   # Model for node-level classification.
-│   └── pre_encoder.py       # Optional pre‑encoder module (ResNet‑18 or custom).
-├── examples/                # Jupyter notebooks demonstrating TGraphX usage.
-│   ├── node_classification_tensor.ipynb
-│   ├── graph_classification_volumetric.ipynb
-│   ├── graph_to_image_ssim.ipynb
-│   └── comparison.png
+│   ├── cnn_encoder.py
+│   ├── cnn_gnn_model.py
+│   ├── graph_classifier.py
+│   ├── node_classifier.py
+│   └── pre_encoder.py
 ├── environment.yml
 └── README.md
 ```
