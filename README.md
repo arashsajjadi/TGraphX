@@ -4,7 +4,10 @@
 
 TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNNs) that work with node and edge features of any dimension while retaining their **spatial layout**. The code is designed for flexibility, easy GPU-acceleration, and rapid prototyping of new GNN ideas, **especially** those that need to preserve local spatial details (e.g., image or volumetric patches).  
 
-> **Note:** The current architecture is new and under active development. Some features (like the skip connection and spatial message passing via CNN aggregators) are **experimental**. The overall design, however, is rooted in rigorous theoretical and practical foundations aiming to unify convolutional neural networks (CNNs) with GNN-based relational reasoning.  
+> **Note:** TGraphX includes optional skip connections that help with 
+> stable gradient flow in deeper GNN stacks. The overall design is rooted 
+> in rigorous theoretical and practical foundations, aiming to unify 
+> convolutional neural networks (CNNs) with GNN-based relational reasoning.
 
 ---  
 ## Table of Contents
@@ -12,6 +15,11 @@ TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNN
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Architecture Highlights](#architecture-highlights)
+  - [Preserving Spatial Fidelity](#preserving-spatial-fidelity)
+  - [Convolution-Based Message Passing](#convolution-based-message-passing)
+  - [Deep CNN Aggregator with Residuals](#deep-cnn-aggregator-with-residuals)
+  - [End-to-End Differentiability](#end-to-end-differentiability)
+- [Future Works](#future-works)
 - [Installation](#installation)
 - [Folder Structure](#folder-structure)
 - [Core Components](#core-components)
@@ -19,9 +27,11 @@ TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNN
 - [Models](#models)
 - [Configuration Options](#configuration-options)
 - [Advanced Topics](#advanced-topics)
-- [Examples](#examples)
 - [Novelties and Contributions](#novelties-and-contributions)
+- [Conclusion](#conclusion)
+- [Citations](#citations)
 - [License](#license)
+
 
 ---
 
@@ -89,6 +99,21 @@ Every stage of TGraphX—patch extraction, optional pre-encoder, CNN encoder, gr
 
 ---
 
+## Future Works
+
+- **Scalability and Data Requirements**  
+  Adapting TGraphX to higher-resolution inputs or massive datasets (e.g., MS COCO) may require further optimizations, including efficient graph construction or pruning strategies.
+
+- **Domain-Specific Customization**  
+  Some tasks might not need full spatial fidelity at every message-passing step. Researchers could explore ways to selectively reduce resolution or apply specialized convolutions to different node subsets.
+
+- **Alternative Edge Definitions**  
+  Learned adjacency or richer spatial features (e.g., IoU or geometric cues) can further improve performance in complex scenes.
+
+- **Multimodal and Real-Time Extensions**  
+  Integrating TGraphX with sensor data or text embeddings could enable richer reasoning for applications like autonomous driving or real-time video surveillance.
+
+---
 ## Installation
 
 1. **Clone the Repository**  
@@ -315,22 +340,6 @@ config = {
 - **Performance Optimizations**  
   Use group convolutions or low-rank factorization in the aggregator to reduce memory and computational overhead.
 
----
-
-## Examples
-
-Several Jupyter notebooks in `examples/` demonstrate:
-
-1. **Node Classification with Image Patches**  
-   - `node_classification_tensor.ipynb` – Shows how to treat each patch as a node and classify nodes individually.
-
-2. **Graph Classification with Volumetric Data**  
-   - `graph_classification_volumetric.ipynb` – Illustrates how TGraphX handles volumetric patches (e.g., `[C, D, H, W]`) and aggregates them using 3D convolutions or custom aggregator modules.
-
-3. **Image-to-Graph Reconstruction using SSIM**  
-   - `graph_to_image_ssim.ipynb` – Demonstrates how TGraphX can reconstruct images from patch-level graphs via a structural similarity (SSIM) loss, highlighting the benefits of preserving spatial detail.
-
-For a *visual summary* of the pipeline, see `comparison.png` or the block diagram in the main paper.
 
 ---
 
@@ -357,6 +366,38 @@ TGraphX departs from traditional GNN designs in several ways:
 
 These innovations build on earlier GNN research while pushing further to **retain** all the valuable local details that are typically lost in flattened GNN nodes.
 
+---
+
+## Conclusion
+
+We have presented **TGraphX**, an architecture aimed at integrating convolutional neural 
+networks (CNNs) and graph neural networks (GNNs) in a way that preserves spatial fidelity. 
+By retaining multi-dimensional CNN feature maps as node representations and employing 
+convolution-based message passing, TGraphX captures both local and global spatial context. 
+Our experiments—particularly those involving detection refinement—demonstrate its potential 
+to resolve detection discrepancies and refine localization accuracy in challenging vision tasks.
+
+While we do not claim it to be universally optimal for all computer vision scenarios, TGraphX 
+offers a flexible framework that other researchers can adapt or extend. This integration of 
+CNN-based feature extraction with GNN-based relational reasoning is a promising direction 
+for future AI and vision research.
+---
+## Citations
+
+```bibtex
+@article{Sajjadi2025TGraphX,
+  title     = {TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning},
+  author    = {Sajjadi, Arash and Eramian, Mark},
+  journal   = {arXiv preprint arXiv:XXXX.XXXXX},
+  year      = {2025},
+  note      = {Accessed on [date]},
+  abstract  = {TGraphX presents a novel paradigm in deep learning by unifying convolutional neural networks (CNNs) with 
+               graph neural networks (GNNs) to enhance visual reasoning tasks. By generating multi-dimensional node features 
+               that retain spatial structure (e.g., 3×128×128 tensors), TGraphX retains local semantics while enabling 1×1 
+               convolution-based message passing and deep CNN aggregation with residual connections. Our approach demonstrates 
+               improved object detection refinement, bridging the gap between spatial feature extraction and relational reasoning.}
+}
+```
 ---
 
 ## License
