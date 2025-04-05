@@ -381,6 +381,7 @@ While we do not claim it to be universally optimal for all computer vision scena
 offers a flexible framework that other researchers can adapt or extend. This integration of 
 CNN-based feature extraction with GNN-based relational reasoning is a promising direction 
 for future AI and vision research.
+
 ---
 ## Citations
 
