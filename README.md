@@ -4,6 +4,11 @@
 
 TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNNs) that work with node and edge features of any dimension while retaining their **spatial layout**. The code is designed for flexibility, easy GPU-acceleration, and rapid prototyping of new GNN ideas, **especially** those that need to preserve local spatial details (e.g., image or volumetric patches).  
 
+📄 **Preprint**: [TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning](https://arxiv.org/abs/2504.03953)  
+✏️ *Authors: Arash Sajjadi, Mark Eramian*  
+🗓️ *Published on arXiv, April 2025*
+
+
 > **Note:** TGraphX includes optional skip connections that help with 
 > stable gradient flow in deeper GNN stacks. The overall design is rooted 
 > in rigorous theoretical and practical foundations, aiming to unify 
@@ -386,17 +391,14 @@ for future AI and vision research.
 ## Citations
 
 ```bibtex
-@article{Sajjadi2025TGraphX,
-  title     = {TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning},
-  author    = {Sajjadi, Arash and Eramian, Mark},
-  journal   = {arXiv preprint arXiv:XXXX.XXXXX},
-  year      = {2025},
-  note      = {Accessed on [date]},
-  abstract  = {TGraphX presents a novel paradigm in deep learning by unifying convolutional neural networks (CNNs) with 
-               graph neural networks (GNNs) to enhance visual reasoning tasks. By generating multi-dimensional node features 
-               that retain spatial structure (e.g., 3×128×128 tensors), TGraphX retains local semantics while enabling 1×1 
-               convolution-based message passing and deep CNN aggregation with residual connections. Our approach demonstrates 
-               improved object detection refinement, bridging the gap between spatial feature extraction and relational reasoning.}
+@misc{sajjadi2025tgraphxtensorawaregraphneural,
+      title={TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning}, 
+      author={Arash Sajjadi and Mark Eramian},
+      year={2025},
+      eprint={2504.03953},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2504.03953}, 
 }
 ```
 ---

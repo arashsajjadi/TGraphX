@@ -1,16 +1,29 @@
 name: tgraphx
 channels:
+  - nvidia  # Needed only for CUDA support
   - conda-forge
   - defaults
 dependencies:
   - python=3.9
+  - pip
   - pyyaml
   - jupyterlab
   - notebook
   - ipykernel
   - matplotlib
   - pandas
-  - pip
+  - pytorch
+  - torchvision
+  - torchaudio
+
+  # --- Use EITHER the cuda-enabled version OR cpuonly below ---
+
+  # For CUDA (GPU support), uncomment the following line:
+  # - pytorch-cuda=11.8
+
+  # For CPU-only (default), uncomment the following line instead:
+  - cpuonly
+
   - pip:
-      - pytest
       - tqdm
+      - pytest
