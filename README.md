@@ -8,16 +8,32 @@ TGraphX is a **PyTorch**-based framework for building Graph Neural Networks (GNN
 ✏️ *Authors: Arash Sajjadi, Mark Eramian*  
 🗓️ *Published on arXiv, April 2025*
 
-To install TGraphX, simply run:
-
-```bash
-pip install tgraphx
-```
 
 > **Note:** TGraphX includes optional skip connections that help with 
 > stable gradient flow in deeper GNN stacks. The overall design is rooted 
 > in rigorous theoretical and practical foundations, aiming to unify 
 > convolutional neural networks (CNNs) with GNN-based relational reasoning.
+
+## Installation
+
+You may try installing TGraphX using:
+
+```bash
+pip install tgraphx
+```
+
+> ⚠️ **Note:** This command is expected to work once the package is fully published on PyPI.  
+> It might work now, but we haven’t tested it yet.  
+> Full support and testing for PyPI installation is planned in a future release.
+
+Alternatively, you can install it manually by cloning the repository:
+
+```bash
+git clone https://github.com/arashsajjadi/TGraphX.git
+cd TGraphX
+pip install -e .
+```
+
 
 ---  
 ## Table of Contents
