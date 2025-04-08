@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tgraphx"
+version = "0.0.1"
+authors = [
+  {name = "Arash Sajjadi", email = "arash.sajjadi@usask.ca"}
+]
+description = "Early placeholder for TGraphX PyPI reservation"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}

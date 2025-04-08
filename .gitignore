@@ -1,59 +1,64 @@
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> e99e0ab (Fresh initial commit after reinit)
-# Ignore IDE and cache
-.idea/
-__pycache__/
-*.pyc
-
-# Ignore data files
-examples/CIFAR10/data/
-*.tar.gz
-*.png
-
-# Ignore Jupyter checkpoints
-.ipynb_checkpoints/
-<<<<<<< HEAD
-=======
-=======
+# ------------------------------
 # IDE and Python cache
+# ------------------------------
 .idea/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Jupyter checkpoints
+# ------------------------------
+# Build artifacts for PyPI
+# ------------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.whl
+
+# ------------------------------
+# Virtual environments
+# ------------------------------
+.venv/
+venv/
+env/
+
+# ------------------------------
+# Jupyter & notebooks
+# ------------------------------
 .ipynb_checkpoints/
 
-# Model files and large data
+# ------------------------------
+# Model files and temp results
+# ------------------------------
 *.pt
 *.ckpt
-*.tar.gz
-*.zip
 *.h5
 *.pkl
 *.npy
+*.npz
+*.log
 
-# Image and result files
+# ------------------------------
+# Image, XML, and visual outputs
+# ------------------------------
 *.png
 *.jpg
 *.jpeg
 *.bmp
 *.tiff
-
-# XML annotations or temp files
+*.svg
 *.xml
 
-# Ignore any data folders anywhere under examples/
+# ------------------------------
+# Datasets and annotations (big)
+# ------------------------------
 examples/**/data/
 examples/**/Full_Object_Detection_Graph_Modeling_YOLOv11_RetinaNet_TGraphX_files/
-
-# Specific unneeded files
 examples/Object_Detection/Full_Object_Detection_Graph_Modeling_YOLOv11_RetinaNet_TGraphX.md
 
-# Ignore any future submodules or folders we don’t want to track
-examples/Object_Detection/**/.git
->>>>>>> ee1faeb (Initial clean setup)
->>>>>>> e99e0ab (Fresh initial commit after reinit)
+# ------------------------------
+# Git submodules or temp git folders
+# ------------------------------
+**/.git
