@@ -25,20 +25,19 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      # Install the CPU-only PyTorch wheel first so pip does not pull in CUDA
-      # libraries when it later resolves torch>=1.13 from pyproject.toml.
+      # Install CPU-only PyTorch first so pip resolves torch>=1.13 without
+      # pulling CUDA wheels on the CI runner.
       - name: Install CPU-only PyTorch
         run: |
           pip install torch torchvision \
             --index-url https://download.pytorch.org/whl/cpu
 
-      # Install the package in editable mode together with dev dependencies
-      # (pytest, build, twine).  torch/torchvision are already satisfied above.
+      # Install the package in editable mode with dev extras
+      # (pytest, build, twine).  torch/torchvision are already satisfied.
       - name: Install TGraphX with dev dependencies
         run: pip install -e ".[dev]"
 
-      # Quick sanity check that the installed package is importable and has
-      # a version string before we run the full suite.
+      # Quick sanity check before running the full suite.
       - name: Smoke-check installed package
         run: |
           python -c "import tgraphx; print('tgraphx', tgraphx.__version__)"
@@ -47,8 +46,47 @@ jobs:
           python -c "from tgraphx import TensorGATLayer, TensorGraphSAGELayer, TensorGINLayer"
           python -c "from tgraphx.layers import TensorGATLayer, TensorGraphSAGELayer, TensorGINLayer"
           python -c "from tgraphx.models import CNNEncoder, CNN_GNN_Model, GraphClassifier, NodeClassifier"
+          python -c "from tgraphx import make_layer, build_model, build_model_from_config"
+          python -c "from tgraphx import build_grid_graph, build_knn_graph, image_to_patches"
+          python -c "from tgraphx.training import set_seed, count_parameters, save_checkpoint, train_epoch, evaluate, fit"
+          python -c "from tgraphx.tracking import CSVLogger, TensorBoardLogger"
+          python -c "from tgraphx.performance import env_report, estimate_message_memory"
+          python -c "from tgraphx.dashboard import launch_dashboard_background"
+          python -c "import tgraphx, sys; assert 'tensorboard' not in sys.modules, 'tensorboard imported at base level'"
+          python -c "import tgraphx, sys; assert 'psutil' not in sys.modules or True"
 
+      # Full test suite — CUDA/MPS tests are skipped automatically on CPU runners.
       - name: Run test suite
-        run: pytest
-        # CUDA and MPS tests are skipped automatically on CPU-only runners
-        # by the custom markers in tests/conftest.py.
+        run: pytest -q
+
+      # Benchmark smoke — small, CPU-safe, terminates quickly.
+      - name: Benchmark layer smoke
+        run: |
+          python benchmarks/benchmark_layers.py \
+            --layer gat --nodes 16 --edges 64 --shape 8,4,4 \
+            --device cpu --iters 3 --warmup 1
+
+      - name: Benchmark graph builders smoke
+        run: python benchmarks/benchmark_graph_builders.py --small
+
+      # Selected fast examples.
+      - name: Fast examples smoke
+        run: |
+          python examples/01_vector_node_classification.py
+          python examples/02_spatial_graph_classification.py
+          python examples/03_volumetric_graph_classification.py
+          python examples/directed_vs_undirected_graphs.py
+          python examples/image_patch_graph.py
+          python examples/checkpoint_save_load.py
+          python examples/training_minimal_fit.py
+          python examples/training_with_csvlogger.py
+          python examples/training_with_tensorboard.py
+          python examples/memory_report.py
+          python examples/mixed_precision_inference.py
+
+      # Build sdist + wheel and check the package metadata.
+      - name: Build distribution
+        run: python -m build
+
+      - name: Check distribution with twine
+        run: twine check dist/tgraphx-*

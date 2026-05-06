@@ -52,7 +52,7 @@ class TestGraphConstruction:
     def test_edge_features_present(self):
         ei = torch.tensor([[0, 1], [1, 0]], dtype=torch.long)
         ef = torch.randn(2, 5)
-        g = Graph(_x(), ei, ef)
+        g = Graph(_x(), ei, edge_features=ef)
         assert g.edge_features.shape == (2, 5)
 
     def test_to_cpu_returns_self(self):
@@ -102,7 +102,7 @@ class TestGraphValidation:
         ei = torch.tensor([[0, 1], [1, 0]], dtype=torch.long)  # 2 edges
         ef = torch.randn(5, 4)  # 5 ≠ 2
         with pytest.raises(ValueError, match="edge_features"):
-            Graph(_x(), ei, ef)
+            Graph(_x(), ei, edge_features=ef)
 
     def test_edge_features_without_edge_index(self):
         with pytest.raises(ValueError, match="edge_index is None"):

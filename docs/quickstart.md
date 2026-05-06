@@ -1,0 +1,103 @@
+# Quickstart
+
+## Installation
+
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu  # CPU only
+pip install -e .   # from source (editable)
+```
+
+## Your first graph
+
+```python
+import torch
+from tgraphx import Graph, ConvMessagePassing
+
+# Six nodes, each with a [16-channel, 8×8] spatial feature map
+node_features = torch.randn(6, 16, 8, 8)
+
+# Directed cycle: 0→1→2→3→4→5→0
+src = torch.arange(6)
+edge_index = torch.stack([src, (src + 1) % 6])    # [2, 6]
+
+g = Graph(node_features, edge_index)               # validated eagerly
+print(g)   # Graph(num_nodes=6, num_edges=6, feature_shape=(16, 8, 8))
+
+layer = ConvMessagePassing(in_shape=(16, 8, 8), out_shape=(32, 8, 8))
+out = layer(g.node_features, g.edge_index)         # [6, 32, 8, 8]
+out.sum().backward()                               # fully differentiable
+```
+
+## Build a graph from a builder
+
+```python
+from tgraphx import build_grid_graph
+
+edge_index = build_grid_graph(3, 3, directed=False, self_loops=True)
+# [2, 33]: 24 neighbour edges + 9 self-loops on a 3×3 grid
+```
+
+## Use the factory API
+
+```python
+from tgraphx import build_model
+
+model = build_model(
+    task="graph_classification",
+    layer="gat",
+    in_shape=(8, 4, 4),
+    hidden_shape=(16, 4, 4),
+    num_layers=2,
+    num_classes=5,
+    heads=2,
+)
+out = model(x, edge_index, batch=batch)   # [num_graphs, 5]
+```
+
+## Config-based construction
+
+```python
+from tgraphx import build_model_from_config
+
+model = build_model_from_config({
+    "model": {
+        "task": "graph_classification",
+        "layer": "gat",
+        "in_shape": [8, 4, 4],
+        "hidden_shape": [16, 4, 4],
+        "num_layers": 2,
+        "num_classes": 5,
+        "heads": 2,
+    }
+})
+```
+
+## Save a checkpoint
+
+```python
+from tgraphx.training import save_checkpoint, load_checkpoint
+
+save_checkpoint(model, optimizer, epoch=10, path="run/epoch10.pt")
+epoch = load_checkpoint(model, optimizer, path="run/epoch10.pt")
+```
+
+## Log metrics
+
+```python
+from tgraphx.tracking import CSVLogger
+
+with CSVLogger("runs/my_run") as logger:
+    for epoch in range(20):
+        # ... training ...
+        logger.log(epoch=epoch, train_loss=loss, accuracy=acc)
+```
+
+## See also
+
+- [Installation](installation.md)
+- [Graph API](graph_basics.md)
+- [Graph Builders](graph_builders.md)
+- [Factories](factories.md)
+- [Training Utilities](training_utilities.md)
+- [Dashboard](dashboard.md)
+- [Limitations](limitations.md)

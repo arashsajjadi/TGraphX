@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use TGraphX in your research, please cite the following."
+type: software
+title: "TGraphX: Tensor-Aware Graph Neural Networks for Multi-Dimensional Feature Learning"
+version: "0.1.0"
+date-released: "2025-04-06"
+url: "https://github.com/arashsajjadi/TGraphX"
+repository-code: "https://github.com/arashsajjadi/TGraphX"
+license: MIT
+authors:
+  - family-names: Sajjadi
+    given-names: Arash
+    email: arash.sajjadi@usask.ca
+    affiliation: University of Saskatchewan
+    orcid: "https://orcid.org/0009-0005-2929-0680"
+  - family-names: Eramian
+    given-names: Mark
+    affiliation: University of Saskatchewan
+preferred-citation:
+  type: article
+  title: "TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning"
+  authors:
+    - family-names: Sajjadi
+      given-names: Arash
+      email: arash.sajjadi@usask.ca
+    - family-names: Eramian
+      given-names: Mark
+  journal: "arXiv preprint"
+  year: 2025
+  url: "https://arxiv.org/abs/2504.03953"
+  identifiers:
+    - type: url
+      value: "https://arxiv.org/abs/2504.03953"
+      description: "arXiv preprint"
+keywords:
+  - graph neural networks
+  - GNN
+  - spatial features
+  - tensor-aware
+  - PyTorch
+  - computer vision
+  - message passing

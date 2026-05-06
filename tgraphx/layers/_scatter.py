@@ -24,6 +24,44 @@ def _expand_index(target: torch.Tensor, like: torch.Tensor) -> torch.Tensor:
     return target.view(view).expand_as(like)
 
 
+def broadcast_edge_weight(
+    weight: torch.Tensor,
+    like: torch.Tensor,
+    num_edges: int,
+) -> torch.Tensor:
+    """Validate ``weight`` and reshape it to broadcast over ``like``'s trailing dims.
+
+    Used by every layer that supports ``edge_weight`` to apply a per-edge
+    scalar to messages of shape ``[E, ...]``.
+
+    Raises:
+        TypeError if ``weight`` is not a Tensor.
+        ValueError on shape, length, or device mismatch with ``like``.
+    """
+    if not isinstance(weight, torch.Tensor):
+        raise TypeError(
+            f"edge_weight must be a torch.Tensor or None, "
+            f"got {type(weight).__name__}"
+        )
+    if weight.dim() != 1:
+        raise ValueError(
+            f"edge_weight must be a 1-D tensor of shape [E], "
+            f"got shape {tuple(weight.shape)}"
+        )
+    if weight.size(0) != num_edges:
+        raise ValueError(
+            f"edge_weight has {weight.size(0)} entries but "
+            f"{num_edges} edges were given"
+        )
+    if weight.device != like.device:
+        raise ValueError(
+            f"edge_weight device ({weight.device}) must match "
+            f"the device of the messages it scales ({like.device})"
+        )
+    view = (num_edges,) + (1,) * (like.dim() - 1)
+    return weight.view(view)
+
+
 def edge_softmax(
     scores: torch.Tensor,
     target: torch.Tensor,

@@ -30,6 +30,13 @@ env/
 .ipynb_checkpoints/
 
 # ------------------------------
+# Example / training run outputs (generated locally)
+# ------------------------------
+runs/
+benchmarks/results/
+*.run_output
+
+# ------------------------------
 # Model files and temp results
 # ------------------------------
 *.pt

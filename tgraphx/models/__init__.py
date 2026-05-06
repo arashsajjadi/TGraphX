@@ -5,6 +5,9 @@ from .cnn_gnn_model import CNN_GNN_Model
 from .graph_classifier import GraphClassifier
 from .node_classifier import NodeClassifier
 from .pre_encoder import PreEncoder
+from .edge_predictor import EdgePredictor
+from .regressors import NodeRegressor, GraphRegressor
+from .factory import build_model, build_model_from_config
 
 __all__ = [
     "CNNEncoder",
@@ -12,4 +15,9 @@ __all__ = [
     "GraphClassifier",
     "NodeClassifier",
     "PreEncoder",
+    "EdgePredictor",
+    "NodeRegressor",
+    "GraphRegressor",
+    "build_model",
+    "build_model_from_config",
 ]

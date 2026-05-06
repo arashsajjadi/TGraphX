@@ -8,6 +8,7 @@ from .sage import TensorGraphSAGELayer
 from .gin import TensorGINLayer
 from .aggregator import DeepCNNAggregator
 from .safe_pool import SafeMaxPool2d
+from .factory import make_layer
 
 __all__ = [
     "TensorMessagePassingLayer",
@@ -19,4 +20,5 @@ __all__ = [
     "TensorGINLayer",
     "DeepCNNAggregator",
     "SafeMaxPool2d",
+    "make_layer",
 ]

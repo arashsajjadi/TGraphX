@@ -247,15 +247,25 @@ class TestTensorGATLayer:
         with pytest.raises(ValueError, match="use_edge_features=False"):
             layer(_spatial(), _ei(), edge_features=torch.randn(N, 2))
 
-    def test_spatial_edge_features_rejected(self):
-        """TensorGATLayer accepts only vector edge features."""
+    def test_spatial_edge_features_supported(self):
+        """TensorGATLayer accepts 4-D spatial edge features (mean-pooled)."""
         layer = TensorGATLayer(
             in_channels=C, out_channels=8,
             use_edge_features=True, edge_dim=2,
         )
-        with pytest.raises(ValueError, match="vector edge features"):
-            # 4-D spatial edge tensor is not allowed for GAT.
-            layer(_spatial(), _ei(), edge_features=torch.randn(N, 2, H, W))
+        # 4-D spatial edge tensor is mean-pooled to vector form before bias.
+        out = layer(_spatial(), _ei(), edge_features=torch.randn(N, 2, H, W))
+        assert out.shape == (N, 8, H, W)
+        assert torch.isfinite(out).all()
+
+    def test_volumetric_edge_features_rejected(self):
+        """5-D volumetric edge features are explicitly rejected."""
+        layer = TensorGATLayer(
+            in_channels=C, out_channels=8,
+            use_edge_features=True, edge_dim=2,
+        )
+        with pytest.raises(NotImplementedError, match="volumetric"):
+            layer(_spatial(), _ei(), edge_features=torch.randn(N, 2, 2, H, W))
 
     def test_attn_dropout_in_train_mode(self):
         layer = TensorGATLayer(

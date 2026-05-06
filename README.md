@@ -44,13 +44,284 @@ drop-in clones of PyTorch Geometric's vector-feature implementations.
 
 ## What is NOT yet implemented
 
-- **Image-to-patch splitting.** `CNN_GNN_Model` and other layers expect pre-split node patches supplied by the user. No patch-extraction utility exists yet.
-- **Graph construction.** `edge_index` is always user-supplied. There are no built-in graph builders (kNN, grid, radius, IoU, learned adjacency).
 - **Graph Transformers** (global attention with positional encodings).
 - **Per-channel and per-pixel attention** for `TensorGATLayer`. Currently only scalar attention per `(edge, head)` is supported (the default safer choice).
-- **Spatial edge features in `TensorGATLayer`.** GAT supports vector edge features `[E, edge_dim]` as an additive attention bias only. `TensorGraphSAGELayer` and `TensorGINLayer` support **both** spatial `[E, edge_dim, H, W]` and vector `[E, edge_dim]` edge features (selected via `edge_features_kind`).
-- **3-D volumetric aggregation.** `DeepCNNAggregator` uses `Conv2d`, so node features of shape `[C, D, H, W]` will fail at the `ConvMessagePassing` aggregation step even though the message function has a `Conv3d` branch. The new `TensorGATLayer`, `TensorGraphSAGELayer`, and `TensorGINLayer` are also 2-D only.
+- **Spatial edge features in `TensorGATLayer`** are accepted as `[E, edge_dim, H, W]` and **mean-pooled** to a vector before the per-`(edge, head)` attention bias projection. This keeps GAT in the scalar-attention regime (no per-pixel attention). `TensorGraphSAGELayer` and `TensorGINLayer` use the full spatial tensor directly (selected via `edge_features_kind="spatial"`).
+- **Per-voxel and per-pixel attention.** `TensorGATLayer` keeps scalar attention per `(edge, head)` even in 3-D mode. Volumetric edge tensors `[E, C_e, D, H, W]` are mean-pooled over `(D, H, W)` before the bias projection — there is no per-voxel attention.
+- **Arbitrary-rank tensor support.** TGraphX supports vector `[N, D]`, 2-D spatial `[N, C, H, W]`, and 3-D volumetric `[N, C, D, H, W]` node features for the listed layers. It does not claim arbitrary-rank tensor support.
 - **Heterogeneous and temporal graphs.**
+- **MLflowLogger.** Not implemented.  Use the `mlflow` client directly.
+  `pip install mlflow`.
+- **GAT / SAGE / GIN chunked forward.** Deferred (GAT's destination-wise
+  softmax requires all edge scores; SAGE/GIN chunking deferred for scope).
+  `ConvMessagePassing` supports `chunk_size` for `sum` / `mean` aggregation.
+- **Hardware-monitoring extras.** CPU/RAM/GPU metrics in the dashboard
+  require optional packages: `pip install tgraphx[monitoring]`.
+- **torch.compile / AMP.** `torch.compile` is available in PyTorch ≥ 2.0
+  and may improve throughput for large graphs; compile overhead dominates
+  for small ones.  Some GNN ops (e.g. `index_add_` in GAT) require matching
+  dtypes and do not work transparently under float16 autocast; bfloat16 or
+  full-precision inference is recommended.
+- **Profiling / logging.** No profiling, hardware polling, or file writes
+  are enabled by default.  All are opt-in.
+
+---
+
+## Performance
+
+### Environment and hardware report
+
+```python
+from tgraphx.performance import env_report, estimate_message_memory, recommended_device
+
+print(env_report())                           # Python/PyTorch/CUDA/MPS info
+print(env_report(include_hardware=True))      # + CPU/RAM/CUDA memory (needs psutil)
+print(env_report(include_sensors=True))       # + GPU util/temp (needs pynvml)
+
+dev = recommended_device()                    # CUDA > MPS > CPU
+
+# Estimate peak message-buffer memory before running
+m = estimate_message_memory(num_edges=1024, out_shape=(64, 8, 8))
+print(f"~{m['total_mb']:.1f} MB  ({m['note']})")
+```
+
+### Benchmarks
+
+```bash
+# Layer throughput (CPU-safe, all flags optional)
+python benchmarks/benchmark_layers.py --layer gat --nodes 64 --edges 256 \
+    --shape 8,4,4 --device cpu --iters 10
+
+# CUDA + AMP + backward
+python benchmarks/benchmark_layers.py --layer conv --nodes 256 --edges 2048 \
+    --shape 32,8,8 --device cuda --amp 1 --backward 1
+
+# Save JSON result
+python benchmarks/benchmark_layers.py --layer gin --shape 8,4,4 \
+    --output results/gin.json
+
+# Graph builder timing
+python benchmarks/benchmark_graph_builders.py --small    # CI-safe
+python benchmarks/benchmark_graph_builders.py            # full
+```
+
+### torch.compile and AMP
+
+```bash
+python examples/torch_compile_benchmark.py   # eager vs compiled, correctness check
+python examples/mixed_precision_inference.py  # autocast forward demo
+python examples/memory_report.py             # env report + memory estimates
+```
+
+### Optional chunked forward (ConvMessagePassing)
+
+Reduce peak edge-buffer memory by processing edges in chunks:
+
+```python
+from tgraphx.layers.conv_message import ConvMessagePassing
+
+layer = ConvMessagePassing(in_shape=(32, 8, 8), out_shape=(32, 8, 8), aggr="sum")
+# Same output as unchunked; lower peak memory for large E
+out = layer(x, edge_index, chunk_size=512)
+```
+
+Supported aggregations: `"sum"` and `"mean"`.  `"max"` falls back to the
+standard path with a warning.  GAT, SAGE, and GIN chunking are deferred
+(softmax and custom scatter make them more complex).
+
+### Hardware compatibility
+
+| Platform | Forward | AMP | torch.compile | Notes |
+|----------|:-------:|:---:|:-------------:|-------|
+| CPU | ✅ | ⚠️ bfloat16 only | ✅ | Compile overhead may dominate small graphs |
+| CUDA | ✅ | ⚠️ float16 (op-dependent) | ✅ | index_add_ ops require dtype match |
+| MPS (Apple Silicon) | ✅ | limited | ⚠️ | Some ops may not be compiled |
+| Linux | ✅ | ✅ | ✅ | Fully supported |
+| Windows | ✅ | ✅ | ✅ | Fully supported |
+| macOS | ✅ | limited | ⚠️ | MPS support best-effort |
+
+---
+
+## Training utilities
+
+TGraphX includes lightweight training helpers — not a full training framework.
+All logging and file writes are **off by default**.
+
+### Training loop helpers
+
+```python
+from tgraphx.training import train_epoch, evaluate, fit
+import torch.nn.functional as F
+
+# One-line training loop
+history = fit(
+    model, train_loader, val_loader=val_loader,
+    epochs=20,
+    optimizer=torch.optim.Adam(model.parameters(), lr=1e-3),
+    loss_fn=F.cross_entropy,
+    log_level=1,           # print per-epoch summary
+)
+# → [{"epoch":0, "train_loss":0.9, "val_loss":0.85}, ...]
+```
+
+Supported batch formats: `GraphBatch` (with `graph_labels` / `node_labels`)
+and `(Tensor, Tensor)` tuples.
+
+### Standalone helpers
+
+```python
+from tgraphx.training import (
+    set_seed,            # seeds torch / numpy / random
+    count_parameters,    # trainable parameter count
+    save_checkpoint,     # torch.save wrapper
+    load_checkpoint,     # returns saved epoch number
+    accuracy,            # multi-class argmax accuracy
+    mean_absolute_error, mean_squared_error,
+)
+```
+
+### CSV logging (dashboard-compatible)
+
+```python
+from tgraphx.tracking import CSVLogger
+
+with CSVLogger("runs/my_run") as logger:
+    history = fit(model, train_loader, ..., logger=logger)
+# writes runs/my_run/metrics.csv with UTC timestamps
+```
+
+### TensorBoard logging (optional)
+
+```python
+from tgraphx.tracking import TensorBoardLogger  # lazy import
+
+# pip install tensorboard  or  pip install "tgraphx[tracking]"
+with TensorBoardLogger("runs/tb") as tb:
+    history = fit(model, train_loader, ..., logger=tb)
+```
+
+Nothing is written unless you explicitly pass a logger.
+`MLflowLogger` is not implemented — use the `mlflow` client directly.
+
+---
+
+## Dashboard
+
+TGraphX includes a local training dashboard — **off by default**, zero external dependencies.
+
+### Quick start
+
+```bash
+# 1. Run a training script that writes metrics.csv and optionally run_metadata.json
+python examples/training_with_dashboard.py
+
+# 2. Launch the dashboard (localhost only)
+tgraphx-dashboard --logdir runs/demo
+# → http://127.0.0.1:8765
+```
+
+```python
+# Python API — non-blocking background thread (use during training)
+from tgraphx.dashboard import launch_dashboard_background
+server = launch_dashboard_background("runs/demo", port=8765)
+# ... training loop ...
+server.shutdown()
+```
+
+### LAN / multi-device access
+
+```bash
+# Requires an explicit token — refused without one
+tgraphx-dashboard --logdir runs/demo \
+  --host 0.0.0.0 --port 8765 --token MY_SECRET_TOKEN
+```
+
+Each browser displays times in **its own local timezone** (UTC is stored, JS converts).
+
+### Dashboard features
+
+| Section | Contents |
+|---------|----------|
+| **Overview** | Status chip, epoch progress, live loss, elapsed / ETA, device |
+| **Metrics** | SVG line charts for every logged column; optional EMA smoothing |
+| **Graph** | Graph summary, degree distribution, SVG preview for small graphs |
+| **Hardware** | CPU/RAM/GPU/MPS stats (requires optional `psutil` / `pynvml`) |
+| **Logs** | Last 50 metric rows as a table |
+| **Config** | `run_metadata.json` as formatted JSON |
+| **TV mode** | Full-screen large-font view for passive monitoring |
+
+### Logging format
+
+Write `metrics.csv` with a header row; all columns are auto-detected:
+
+```
+epoch,step,train_loss,val_loss,accuracy,learning_rate,timestamp
+1,50,0.82,0.91,0.56,0.001,2025-01-01T12:00:00Z
+```
+
+Timestamps in **ISO-8601 UTC** are displayed in the viewer's local timezone.
+
+Optional `run_metadata.json` (free-form dict) and `graph_metadata.json`:
+
+```json
+{
+  "num_nodes": 9, "num_edges": 33, "directed": false,
+  "builder": "build_grid_graph", "builder_params": {"rows": 3, "cols": 3},
+  "degree_stats": {"mean": 3.6, "min": 2, "max": 4},
+  "edge_index": [[...], [...]]
+}
+```
+
+### Graph visualization limits
+
+* Full SVG preview: ≤ 200 nodes and ≤ 1 000 edges (send `edge_index` in JSON).
+* Larger graphs: summary + degree histogram only (edge_index stripped automatically).
+* Grid graphs: 2-D grid layout rendered from `builder_params`; no `edge_index` needed.
+* 3-D grids: rendered as depth-slice panels.
+* **Never** writes large `edge_index` files silently — opt-in by including it in `graph_metadata.json`.
+
+### Security model
+
+| Scenario | Token required? |
+|----------|:-:|
+| `--host 127.0.0.1` (default) | No |
+| `--host 0.0.0.0` + connecting from localhost | No |
+| `--host 0.0.0.0` + connecting from another device | **Yes** |
+| Starting LAN mode without `--token` | **Refused at startup** |
+
+The dashboard is **read-only**, serves no external assets, and restricts all file access to `--logdir`.
+
+### Hardware monitoring (optional)
+
+```bash
+pip install psutil   # CPU %, RAM %, process memory
+pip install pynvml   # NVIDIA GPU util, temperature, VRAM
+```
+
+Missing packages are gracefully hidden — no broken charts.
+
+---
+
+## Privacy and local-first behavior
+
+TGraphX is designed to be **entirely local and private**:
+
+| Behavior | Default |
+|---|---|
+| Telemetry / analytics | None — never |
+| Remote calls at import | None |
+| Dashboard | Off — launch explicitly |
+| CSV metric logging | Off — create `CSVLogger` explicitly |
+| TensorBoard logging | Off — create `TensorBoardLogger` explicitly |
+| Hardware monitoring | Off — pass `include_hardware=True` to `env_report` |
+| Checkpoints | Off — call `save_checkpoint` explicitly |
+| Graph serialization | Off — include `edge_index` in JSON manually |
+| Background threads | None (unless `launch_dashboard_background` is called) |
+| File writes | Only to paths you explicitly provide |
+| Reads | Dashboard reads only inside `--logdir` |
+| External CDN / assets | None — dashboard is fully self-contained |
+
+No `~/.tgraphx` directory or user-level config is created by default.
 
 ---
 
@@ -113,6 +384,101 @@ out.sum().backward()   # all learned stages are differentiable
 
 ---
 
+## Graph Builders
+
+TGraphX ships **pure-PyTorch graph builders** that return `edge_index`
+tensors (`[2, E]`, `dtype=torch.long`) ready for any GNN layer or
+`Graph` constructor.  They create **fixed, rule-based** adjacency
+structures — they do **not** implement learned adjacency.
+
+### Builder API
+
+| Function | Description | Key params |
+|----------|-------------|-----------|
+| `build_grid_graph(rows, cols)` | 2-D 4-connected grid | `directed`, `self_loops` |
+| `build_grid_graph_3d(depth, rows, cols)` | 3-D 6-connected grid | `directed`, `self_loops` |
+| `build_fully_connected_graph(num_nodes)` | Complete graph | `self_loops` |
+| `build_knn_graph(coords, k)` | k-nearest-neighbour | `directed`, `self_loops` |
+| `build_radius_graph(coords, radius)` | All pairs within radius | `directed`, `self_loops` |
+| `build_iou_graph(boxes, threshold)` | Bounding-box IoU ≥ threshold | `directed`, `self_loops` |
+| `build_random_graph(num_nodes, num_edges)` | Uniform random sample | `directed`, `self_loops`, `seed` |
+
+> **O(N²) warning:** `build_knn_graph` and `build_radius_graph` call
+> `torch.cdist` internally, which requires **O(N²)** time and memory.
+> For large graphs (N > 10 000), use approximate-NN libraries instead.
+>
+> **O(N²) warning:** `build_fully_connected_graph` emits N·(N−1) edges.
+> Memory grows quadratically with node count.
+
+### Grid graph quickstart
+
+```python
+import torch
+from tgraphx import Graph, build_grid_graph
+from tgraphx.layers.conv_message import ConvMessagePassing
+
+# 3×3 patch grid — 9 nodes, each with a [4, 8, 8] spatial feature
+node_features = torch.randn(9, 4, 8, 8)
+edge_index = build_grid_graph(3, 3, directed=False, self_loops=True)
+# edge_index: [2, 33]  (24 neighbour + 9 self-loop edges)
+
+g = Graph(node_features, edge_index)
+
+layer = ConvMessagePassing(in_shape=(4, 8, 8), out_shape=(8, 8, 8))
+out = layer(g.node_features, g.edge_index)   # [9, 8, 8, 8]
+```
+
+### 2-D image patch graph
+
+```python
+import torch
+from tgraphx import build_grid_graph, image_to_patches
+from tgraphx.layers.gat import TensorGATLayer
+
+# Extract 4×4 patches from a [B, C, H, W] image
+images = torch.randn(2, 3, 8, 8)
+patches = image_to_patches(images, patch_size=4)   # [2, 4, 3, 4, 4]
+
+# Build the patch grid graph
+edge_index = build_grid_graph(2, 2, directed=False, self_loops=True)
+
+# Run GAT on one image's patches
+x = patches[0]   # [4, 3, 4, 4]
+gat = TensorGATLayer(in_channels=3, out_channels=8, num_heads=2, spatial_rank=2)
+out = gat(x, edge_index)   # [4, 8, 4, 4]
+```
+
+### 3-D volume patch graph
+
+```python
+import torch
+from tgraphx import build_grid_graph_3d, volume_to_patches
+from tgraphx.layers.gat import TensorGATLayer
+
+# Extract 4×4×4 patches from a [B, C, D, H, W] volume
+volumes = torch.randn(1, 2, 8, 8, 8)
+patches = volume_to_patches(volumes, patch_size=4)   # [1, 8, 2, 4, 4, 4]
+
+# Build the 3-D patch grid graph
+edge_index = build_grid_graph_3d(2, 2, 2, directed=False, self_loops=True)
+
+# Run GAT on one volume's patches
+x = patches[0]   # [8, 2, 4, 4, 4]
+gat = TensorGATLayer(in_channels=2, out_channels=4, num_heads=2, spatial_rank=3)
+out = gat(x, edge_index)   # [8, 4, 4, 4, 4]
+```
+
+### Patch helper API
+
+| Function | Input | Output | Notes |
+|----------|-------|--------|-------|
+| `patch_grid_shape(H, W, patch_size, stride)` | — | `(n_h, n_w)` | Raises if not exactly covered |
+| `image_to_patches(images, patch_size, stride)` | `[B, C, H, W]` | `[B, P, C, ph, pw]` | Row-major; matches grid node order |
+| `volume_patch_grid_shape(D, H, W, patch_size, stride)` | — | `(n_d, n_h, n_w)` | Raises if not exactly covered |
+| `volume_to_patches(volumes, patch_size, stride)` | `[B, C, D, H, W]` | `[B, P, C, pd, ph, pw]` | Depth-row-col order; matches 3-D grid |
+
+---
+
 ## Concept: tensor-aware node features
 
 In a standard GNN a node carries a vector `x_i ∈ ℝ^d`. In TGraphX a node carries a tensor `X_i ∈ ℝ^{C×H×W}`. Every layer follows the standard message-passing template:
@@ -148,6 +514,105 @@ The graph structure — which nodes are connected — is **not learned by the mo
 
 ---
 
+## Factory API
+
+### `make_layer` — create any layer by name
+
+```python
+from tgraphx import make_layer
+
+# 2-D spatial GAT with 2 attention heads
+layer = make_layer("gat", in_shape=(8, 4, 4), out_shape=(16, 4, 4), heads=2, residual=True)
+
+# Vector linear message passing
+layer = make_layer("linear", in_shape=(32,), out_shape=(64,), aggr="mean")
+```
+
+| Name | Layer class | Shape support |
+|------|-------------|--------------|
+| `"conv"` | `ConvMessagePassing` | 2-D / 3-D spatial |
+| `"gat"` | `TensorGATLayer` | 2-D / 3-D spatial |
+| `"sage"` | `TensorGraphSAGELayer` | 2-D / 3-D spatial |
+| `"gin"` | `TensorGINLayer` | 2-D / 3-D spatial |
+| `"linear"` | `LinearMessagePassing` | vector only |
+| `"legacy_attention"` | `AttentionMessagePassing` | vector / 2-D spatial |
+
+### `build_model` — complete task model
+
+```python
+from tgraphx import build_model
+
+# Node classification on vector features
+model = build_model(
+    task="node_classification",
+    layer="linear",
+    in_shape=(32,),
+    hidden_shape=(64,),
+    num_layers=3,
+    num_classes=5,
+)
+out = model(x, edge_index)    # [N, 5]
+
+# Graph classification on 2-D image patches
+model = build_model(
+    task="graph_classification",
+    layer="gat",
+    in_shape=(3, 4, 4),       # [C, ph, pw]
+    hidden_shape=(8, 4, 4),
+    num_layers=2,
+    num_classes=10,
+    heads=2,
+    pooling="mean",
+)
+out = model(x, edge_index, batch=batch)   # [G, 10]
+```
+
+### Task support matrix
+
+| Task | Vector `[N,D]` | 2-D spatial `[N,C,H,W]` | 3-D volumetric `[N,C,D,H,W]` |
+|------|:-:|:-:|:-:|
+| `node_classification` | ✓ | ✓ | ✓ |
+| `node_regression` | ✓ | ✓ | ✓ |
+| `graph_classification` | ✓ | ✓ | ✓ |
+| `graph_regression` | ✓ | ✓ | ✓ |
+| `edge_prediction` | ✓ | ✓ (spatial pool) | ✓ (spatial pool) |
+| `link_prediction` | deferred | deferred | deferred |
+
+> **Spatial / volumetric tasks**: after the GNN stack the factory applies
+> global spatial average-pooling to flatten `[N, C, *spatial]` → `[N, C]`
+> before the linear head.  Spatial resolution is preserved inside every
+> GNN layer and only collapsed at the final readout.
+
+### `build_model_from_config` — config-driven construction
+
+```python
+from tgraphx import build_model_from_config
+
+# From a Python dict (no eval, no exec)
+config = {
+    "model": {
+        "task": "graph_classification",
+        "layer": "gat",
+        "in_shape": [8, 4, 4],
+        "hidden_shape": [16, 4, 4],
+        "num_layers": 2,
+        "num_classes": 3,
+        "heads": 2,
+        "residual": True,
+        "dropout": 0.1,
+    }
+}
+model = build_model_from_config(config)
+
+# From a JSON file
+model = build_model_from_config("config.json")
+
+# From a YAML file (requires PyYAML)
+model = build_model_from_config("config.yaml")
+```
+
+---
+
 ## Examples
 
 ```bash
@@ -175,6 +640,25 @@ python examples/tiny_overfit_edge_features.py
 
 # Deep 8-layer stack gradient sanity for every GNN family
 python examples/gradient_sanity_stack.py
+
+# Graph builder directedness and self-loop demo
+python examples/directed_vs_undirected_graphs.py
+
+# 2-D image → patch → GNN (ConvMP + GAT)
+python examples/image_patch_graph.py
+
+# 3-D volume → patch → GNN (ConvMP + GAT)
+python examples/volume_patch_graph.py
+
+# All four GNN families on a 2-D and 3-D grid graph
+python examples/gnn_family_with_graph_builders.py
+
+# Factory examples (graph builders + model factories)
+python examples/01_vector_node_classification.py
+python examples/02_spatial_graph_classification.py
+python examples/03_volumetric_graph_classification.py
+python examples/04_config_based_model.py
+python examples/05_edge_prediction.py
 ```
 
 ---
@@ -187,18 +671,41 @@ python examples/gradient_sanity_stack.py
 from tgraphx import Graph
 
 g = Graph(
-    node_features,      # torch.Tensor  [N, ...]          required
-    edge_index,         # torch.LongTensor [2, E] or None  required
-    edge_features,      # torch.Tensor  [E, ...]           optional
+    node_features,                 # torch.Tensor  [N, ...]              required
+    edge_index=None,               # torch.LongTensor [2, E] or None     optional
+    edge_weight=None,              # torch.Tensor [E]                    optional
+    edge_features=None,            # torch.Tensor [E, ...]               optional
+    node_labels=None,              # torch.Tensor [N, ...]               optional
+    edge_labels=None,              # torch.Tensor [E, ...]               optional
+    graph_label=None,              # torch.Tensor (any shape)            optional
+    metadata=None,                 # dict                                optional
 )
-g.to("cuda")            # moves all tensors in-place; returns self
+g.clone()                          # deep copy (tensors and metadata)
+g.to("cuda", dtype=torch.float32)  # moves all tensor fields; dtype only
+                                   #   applies to floating-point tensors
+g.cpu(); g.cuda()                  # convenience aliases
+g.add_self_loops(); g.remove_self_loops()
+g.make_undirected(reduce="mean")   # symmetrize, coalesce duplicates
+g.is_undirected()                  # structural check (ignores weights)
+g.validate()                       # re-run validation after manual mutation
+g.num_nodes, g.num_edges, g.feature_shape, g.edge_feature_shape
+g.has_edges, g.has_edge_weight, g.has_edge_features
 ```
+
+Supported per-node feature layouts: `[N, D]`, `[N, C, H, W]`, and storage-level
+`[N, C, D, H, W]`. Edge features mirror this: `[E, D_e]`, `[E, C_e, H, W]`, and
+storage-level `[E, C_e, D, H, W]`.
 
 `Graph.__init__` raises immediately on:
 - non-Tensor inputs
+- `node_features` or `edge_features` with fewer than 2 dimensions
 - `edge_index` with wrong shape, wrong dtype (`torch.long` required), or out-of-range indices
-- device mismatch between `node_features` and `edge_index` / `edge_features`
-- `edge_features` length not equal to the number of edges
+- `edge_weight` that is not 1-D, or whose length differs from `E`
+- per-edge tensors (`edge_weight` / `edge_features` / `edge_labels`) supplied
+  without an `edge_index`
+- device mismatch between `node_features` and any other tensor field
+- length mismatch between `node_features` / `edge_index` and any per-node /
+  per-edge tensor
 
 ### `GraphBatch`
 
@@ -206,14 +713,23 @@ g.to("cuda")            # moves all tensors in-place; returns self
 from tgraphx import GraphBatch
 
 batch = GraphBatch([g1, g2, g3])
-# batch.node_features  [N_total, C, H, W]
+# batch.node_features  [N_total, ...]
 # batch.edge_index     [2, E_total]   — indices offset per graph
-# batch.edge_features  [E_total, ...] — concatenated if present
+# batch.edge_weight    [E_total]      — concatenated if every graph has it
+# batch.edge_features  [E_total, ...] — concatenated if every graph has it
+# batch.node_labels    [N_total, ...] — concatenated if every graph has it
+# batch.edge_labels    [E_total, ...] — concatenated if every graph has it
+# batch.graph_labels   [B, ...]       — stacked if every graph has it
+# batch.metadata       list[Any]      — verbatim, length B (None entries OK)
 # batch.batch          [N_total]      — graph membership (dtype=long)
 batch.to("cuda")
 ```
 
-All graphs must share the same per-node feature shape. Passing graphs with different spatial sizes raises a `ValueError` with a descriptive message.
+All graphs must share the same per-node feature shape (and per-edge feature
+shape, when present). Passing graphs with different spatial sizes raises a
+`ValueError` with a descriptive message. Optional per-edge tensors must be
+present on every graph that has edges, or none — mixing-some-with-none is
+rejected so per-edge data is never silently dropped.
 
 ### `ConvMessagePassing`
 
@@ -505,7 +1021,7 @@ device = get_device(device_id=1)  # specific CUDA device
 
 | Tensor | Shape | dtype | Notes |
 |--------|-------|-------|-------|
-| `node_features` | `[N, C, H, W]` | float | 2-D spatial; N = number of nodes |
+| `node_features` | `[N, D]`, `[N, C, H, W]`, or `[N, C, D, H, W]` | float | vector, 2-D spatial, or 3-D volumetric; N = number of nodes |
 | `node_features` (vector) | `[N, D]` | float | For `NodeClassifier` / `LinearMessagePassing` |
 | `edge_index` | `[2, E]` | `torch.long` | Row 0 = source nodes, row 1 = destination nodes |
 | `edge_features` | `[E, ...]` | float | Optional; length must equal E |
@@ -551,27 +1067,29 @@ batch.to(device)
 - **No patch extraction:** Users split images into patches before passing them to the model.
 - **`AttentionMessagePassing` is not GAT.** It uses per-edge sigmoid gating without softmax normalisation. Use `TensorGATLayer` for true multi-head GAT.
 - **Scalar attention only in `TensorGATLayer`.** Per-channel and per-pixel attention modes are not implemented.
-- **GAT edge features are vector-only.** `TensorGATLayer` accepts `[E, edge_dim]` vector edge features as an additive attention bias. Spatial edge tensors `[E, C_e, H, W]` are not supported in GAT (use `TensorGraphSAGELayer` or `TensorGINLayer` for those).
-- **2-D aggregation only:** All layers expect node features of shape `[N, C, H, W]`. 3-D / volumetric inputs `[N, C, D, H, W]` are not supported end-to-end.
+- **GAT edge features (vector or spatial → pooled).** `TensorGATLayer` accepts `[E, edge_dim]` vectors and matching-rank spatial tensors (`[E, edge_dim, H, W]` when `spatial_rank=2`, `[E, edge_dim, D, H, W]` when `spatial_rank=3`). Spatial tensors are mean-pooled over their spatial dims before the per-`(edge, head)` attention bias projection — this keeps the scalar-attention regime stable. Mixed-rank edges (e.g. 5-D into a 2-D-configured GAT, or 4-D into a 3-D-configured GAT) raise `NotImplementedError`. `TensorGraphSAGELayer` and `TensorGINLayer` use matching-rank spatial edge tensors directly without pooling.
+- **Node-feature ranks supported.** TGraphX supports vector `[N, D]`, 2-D spatial `[N, C, H, W]`, and 3-D volumetric `[N, C, D, H, W]` node features for the listed layers. It does not claim arbitrary-rank tensor support. Vector node features are handled by `LinearMessagePassing`; 2-D / 3-D by `ConvMessagePassing`, `TensorGATLayer`, `TensorGraphSAGELayer`, and `TensorGINLayer` (with `spatial_rank=2` or `3` at construction time).
 - **Differentiability:** All learned parameters (CNN encoder, message-passing layers, classifier) are end-to-end differentiable. The graph topology (`edge_index`) is user-provided and is not learned by the model.
 
 ## GNN family coverage
 
 | GNN family | Implemented? | Tested? | Limitations |
 |------------|-------------|---------|------------|
-| Tensor-aware GCN-style (Conv message passing) | ✅ `ConvMessagePassing` | ✅ | 2-D spatial only; edge features must be spatial `[E, C_e, H, W]` |
-| Tensor-aware GAT (multi-head) | ✅ `TensorGATLayer` | ✅ | scalar attention per `(edge, head)`; vector edge bias `[E, D_e]` supported; no spatial edge features |
-| Tensor-aware GraphSAGE | ✅ `TensorGraphSAGELayer` | ✅ | mean / max only; no LSTM aggregator |
-| Tensor-aware GIN / GINEConv | ✅ `TensorGINLayer` | ✅ | 2-D spatial only |
+| Tensor-aware GCN-style (Conv message passing) | ✅ `ConvMessagePassing` | ✅ | 2-D `[N, C, H, W]` and 3-D `[N, C, D, H, W]`; edge features must be matching-rank spatial with channel count = node channel count |
+| Tensor-aware GAT (multi-head) | ✅ `TensorGATLayer` | ✅ | 2-D and 3-D node features (`spatial_rank=2`/`3`); scalar attention per `(edge, head)`; vector `[E, D_e]` and matching-rank spatial / volumetric edge features (mean-pooled); no per-pixel / per-voxel attention |
+| Tensor-aware GraphSAGE | ✅ `TensorGraphSAGELayer` | ✅ | 2-D and 3-D node features (`spatial_rank=2`/`3`); mean / max only; no LSTM aggregator |
+| Tensor-aware GIN / GINEConv | ✅ `TensorGINLayer` | ✅ | 2-D and 3-D node features (`spatial_rank=2`/`3`) |
 | MPNN-style custom layer | ✅ `TensorMessagePassingLayer` base | ✅ (subclass test + example) | — |
-| Edge-conditioned MP (spatial) | ✅ `ConvMessagePassing`, `TensorGraphSAGELayer`, `TensorGINLayer` | ✅ | edge features `[E, C_e, H, W]` |
+| Edge-conditioned MP (spatial / volumetric) | ✅ `ConvMessagePassing`, `TensorGATLayer` (mean-pooled), `TensorGraphSAGELayer`, `TensorGINLayer` | ✅ | edge features `[E, C_e, H, W]` (2-D) or `[E, C_e, D, H, W]` (3-D, matching the layer's `spatial_rank`) |
+| Per-edge `edge_weight` (`[E]`) | ✅ all four message-passing layers, 2-D and 3-D | ✅ | scales messages before aggregation; on GAT applied after softmax-normalised attention |
+| 3-D / volumetric node features | ✅ `ConvMessagePassing`, `TensorGATLayer`, `TensorGraphSAGELayer`, `TensorGINLayer` | ✅ | `[N, C, D, H, W]`; pass `spatial_rank=3` to GAT/SAGE/GIN, or `(C, D, H, W)` `in_shape` to `ConvMessagePassing`. `DeepCNNAggregator` is rank-aware. `LinearMessagePassing` covers vector `[N, D]` and is unaffected. |
 | Edge-conditioned MP (vector) | ✅ `TensorGATLayer`, `TensorGraphSAGELayer`, `TensorGINLayer` | ✅ | edge features `[E, D_e]`; `edge_features_kind="vector"` |
 | `aggr="sum"\|"mean"\|"max"` base | ✅ all three modes | ✅ hand-computed + backward | `ConvMessagePassing` `aggr="max"` routes through `scatter_max` |
 | Graph Transformer | ❌ | — | not implemented |
 | Heterogeneous graphs | ❌ | — | not supported |
 | Temporal / spatiotemporal graphs | ❌ | — | not supported |
 | Learned graph construction | ❌ | — | `edge_index` is always user-supplied |
-| 3-D / volumetric aggregation | ❌ | — | layers are 2-D only (`Conv2d` aggregators) |
+| Arbitrary-rank tensor support beyond rank 0 / 2 / 3 | ❌ | — | only vector, 2-D, and 3-D shapes are supported |
 
 ---
 

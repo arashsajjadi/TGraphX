@@ -54,6 +54,19 @@ dev = [
     "build>=0.10",
     "twine>=4.0",
 ]
+# Hardware-monitoring extras for the dashboard
+monitoring = [
+    "psutil>=5.9",
+    "pynvml>=11.0",
+]
+# Third-party experiment-tracking libraries (not bundled with TGraphX)
+tracking = [
+    "tensorboard>=2.11",
+    "mlflow>=2.0",
+]
+
+[project.scripts]
+tgraphx-dashboard = "tgraphx.dashboard.app:main"
 
 [project.urls]
 Homepage = "https://github.com/arashsajjadi/TGraphX"

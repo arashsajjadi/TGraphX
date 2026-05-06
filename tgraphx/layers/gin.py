@@ -1,13 +1,15 @@
-"""Tensor-aware GIN / GINEConv layer.
+"""Tensor-aware GIN / GINEConv layer for 2-D or 3-D node features.
 
-Adapts Xu et al. (2019)'s Graph Isomorphism Network to spatial node features:
+Adapts Xu et al. (2019) Graph Isomorphism Network to spatial / volumetric
+features:
 
     h_j' = MLP( (1 + ε) · h_j + Σ_{i ∈ N(j)} h_i )
 
-For tensor features, ``MLP`` is a small 1x1 ``Conv2d`` block by default so the
-spatial layout ``[C, H, W]`` is preserved.  Users may pass any custom module
-as the MLP as long as it maps ``[N, in_channels, H, W]`` to
-``[N, out_channels, H, W]``.
+For tensor features, ``MLP`` is a small 1×1 (or 1×1×1) ``Conv2d`` /
+``Conv3d`` block by default so the spatial layout ``[C, H, W]`` (rank 2)
+or ``[C, D, H, W]`` (rank 3) is preserved.  Users may pass any custom
+module as the MLP as long as it preserves the leading ``[N, ...]`` shape
+and maps ``in_channels`` to ``out_channels``.
 
 When ``use_edge_features=True``, this becomes a tensor-aware GINEConv:
 
@@ -16,11 +18,15 @@ When ``use_edge_features=True``, this becomes a tensor-aware GINEConv:
 The edge projection ``φ`` adapts to the input format:
 
 * ``edge_features_kind="spatial"`` (default) — ``e_ij`` has shape
-  ``[E, edge_dim, H, W]``; ``φ`` is a 1x1 ``Conv2d`` mapping
-  ``edge_dim → in_channels`` (or identity when ``edge_dim == in_channels``).
+  ``[E, edge_dim, *spatial]`` matching the layer's ``spatial_rank``;
+  ``φ`` is a 1×1 (or 1×1×1) convolution mapping ``edge_dim → in_channels``
+  (or identity when ``edge_dim == in_channels``).
 * ``edge_features_kind="vector"``  — ``e_ij`` has shape ``[E, edge_dim]``;
-  ``φ`` is ``nn.Linear(edge_dim, in_channels)`` followed by an unsqueeze to
-  ``[E, in_channels, 1, 1]`` so the bias broadcasts over the spatial grid.
+  ``φ`` is ``nn.Linear(edge_dim, in_channels)`` followed by an unsqueeze
+  to ``[E, in_channels, 1, ...]`` (one ``1`` per spatial dim) so the bias
+  broadcasts over the spatial grid.
+
+``edge_weight`` (``[E]``) scales each neighbour message before scatter-sum.
 """
 
 from __future__ import annotations
@@ -29,40 +35,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ._scatter import scatter_sum
+from ._dim import (
+    batchnorm,
+    conv1x1,
+    expected_x_dim,
+    trailing_ones,
+    validate_spatial_rank,
+)
+from ._scatter import broadcast_edge_weight, scatter_sum
 
 
 class TensorGINLayer(nn.Module):
-    """Tensor-aware GIN / GINEConv layer.
-
-    Args:
-        in_channels: Input channel count.
-        out_channels: Output channel count.
-        hidden_channels: Hidden channel count in the default MLP.  Defaults
-            to ``out_channels``.
-        eps: Initial value of the ε parameter.
-        train_eps: If ``True``, ε is a learnable scalar; otherwise it is a
-            fixed buffer.
-        use_batchnorm: If ``True``, insert ``BatchNorm2d`` layers after each
-            convolution in the default MLP.
-        mlp: Optional user-supplied module used in place of the default
-            two-layer 1x1 Conv MLP.  Must map ``[N, in_channels, H, W]`` to
-            ``[N, out_channels, H, W]``.
-        use_edge_features: Enable GINEConv-style edge inclusion.
-        edge_dim: Edge feature channel/vector count, required when
-            ``use_edge_features=True``.
-        edge_features_kind: ``"spatial"`` (default) for ``[E, edge_dim, H, W]``
-            edge tensors, or ``"vector"`` for ``[E, edge_dim]`` per-edge
-            vectors that are broadcast over the ``H × W`` grid.
-
-    Shape conventions:
-        * ``x``              ``[N, in_channels, H, W]``
-        * ``edge_index``     ``[2, E]`` (``torch.long``)
-        * ``edge_features``  ``[E, edge_dim, H, W]`` if ``edge_features_kind=
-          "spatial"``, ``[E, edge_dim]`` if ``"vector"`` (only when
-          ``use_edge_features=True``).
-        * output             ``[N, out_channels, H, W]``
-    """
+    """Tensor-aware GIN / GINEConv layer for 2-D or 3-D node features."""
 
     def __init__(
         self,
@@ -76,6 +60,7 @@ class TensorGINLayer(nn.Module):
         use_edge_features: bool = False,
         edge_dim: int | None = None,
         edge_features_kind: str = "spatial",
+        spatial_rank: int = 2,
     ) -> None:
         super().__init__()
         if use_edge_features and edge_dim is None:
@@ -85,6 +70,7 @@ class TensorGINLayer(nn.Module):
                 f"edge_features_kind must be 'spatial' or 'vector'; got "
                 f"{edge_features_kind!r}."
             )
+        validate_spatial_rank(spatial_rank)
         if hidden_channels is None:
             hidden_channels = out_channels
 
@@ -93,6 +79,7 @@ class TensorGINLayer(nn.Module):
         self.use_edge_features = use_edge_features
         self.edge_dim = edge_dim
         self.edge_features_kind = edge_features_kind
+        self.spatial_rank = spatial_rank
 
         if train_eps:
             self.eps = nn.Parameter(torch.tensor(float(eps)))
@@ -101,14 +88,14 @@ class TensorGINLayer(nn.Module):
 
         if mlp is None:
             layers: list[nn.Module] = [
-                nn.Conv2d(in_channels, hidden_channels, kernel_size=1)
+                conv1x1(spatial_rank, in_channels, hidden_channels)
             ]
             if use_batchnorm:
-                layers.append(nn.BatchNorm2d(hidden_channels))
+                layers.append(batchnorm(spatial_rank, hidden_channels))
             layers.append(nn.ReLU(inplace=True))
-            layers.append(nn.Conv2d(hidden_channels, out_channels, kernel_size=1))
+            layers.append(conv1x1(spatial_rank, hidden_channels, out_channels))
             if use_batchnorm:
-                layers.append(nn.BatchNorm2d(out_channels))
+                layers.append(batchnorm(spatial_rank, out_channels))
             self.mlp = nn.Sequential(*layers)
         else:
             self.mlp = mlp
@@ -118,7 +105,7 @@ class TensorGINLayer(nn.Module):
                 if edge_dim == in_channels:
                     self.edge_proj: nn.Module = nn.Identity()
                 else:
-                    self.edge_proj = nn.Conv2d(edge_dim, in_channels, kernel_size=1)
+                    self.edge_proj = conv1x1(spatial_rank, edge_dim, in_channels)
             else:  # "vector"
                 self.edge_proj = nn.Linear(edge_dim, in_channels)
         else:
@@ -133,10 +120,15 @@ class TensorGINLayer(nn.Module):
         x: torch.Tensor,
         edge_index: torch.Tensor,
         edge_features: torch.Tensor | None = None,
+        edge_weight: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        if x.dim() != 4:
+        rank = self.spatial_rank
+        x_dim = expected_x_dim(rank)
+        if x.dim() != x_dim:
+            shape_str = "[N, C, H, W]" if rank == 2 else "[N, C, D, H, W]"
             raise ValueError(
-                f"x must have shape [N, C, H, W]; got {tuple(x.shape)}."
+                f"x must have shape {shape_str} (spatial_rank={rank}); "
+                f"got {tuple(x.shape)}."
             )
         if edge_index.dim() != 2 or edge_index.size(0) != 2:
             raise ValueError(
@@ -168,18 +160,20 @@ class TensorGINLayer(nn.Module):
                     f"edge_index has {edge_index.size(1)} edges."
                 )
             if self.edge_features_kind == "spatial":
-                if edge_features.dim() != 4:
+                expected_dim = 2 + rank
+                spatial_str = "[E, edge_dim, H, W]" if rank == 2 else "[E, edge_dim, D, H, W]"
+                if edge_features.dim() != expected_dim:
                     raise ValueError(
-                        f"edge_features must have shape [E, edge_dim, H, W] "
-                        f"when edge_features_kind='spatial'; got "
-                        f"{tuple(edge_features.shape)}."
+                        f"edge_features must have shape {spatial_str} when "
+                        f"edge_features_kind='spatial' and spatial_rank={rank}; "
+                        f"got {tuple(edge_features.shape)}."
                     )
                 if edge_features.size(1) != self.edge_dim:
                     raise ValueError(
                         f"edge_features channel count {edge_features.size(1)} "
                         f"does not match edge_dim={self.edge_dim}."
                     )
-                edge_term = self.edge_proj(edge_features)  # [E, in_channels, H, W]
+                edge_term = self.edge_proj(edge_features)  # [E, in_channels, *spatial]
             else:  # "vector"
                 if edge_features.dim() != 2:
                     raise ValueError(
@@ -192,13 +186,20 @@ class TensorGINLayer(nn.Module):
                         f"edge_features last-dim {edge_features.size(1)} does "
                         f"not match edge_dim={self.edge_dim}."
                     )
-                # [E, edge_dim] -> [E, in_channels] -> [E, in_channels, 1, 1]
-                edge_term = self.edge_proj(edge_features).unsqueeze(-1).unsqueeze(-1)
+                edge_vec = self.edge_proj(edge_features)  # [E, in_channels]
+                view = (edge_vec.size(0), self.in_channels) + trailing_ones(rank)
+                edge_term = edge_vec.view(view)
             messages = F.relu(x.index_select(0, src) + edge_term)
         else:
             messages = x.index_select(0, src)
 
-        agg = scatter_sum(messages, dst, N)  # [N, in_channels, H, W]
+        if edge_weight is not None:
+            weight_b = broadcast_edge_weight(
+                edge_weight, messages, num_edges=edge_index.size(1)
+            )
+            messages = messages * weight_b
+
+        agg = scatter_sum(messages, dst, N)  # [N, in_channels, *spatial]
         combined = (1.0 + self.eps) * x + agg
         return self.mlp(combined)
 
@@ -207,5 +208,6 @@ class TensorGINLayer(nn.Module):
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
             f"eps={float(self.eps):.4f}, "
             f"train_eps={isinstance(self.eps, nn.Parameter)}, "
-            f"use_edge_features={self.use_edge_features}"
+            f"use_edge_features={self.use_edge_features}, "
+            f"spatial_rank={self.spatial_rank}"
         )

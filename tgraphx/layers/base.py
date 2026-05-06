@@ -112,12 +112,26 @@ class TensorMessagePassingLayer(nn.Module):
                 out = node_feature + out
         return out
 
-    def forward(self, node_features, edge_index, edge_features=None):
+    def forward(self, node_features, edge_index, edge_features=None, edge_weight=None):
+        r"""Standard message-passing forward.
+
+        ``edge_weight`` is an optional ``[E]`` per-edge scalar.  If provided,
+        each per-edge message is multiplied by the corresponding weight
+        before aggregation.  The weight is broadcast over every trailing
+        dimension of the message tensor, so it works for both vector and
+        spatial messages.
+        """
         src_idx = edge_index[0]
         dest_idx = edge_index[1]
         src_features = node_features[src_idx]
         dest_features = node_features[dest_idx]
         messages = self.message(src_features, dest_features, edge_features)
+        if edge_weight is not None:
+            from ._scatter import broadcast_edge_weight
+            weight_b = broadcast_edge_weight(
+                edge_weight, messages, num_edges=edge_index.size(1)
+            )
+            messages = messages * weight_b
         num_nodes = node_features.size(0)
         aggregated = self.aggregate(messages, edge_index, num_nodes)
         updated_nodes = self.update(node_features, aggregated)
