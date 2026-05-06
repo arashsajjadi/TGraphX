@@ -1,5 +1,21 @@
 # Quickstart
 
+## Colab tutorial
+
+For an interactive, browser-based introduction that requires no local setup,
+open the official TGraphX Colab notebook:
+
+**[Open the TGraphX Colab Tutorial](https://colab.research.google.com/drive/1agls1xtqE5WxbWthcG0HEa3Gbk3fvoCD?usp=sharing)**
+
+The notebook installs TGraphX from PyPI and walks through vector, 2-D spatial,
+and 3-D volumetric node classification, regression, edge prediction, and the
+full layer zoo on synthetic sanity-check tasks.
+
+> These are controlled synthetic tasks intended to verify installation and API
+> behaviour.  They are not benchmark results or real-world performance claims.
+
+---
+
 ## Installation
 
 ```bash

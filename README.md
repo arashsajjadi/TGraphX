@@ -11,6 +11,33 @@ TGraphX is a PyTorch library for graph neural networks whose **node features are
 
 ---
 
+## Colab tutorial
+
+TGraphX includes a hands-on Google Colab notebook that installs the latest PyPI release and walks through the main API features interactively:
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1agls1xtqE5WxbWthcG0HEa3Gbk3fvoCD?usp=sharing)
+
+**[Open the TGraphX Colab Tutorial →](https://colab.research.google.com/drive/1agls1xtqE5WxbWthcG0HEa3Gbk3fvoCD?usp=sharing)**
+
+The notebook covers:
+
+- CPU/GPU environment checks
+- Vector node classification
+- 2-D spatial graph classification using image patches
+- 3-D volumetric graph classification
+- Graph-level and node-level regression
+- Edge prediction / edge classification
+- Layer zoo: `ConvMessagePassing`, `TensorGATLayer`, `TensorGraphSAGELayer`, `TensorGINLayer`, `LinearMessagePassing`, legacy `AttentionMessagePassing`
+- Edge weights and edge features
+- Dashboard-compatible run files
+
+> **Honesty note:** All tasks in the notebook use controlled synthetic data
+> designed to verify installation, API behaviour, device compatibility, and
+> gradient flow.  They are not benchmark results and make no real-world
+> performance or state-of-the-art claims.
+
+---
+
 ## The problem TGraphX solves
 
 Standard GNN frameworks (PyG, DGL) expect flat vector node features. Flattening a `[C, H, W]` feature map into a `[C·H·W]` vector discards the spatial structure that makes CNNs effective. TGraphX keeps each node's representation as a tensor and applies 1×1 convolutions during message passing, so every neighbourhood aggregation step acts like a miniature CNN across neighbouring feature maps.
