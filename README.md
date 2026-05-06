@@ -144,7 +144,7 @@ Every stage of TGraphX—patch extraction, optional pre-encoder, CNN encoder, gr
 
 1. **Clone the Repository**  
    ```bash
-   git clone https://github.com/YourUsername/TGraphX.git
+   git clone https://github.com/arashsajjadi/TGraphX.git
    cd TGraphX
    ```
 

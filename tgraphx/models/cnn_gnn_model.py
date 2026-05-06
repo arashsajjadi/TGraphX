@@ -1,8 +1,8 @@
 # File: models/cnn_gnn_model.py
 import torch
 import torch.nn as nn
-from models.cnn_encoder import CNNEncoder
-from layers.conv_message import ConvMessagePassing
+from .cnn_encoder import CNNEncoder
+from ..layers.conv_message import ConvMessagePassing
 
 class CNN_GNN_Model(nn.Module):
     """

@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.safe_pool import SafeMaxPool2d  # Use our new safe pooling module
+from ..layers.safe_pool import SafeMaxPool2d
 
 
 class ResidualBlock(nn.Module):

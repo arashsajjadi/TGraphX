@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.conv_message import ConvMessagePassing
+from ..layers.conv_message import ConvMessagePassing
 
 class GraphClassifier(nn.Module):
     r"""Graph classification model that applies message passing followed by a graph-level pooling.

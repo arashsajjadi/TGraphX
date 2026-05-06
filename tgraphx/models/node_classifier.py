@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.base import LinearMessagePassing
+from ..layers.base import LinearMessagePassing
 
 
 class NodeClassifier(nn.Module):
