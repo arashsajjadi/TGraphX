@@ -29,6 +29,20 @@ def load_config(config_path):
     return config
 
 
-def get_device():
-    r"""Return the available device ('cuda' if available, else 'cpu')."""
-    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def get_device(device_id: int = 0) -> torch.device:
+    r"""Return the best available device.
+
+    Priority: CUDA > Apple Silicon MPS > CPU.
+
+    Args:
+        device_id (int): CUDA device index. Ignored for MPS and CPU. Default: 0.
+
+    Returns:
+        torch.device
+    """
+    if torch.cuda.is_available():
+        return torch.device(f'cuda:{device_id}')
+    mps_backend = getattr(torch.backends, 'mps', None)
+    if mps_backend is not None and mps_backend.is_available():
+        return torch.device('mps')
+    return torch.device('cpu')

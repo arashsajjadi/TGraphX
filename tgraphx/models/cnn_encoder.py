@@ -1,8 +1,11 @@
 # File: cnn_encoder.py
+import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ..layers.safe_pool import SafeMaxPool2d
+
+_log = logging.getLogger(__name__)
 
 
 class ResidualBlock(nn.Module):
@@ -10,16 +13,14 @@ class ResidualBlock(nn.Module):
         super().__init__()
         self.block = block
         self.debug = debug
-        self.proj = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=2)
+        # stride=1 so the projection only adjusts channels without changing spatial dims.
+        self.proj = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1)
 
     def forward(self, x):
         out = self.block(x)
         if x.shape != out.shape:
-            if self.debug:
-                print("ResidualBlock shape mismatch:", x.shape, out.shape)
+            _log.debug("ResidualBlock: projecting skip from %s to %s", x.shape, out.shape)
             x = self.proj(x)
-        if self.debug:
-            print("ResidualBlock output shape:", (x + out).shape)
         return x + out
 
 
@@ -73,17 +74,14 @@ class CNNEncoder(nn.Module):
         if self.pre_encoder is not None:
             x = self.pre_encoder(x)
         out = self.cnn(x)
-        if self.debug:
-            print("CNN output shape:", out.shape)
+        _log.debug("CNN output shape: %s", out.shape)
         if self.return_feature_map:
             out = self.conv1x1(out)
-            if self.debug:
-                print("Feature map shape after 1x1 conv:", out.shape)
+            _log.debug("Feature map shape after 1x1 conv: %s", out.shape)
             return out
         else:
             out = self.avgpool(out)
             out = out.view(out.size(0), -1)
-            if self.debug:
-                print("Flattened encoder output shape:", out.shape)
+            _log.debug("Flattened encoder output shape: %s", out.shape)
             out = self.fc(out)
             return out

@@ -23,9 +23,12 @@ class AttentionMessagePassing(TensorMessagePassingLayer):
             if self.use_edge_features:
                 self.edge_proj = nn.Conv2d(in_shape[0], self.out_dim, kernel_size=1)
         else:
-            # This branch is for vector inputs; not used for spatial maps.
+            # Vector input path: in_shape is (D,), use Linear projections.
+            # message() works for both spatial and vector because:
+            #   query/key/value: [E, out_dim]; (q*k).sum(dim=1, keepdim=True) -> [E, 1];
+            #   value * attn -> [E, out_dim]. No spatial dimensions needed.
             self.flatten_dim = in_shape[0]
-            self.query_proj = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+            self.query_proj = nn.Linear(self.flatten_dim, self.out_dim)
             self.key_proj = nn.Linear(self.flatten_dim, self.out_dim)
             self.value_proj = nn.Linear(self.flatten_dim, self.out_dim)
             if self.use_edge_features:

@@ -25,7 +25,18 @@ class TensorMessagePassingLayer(nn.Module):
         self.residual = residual
         self.use_batchnorm = use_batchnorm
         if use_batchnorm:
-            self.bn = nn.BatchNorm1d(out_shape[0])  # for flattened node features
+            ndim = len(out_shape)
+            if ndim == 1:
+                self.bn = nn.BatchNorm1d(out_shape[0])
+            elif ndim == 3:
+                self.bn = nn.BatchNorm2d(out_shape[0])
+            elif ndim == 4:
+                self.bn = nn.BatchNorm3d(out_shape[0])
+            else:
+                raise ValueError(
+                    f"use_batchnorm requires out_shape of 1 (vector), 3 (2-D spatial), "
+                    f"or 4 (3-D volumetric) dimensions; got {ndim}."
+                )
         self.dropout = nn.Dropout(p=dropout_prob) if dropout_prob > 0 else None
 
 
@@ -57,13 +68,18 @@ class TensorMessagePassingLayer(nn.Module):
         aggregated = torch.zeros(num_nodes, *messages.shape[1:], device=messages.device)
         aggregated = aggregated.index_add(0, target, messages)
         if self.aggr == 'mean':
-            # Compute counts per node and take mean
             counts = torch.zeros(num_nodes, device=messages.device)
             ones = torch.ones(messages.shape[0], device=messages.device)
             counts = counts.index_add(0, target, ones)
-            counts = counts.unsqueeze(-1).clamp(min=1)
+            # Reshape to broadcast over all trailing feature dimensions.
+            view_shape = (num_nodes,) + (1,) * (aggregated.dim() - 1)
+            counts = counts.view(view_shape).clamp(min=1)
             aggregated = aggregated / counts
-        # For 'max', a more complex (and less vectorized) implementation is required.
+        elif self.aggr == 'max':
+            raise NotImplementedError(
+                "aggr='max' is not implemented in TensorMessagePassingLayer. "
+                "Use aggr='sum' or aggr='mean', or subclass and override aggregate()."
+            )
         return aggregated
 
     def update(self, node_feature, aggregated_message):

@@ -1,6 +1,9 @@
 # File: models/pre_encoder.py
+import logging
 import torch.nn as nn
 import torchvision.models as models
+
+_log = logging.getLogger(__name__)
 
 class PreEncoder(nn.Module):
     """
@@ -12,23 +15,17 @@ class PreEncoder(nn.Module):
         super().__init__()
         self.out_channels = out_channels  # Save the output channel count.
         if use_pretrained:
-            print("Loading pretrained ResNet-18 weights...")
-            # Use the new weights API from torchvision (>=0.13)
+            _log.info("Loading pretrained ResNet-18 weights.")
             resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-
-            # Check if the weights are successfully loaded by printing the model's parameters
-            print("ResNet-18 model loaded. Checking model parameters:")
-            for name, param in resnet.named_parameters():
-                print(f"{name}: {param.shape}")
 
             if in_channels != 3:
                 resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
-            # Remove the fully-connected layer and pooling
+            # Remove the fully-connected layer and global pooling.
             self.features = nn.Sequential(*list(resnet.children())[:-2])
             self.conv1x1 = nn.Conv2d(512, out_channels, kernel_size=1)
 
-            print("Pretrained weights loaded successfully.")
+            _log.info("Pretrained ResNet-18 loaded successfully.")
         else:
             # Build a simple custom pre-encoder (example with 2 conv layers)
             hidden_channels = custom_params.get("hidden_channels", out_channels) if custom_params else out_channels

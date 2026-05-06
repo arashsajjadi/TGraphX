@@ -32,17 +32,23 @@ class GraphClassifier(nn.Module):
         # Final classifier expects input features equal to the channel dimension (hidden_shape[0])
         self.classifier = nn.Linear(hidden_shape[0], num_classes)
 
-    def forward(self, node_features, edge_index, edge_features, batch):
+    def forward(self, node_features, edge_index, edge_features=None, batch=None):
         """
         Args:
             node_features (Tensor): [N, ...] node features.
             edge_index (LongTensor): [2, E] edge indices.
-            edge_features (Tensor): [E, ...] edge features.
+            edge_features (Tensor | None): [E, ...] edge features. Default: None.
             batch (LongTensor): [N] tensor assigning each node to a graph in the batch.
+                Required; pass explicitly.
 
         Returns:
-            Tensor: Logits for each graph in the batch.
+            Tensor: Logits for each graph in the batch, shape [num_graphs, num_classes].
         """
+        if batch is None:
+            raise ValueError(
+                "batch is required for graph-level pooling. "
+                "Pass a LongTensor of shape [N] mapping each node to its graph index."
+            )
         x = node_features
         for layer in self.layers:
             x = layer(x, edge_index, edge_features)
@@ -61,11 +67,16 @@ class GraphClassifier(nn.Module):
             pooled = torch.zeros(num_graphs, *x.shape[1:], device=x.device)
             pooled = pooled.index_add(0, batch, x)
         elif self.pooling == 'max':
-            pooled = torch.full((num_graphs, *x.shape[1:]), -float('inf'), device=x.device)
-            for i in range(num_graphs):
-                mask = (batch == i)
-                if mask.sum() > 0:
-                    pooled[i] = x[mask].max(dim=0)[0]
+            # Vectorised max pooling via scatter_reduce_ to avoid a Python loop.
+            x_flat = x.flatten(1)                               # [N, F]
+            idx = batch.unsqueeze(1).expand_as(x_flat)         # [N, F]
+            pooled_flat = x_flat.new_full((num_graphs, x_flat.size(1)), float('-inf'))
+            pooled_flat.scatter_reduce_(0, idx, x_flat, reduce='amax', include_self=True)
+            # Guard: graphs with no nodes keep -inf; replace with 0.
+            pooled_flat = pooled_flat.masked_fill(
+                torch.isinf(pooled_flat) & (pooled_flat < 0), 0.0
+            )
+            pooled = pooled_flat.view(num_graphs, *x.shape[1:])
         else:
             raise ValueError("Invalid pooling type. Choose from 'mean', 'sum', or 'max'.")
 

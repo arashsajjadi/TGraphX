@@ -13,8 +13,9 @@ class ConvMessagePassing(TensorMessagePassingLayer):
     All operations preserve the spatial dimensions (H, W).
     """
 
-    def __init__(self, in_shape, out_shape, aggr='sum', use_edge_features=False, aggregator_params=None):
-        super().__init__(in_shape, out_shape, aggr)
+    def __init__(self, in_shape, out_shape, aggr='sum', use_edge_features=False,
+                 aggregator_params=None, residual=False):
+        super().__init__(in_shape, out_shape, aggr, residual=residual)
         self.use_edge_features = use_edge_features
         self.node_channels = in_shape[0]
         if self.use_edge_features:
@@ -47,6 +48,7 @@ class ConvMessagePassing(TensorMessagePassingLayer):
         return self.conv(msg_input)
 
     def update(self, node_feature, aggregated_message):
-        # Use the deep CNN aggregator to process spatial messages.
         aggregated_message = self.aggregator(aggregated_message)
+        if self.residual and node_feature.shape == aggregated_message.shape:
+            aggregated_message = node_feature + aggregated_message
         return aggregated_message
