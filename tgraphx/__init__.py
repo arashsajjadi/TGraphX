@@ -14,6 +14,9 @@ from .core.utils import load_config, get_device
 from .layers.base import TensorMessagePassingLayer, LinearMessagePassing
 from .layers.conv_message import ConvMessagePassing
 from .layers.attention_message import AttentionMessagePassing
+from .layers.gat import TensorGATLayer
+from .layers.sage import TensorGraphSAGELayer
+from .layers.gin import TensorGINLayer
 
 __all__ = [
     "__version__",
@@ -27,4 +30,7 @@ __all__ = [
     "LinearMessagePassing",
     "ConvMessagePassing",
     "AttentionMessagePassing",
+    "TensorGATLayer",
+    "TensorGraphSAGELayer",
+    "TensorGINLayer",
 ]

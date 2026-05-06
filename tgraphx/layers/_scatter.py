@@ -1,0 +1,130 @@
+"""Internal scatter and softmax helpers for tensor-aware GNN layers.
+
+These functions reduce per-edge tensors by destination-node index using
+pure PyTorch operations.  They are kept in a single private module so that
+``TensorGATLayer``, ``TensorGraphSAGELayer``, and ``TensorGINLayer`` share
+exactly one well-tested implementation.
+
+No external dependencies (e.g. ``torch_scatter``) are introduced.
+``Tensor.scatter_reduce_`` with ``reduce='amax'`` is available in
+PyTorch >= 1.13 and is the only scatter primitive used here besides
+``Tensor.index_add_`` and ``Tensor.scatter_add_``.
+"""
+
+from __future__ import annotations
+
+import torch
+
+
+def _expand_index(target: torch.Tensor, like: torch.Tensor) -> torch.Tensor:
+    """Reshape a 1-D index tensor so it can scatter along dim 0 of ``like``."""
+    if like.dim() == 1:
+        return target
+    view = (target.size(0),) + (1,) * (like.dim() - 1)
+    return target.view(view).expand_as(like)
+
+
+def edge_softmax(
+    scores: torch.Tensor,
+    target: torch.Tensor,
+    num_nodes: int,
+) -> torch.Tensor:
+    """Softmax normalisation over incoming edges per destination node.
+
+    For every destination ``j`` and every trailing index, the returned weights
+    satisfy ``sum_{i : target[i] == j} out[i, ...] == 1`` modulo floating-point
+    error.  Destinations with no incoming edges are simply not indexed.
+
+    Args:
+        scores: ``[E, *]`` raw attention logits per edge.  ``*`` is any
+            (possibly empty) trailing shape; common values are ``[E]`` and
+            ``[E, num_heads]``.
+        target: ``[E]`` long tensor of destination node indices.
+        num_nodes: total number of nodes.  Must satisfy
+            ``num_nodes >= int(target.max()) + 1`` when E > 0.
+
+    Returns:
+        Tensor of the same shape as ``scores``.
+    """
+    if scores.size(0) != target.size(0):
+        raise ValueError(
+            f"scores and target must agree on dim 0; "
+            f"got {scores.size(0)} vs {target.size(0)}"
+        )
+    if target.dtype != torch.long:
+        raise TypeError(f"target must have dtype torch.long, got {target.dtype}")
+    if scores.size(0) == 0:
+        return scores  # nothing to normalise
+
+    trailing = scores.shape[1:]
+    target_b = _expand_index(target, scores)
+
+    # Per-destination max for numerical stability.  scatter_reduce_ with
+    # include_self=True means ``max(initial, src)`` — initial is -inf, so
+    # for any destination that does receive at least one edge the result is
+    # simply max(src for that edge group).  Destinations with no incoming
+    # edges keep their -inf placeholder, but we never index into them.
+    max_per_dest = scores.new_full((num_nodes, *trailing), float("-inf"))
+    max_per_dest.scatter_reduce_(0, target_b, scores, reduce="amax", include_self=True)
+    scores_shifted = scores - max_per_dest.index_select(0, target)
+
+    # Exponentiate and sum per destination.
+    exp_scores = scores_shifted.exp()
+    sum_per_dest = scores.new_zeros((num_nodes, *trailing))
+    sum_per_dest.scatter_add_(0, target_b, exp_scores)
+
+    # Divide.  Any destination with no incoming edges has sum 0, but we never
+    # index into those rows.  We still clamp the denominator for safety.
+    denom = sum_per_dest.index_select(0, target).clamp_min(1e-16)
+    return exp_scores / denom
+
+
+def scatter_sum(
+    src: torch.Tensor,
+    target: torch.Tensor,
+    num_nodes: int,
+) -> torch.Tensor:
+    """Sum ``src`` rows by destination index along dim 0.
+
+    Returns a tensor ``out`` with shape ``[num_nodes, *src.shape[1:]]`` such
+    that ``out[j] = sum_{i : target[i] == j} src[i]``.  Destinations with no
+    matching rows stay at zero.
+    """
+    out = src.new_zeros((num_nodes, *src.shape[1:]))
+    out.index_add_(0, target, src)
+    return out
+
+
+def scatter_mean(
+    src: torch.Tensor,
+    target: torch.Tensor,
+    num_nodes: int,
+) -> torch.Tensor:
+    """Mean of ``src`` rows by destination index along dim 0.
+
+    Destinations with no matching rows are returned as zero (a count clamp of
+    1 is applied so we never divide by zero).
+    """
+    summed = scatter_sum(src, target, num_nodes)
+    counts = src.new_zeros(num_nodes)
+    counts.index_add_(0, target, src.new_ones(src.size(0)))
+    counts = counts.clamp_min(1.0).view((num_nodes,) + (1,) * (summed.dim() - 1))
+    return summed / counts
+
+
+def scatter_max(
+    src: torch.Tensor,
+    target: torch.Tensor,
+    num_nodes: int,
+) -> torch.Tensor:
+    """Max of ``src`` rows by destination index along dim 0.
+
+    Destinations with no matching rows would otherwise return ``-inf``
+    (the identity for max); they are replaced with ``0`` to keep downstream
+    computations finite.
+    """
+    trailing = src.shape[1:]
+    out = src.new_full((num_nodes, *trailing), float("-inf"))
+    target_b = _expand_index(target, src)
+    out.scatter_reduce_(0, target_b, src, reduce="amax", include_self=True)
+    return out.masked_fill(torch.isinf(out) & (out < 0), 0.0)
