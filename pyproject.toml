@@ -65,3 +65,7 @@ Paper = "https://arxiv.org/abs/2504.03953"
 where = ["."]
 include = ["tgraphx*"]
 exclude = ["tests*", "examples*", "dist*", "build*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short --strict-markers"

@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    name: "Python ${{ matrix.python-version }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false   # keep running other versions even if one fails
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      # Install the CPU-only PyTorch wheel first so pip does not pull in CUDA
+      # libraries when it later resolves torch>=1.13 from pyproject.toml.
+      - name: Install CPU-only PyTorch
+        run: |
+          pip install torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      # Install the package in editable mode together with dev dependencies
+      # (pytest, build, twine).  torch/torchvision are already satisfied above.
+      - name: Install TGraphX with dev dependencies
+        run: pip install -e ".[dev]"
+
+      # Quick sanity check that the installed package is importable and has
+      # a version string before we run the full suite.
+      - name: Smoke-check installed package
+        run: |
+          python -c "import tgraphx; print('tgraphx', tgraphx.__version__)"
+          python -c "from tgraphx import Graph, GraphBatch"
+          python -c "from tgraphx.layers import ConvMessagePassing"
+          python -c "from tgraphx.models import CNNEncoder"
+
+      - name: Run test suite
+        run: pytest
+        # CUDA and MPS tests are skipped automatically on CPU-only runners
+        # by the custom markers in tests/conftest.py.
