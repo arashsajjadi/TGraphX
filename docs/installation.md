@@ -45,7 +45,7 @@ pip install "tgraphx[dev]"
 
 ```python
 import tgraphx
-print(tgraphx.__version__)          # e.g. "0.1.0"
+print(tgraphx.__version__)          # e.g. "0.1.1"
 
 from tgraphx import Graph, TensorGATLayer, build_grid_graph
 from tgraphx.performance import env_report

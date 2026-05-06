@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.1] — 2026-05-05
+
+### Fixed
+
+- Corrected PyPI-facing package metadata: `Arash Sajjadi` is now the sole
+  listed package author and maintainer in `pyproject.toml`.
+  Mark Eramian is Arash Sajjadi's PhD supervisor / academic advisor and
+  co-author of the related preprint; he is acknowledged in that capacity in
+  `CITATION.cff`, `README.md`, and the BibTeX citation block.
+- Removed `mlflow` from the `tracking` optional extra (MLflowLogger is not
+  implemented in TGraphX; users should install `mlflow` separately).
+- Updated copyright year in `LICENSE` to 2025–2026.
+- Updated `CITATION.cff` software-level `authors` to list Arash Sajjadi;
+  paper co-authorship (Sajjadi & Eramian) preserved in `preferred-citation`.
+- Added Python 3.13 classifier.
+- Suppressed PyTorch-upstream `torch.jit.script_method` DeprecationWarning
+  in pytest configuration.
+
+---
+
 ## [0.1.0] — 2026-05
 
 ### Added — Core
@@ -142,4 +162,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+[0.1.1]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.1.1
 [0.1.0]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.1.0

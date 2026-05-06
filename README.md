@@ -1166,6 +1166,26 @@ python examples/minimal_graph_classifier.py
 
 ---
 
+## Authorship
+
+**Software author and maintainer:**
+Arash Sajjadi, PhD Candidate in Computer Science, University of Saskatchewan
+([arash.sajjadi@usask.ca](mailto:arash.sajjadi@usask.ca))
+
+**Academic supervision:**
+Mark Eramian, PhD Supervisor / Academic Advisor, University of Saskatchewan
+
+**Related preprint:**
+*TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning*
+Arash Sajjadi and Mark Eramian — [arXiv:2504.03953](https://arxiv.org/abs/2504.03953)
+
+> The software package is developed and maintained by Arash Sajjadi.
+> Mark Eramian is Arash Sajjadi's PhD supervisor and co-author of the related
+> academic preprint.  Software authorship and paper co-authorship are separate
+> roles; both are acknowledged accurately above.
+
+---
+
 ## Citation
 
 If you use TGraphX in your research, please cite:

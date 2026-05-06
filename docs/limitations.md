@@ -57,5 +57,5 @@ semantics differ; there are no conversion utilities.
 
 ## Version
 
-These limitations apply to TGraphX 0.1.0. Deferred items may be addressed
+These limitations apply to TGraphX 0.1.1. Deferred items may be addressed
 in future releases. See [CHANGELOG.md](../CHANGELOG.md).

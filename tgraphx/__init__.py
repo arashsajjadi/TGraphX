@@ -6,7 +6,7 @@ combined with GNN-style relational reasoning.
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .core.graph import Graph, GraphBatch
 from .core.dataloader import GraphDataset, GraphDataLoader
