@@ -35,6 +35,9 @@ def test_import_layers_from_top():
         LinearMessagePassing,
         ConvMessagePassing,
         AttentionMessagePassing,
+        TensorGATLayer,
+        TensorGraphSAGELayer,
+        TensorGINLayer,
     )
 
 
@@ -52,6 +55,9 @@ def test_import_layers_subpackage():
         LinearMessagePassing,
         ConvMessagePassing,
         AttentionMessagePassing,
+        TensorGATLayer,
+        TensorGraphSAGELayer,
+        TensorGINLayer,
         DeepCNNAggregator,
         SafeMaxPool2d,
     )

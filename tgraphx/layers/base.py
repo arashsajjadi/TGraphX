@@ -12,8 +12,14 @@ class TensorMessagePassingLayer(nn.Module):
         Aggregation: m_i = aggr( { m_ij }_{j in N(i)} )
         Update:    x_i' = g( x_i, m_i )
 
-    Subclasses should override the `message()` and `update()` methods.
+    Subclasses should override the ``message()`` and ``update()`` methods.
     The default aggregation is implemented using index_add.
+
+    Naming note:
+        The public ``forward()`` signature accepts ``edge_features`` (matching
+        the ``Graph`` data class).  The abstract ``message()`` method receives
+        the same tensor as ``edge_attr``.  Both names refer to identical data;
+        ``edge_attr`` is the per-edge name used in the internal message step.
     """
 
     def __init__(self, in_shape, out_shape, aggr='sum', dropout_prob=0.0, residual=False, use_batchnorm=False):

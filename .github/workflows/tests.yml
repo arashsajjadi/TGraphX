@@ -43,8 +43,10 @@ jobs:
         run: |
           python -c "import tgraphx; print('tgraphx', tgraphx.__version__)"
           python -c "from tgraphx import Graph, GraphBatch"
-          python -c "from tgraphx.layers import ConvMessagePassing"
-          python -c "from tgraphx.models import CNNEncoder"
+          python -c "from tgraphx import ConvMessagePassing, AttentionMessagePassing"
+          python -c "from tgraphx import TensorGATLayer, TensorGraphSAGELayer, TensorGINLayer"
+          python -c "from tgraphx.layers import TensorGATLayer, TensorGraphSAGELayer, TensorGINLayer"
+          python -c "from tgraphx.models import CNNEncoder, CNN_GNN_Model, GraphClassifier, NodeClassifier"
 
       - name: Run test suite
         run: pytest
