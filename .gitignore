@@ -6,6 +6,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
 # ------------------------------
 # Build artifacts for PyPI
@@ -33,6 +36,8 @@ env/
 # Example / training run outputs (generated locally)
 # ------------------------------
 runs/
+logs/
+checkpoints/
 benchmarks/results/
 *.run_output
 
