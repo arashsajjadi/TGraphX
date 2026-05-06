@@ -38,6 +38,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Image Recognition",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -59,10 +60,11 @@ monitoring = [
     "psutil>=5.9",
     "pynvml>=11.0",
 ]
-# Third-party experiment-tracking libraries (not bundled with TGraphX)
+# TensorBoard integration (TensorBoardLogger uses torch.utils.tensorboard)
+# MLflow is intentionally excluded: MLflowLogger is not implemented in TGraphX.
+# Install mlflow separately if you use it: pip install mlflow
 tracking = [
     "tensorboard>=2.11",
-    "mlflow>=2.0",
 ]
 
 [project.scripts]
@@ -82,3 +84,7 @@ exclude = ["tests*", "examples*", "dist*", "build*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts   = "-v --tb=short --strict-markers"
+filterwarnings = [
+    # PyTorch upstream: torch.jit.script_method deprecated in favour of torch.compile
+    "ignore:.*torch.jit.script_method.*:DeprecationWarning",
+]

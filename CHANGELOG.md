@@ -85,16 +85,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Checkpoint save/load.
 - torch.compile benchmark, mixed precision inference, memory report.
 - Minimal layer examples, tiny overfit checks, gradient sanity stack.
+- `training_minimal_fit.py`, `training_with_csvlogger.py`,
+  `training_with_tensorboard.py` — training utility examples.
+- `run_all_fast_examples.py` — runs all fast examples and reports results.
+
+### Added — Training Utilities
+
+- `train_epoch(model, loader, optimizer, loss_fn, ...)` — one supervised
+  epoch; returns averaged loss + metrics dict.
+- `evaluate(model, loader, loss_fn, ...)` — evaluation under `no_grad`;
+  no file writes.
+- `fit(model, train_loader, ...)` — thin loop wrapper over `train_epoch` /
+  `evaluate`; returns per-epoch history list.
+- Supported batch formats: `GraphBatch` (with `graph_labels` / `node_labels`)
+  and `(Tensor, Tensor)` tuples.
+- `[B, 1]` label tensors are squeezed to `[B]` for compatibility with
+  `CrossEntropyLoss` and similar losses.
+
+### Added — Tracking
+
+- `TensorBoardLogger` — optional TensorBoard logger backed by
+  `torch.utils.tensorboard.SummaryWriter`; lazy import; compatible
+  `log(**kwargs)` interface matching `CSVLogger`.
+  Requires: `pip install tensorboard` or `pip install "tgraphx[tracking]"`.
+
+### Added — Dashboard
+
+- Bounded metrics loading: `/api/metrics` returns at most `max_metric_rows`
+  (default 5 000) most recent rows; response includes `truncated`,
+  `total_row_count`, and `max_rows` fields.
+- Metrics truncation notice displayed in the Metrics section of the dashboard
+  UI when rows are omitted.
+- `--max-metric-rows` CLI argument (default 5 000).
+- `/api/metrics` mtime/size/max_rows caching to avoid reparsing unchanged CSV.
+
+### Added — Performance
+
+- `tgraphx.performance`: `env_report`, `estimate_message_memory`,
+  `recommended_device`.
+- `benchmarks/benchmark_layers.py` — layer throughput with CUDA events /
+  `perf_counter`, AMP, `torch.compile`, JSON output, `--chunk-size`.
+- `benchmarks/benchmark_graph_builders.py` — builder timing, O(N²) warnings.
+- `ConvMessagePassing.forward(chunk_size=N)` — optional edge chunking for
+  `aggr="sum"` and `aggr="mean"` to reduce peak message-buffer memory.
 
 ### Not Implemented (intentional)
 
-- `train_epoch`, `evaluate`, `fit` — no training loop framework.
-- `TensorBoardLogger`, `MLflowLogger` — use upstream tools directly.
+- `MLflowLogger` — use the `mlflow` client directly: `pip install mlflow`.
 - GAT / SAGE / GIN chunked forward — softmax constraint defers GAT;
   SAGE/GIN deferred for scope.
 - Neighbor sampling, Graph Transformers, heterogeneous/temporal graphs.
 - Per-channel/per-pixel attention in GAT.
-- Incremental CSV tail-read in dashboard.
+- Incremental CSV tail-read by bytes (deferred; full file read on cache miss).
+- GradScaler in `train_epoch` AMP — users who need stable float16 training
+  should manage a `torch.cuda.amp.GradScaler` in their own loop.
 
 ---
 
