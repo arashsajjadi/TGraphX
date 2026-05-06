@@ -62,30 +62,42 @@ class TensorMessagePassingLayer(nn.Module):
     def aggregate(self, messages, edge_index, num_nodes):
         r"""Aggregate messages from incoming edges for each node.
 
+        Supports ``aggr`` values:
+
+        * ``"sum"``  — element-wise sum of incoming messages.
+        * ``"mean"`` — element-wise mean over incoming edges (isolated nodes
+          stay at zero; the count divisor is clamped to 1).
+        * ``"max"``  — element-wise max over incoming edges (isolated nodes
+          return zero; ``-inf`` placeholders are masked out).  Implemented
+          via ``torch.scatter_reduce_(reduce='amax')``.
+
         Args:
-            messages (Tensor): Messages for each edge, shape [E, ...].
-            edge_index (LongTensor): Edge indices with shape [2, E].
+            messages (Tensor): Messages for each edge, shape ``[E, ...]``.
+            edge_index (LongTensor): Edge indices with shape ``[2, E]``.
             num_nodes (int): Number of nodes.
 
         Returns:
-            Tensor: Aggregated messages for each node.
+            Tensor: Aggregated messages for each node, shape
+            ``[num_nodes, ...]``.
         """
-        target = edge_index[1]  # destination indices for each edge
-        aggregated = torch.zeros(num_nodes, *messages.shape[1:], device=messages.device)
+        target = edge_index[1]
+        if self.aggr == 'max':
+            # Local import to avoid an import cycle at module load.
+            from ._scatter import scatter_max
+            return scatter_max(messages, target, num_nodes)
+
+        aggregated = torch.zeros(
+            num_nodes, *messages.shape[1:],
+            device=messages.device, dtype=messages.dtype,
+        )
         aggregated = aggregated.index_add(0, target, messages)
         if self.aggr == 'mean':
-            counts = torch.zeros(num_nodes, device=messages.device)
-            ones = torch.ones(messages.shape[0], device=messages.device)
+            counts = torch.zeros(num_nodes, device=messages.device, dtype=messages.dtype)
+            ones = torch.ones(messages.shape[0], device=messages.device, dtype=messages.dtype)
             counts = counts.index_add(0, target, ones)
-            # Reshape to broadcast over all trailing feature dimensions.
             view_shape = (num_nodes,) + (1,) * (aggregated.dim() - 1)
             counts = counts.view(view_shape).clamp(min=1)
             aggregated = aggregated / counts
-        elif self.aggr == 'max':
-            raise NotImplementedError(
-                "aggr='max' is not implemented in TensorMessagePassingLayer. "
-                "Use aggr='sum' or aggr='mean', or subclass and override aggregate()."
-            )
         return aggregated
 
     def update(self, node_feature, aggregated_message):

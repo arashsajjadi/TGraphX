@@ -241,9 +241,20 @@ class TestTensorGATLayer:
         out = layer(_spatial(), _ei())
         assert out.shape == (N, C, H, W)
 
-    def test_edge_features_not_implemented(self):
+    def test_unexpected_edge_features_raises(self):
+        """Without use_edge_features, passing edge_features must raise ValueError."""
         layer = TensorGATLayer(in_channels=C, out_channels=8)
-        with pytest.raises(NotImplementedError, match="edge features"):
+        with pytest.raises(ValueError, match="use_edge_features=False"):
+            layer(_spatial(), _ei(), edge_features=torch.randn(N, 2))
+
+    def test_spatial_edge_features_rejected(self):
+        """TensorGATLayer accepts only vector edge features."""
+        layer = TensorGATLayer(
+            in_channels=C, out_channels=8,
+            use_edge_features=True, edge_dim=2,
+        )
+        with pytest.raises(ValueError, match="vector edge features"):
+            # 4-D spatial edge tensor is not allowed for GAT.
             layer(_spatial(), _ei(), edge_features=torch.randn(N, 2, H, W))
 
     def test_attn_dropout_in_train_mode(self):

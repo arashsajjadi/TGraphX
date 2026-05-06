@@ -48,9 +48,8 @@ drop-in clones of PyTorch Geometric's vector-feature implementations.
 - **Graph construction.** `edge_index` is always user-supplied. There are no built-in graph builders (kNN, grid, radius, IoU, learned adjacency).
 - **Graph Transformers** (global attention with positional encodings).
 - **Per-channel and per-pixel attention** for `TensorGATLayer`. Currently only scalar attention per `(edge, head)` is supported (the default safer choice).
-- **Edge features in `TensorGATLayer`.** `TensorGraphSAGELayer` and `TensorGINLayer` accept spatial edge features `[E, edge_dim, H, W]`. EGAT-style edge bias for GAT is planned.
+- **Spatial edge features in `TensorGATLayer`.** GAT supports vector edge features `[E, edge_dim]` as an additive attention bias only. `TensorGraphSAGELayer` and `TensorGINLayer` support **both** spatial `[E, edge_dim, H, W]` and vector `[E, edge_dim]` edge features (selected via `edge_features_kind`).
 - **3-D volumetric aggregation.** `DeepCNNAggregator` uses `Conv2d`, so node features of shape `[C, D, H, W]` will fail at the `ConvMessagePassing` aggregation step even though the message function has a `Conv3d` branch. The new `TensorGATLayer`, `TensorGraphSAGELayer`, and `TensorGINLayer` are also 2-D only.
-- **`aggr="max"` in `TensorMessagePassingLayer`.** Raises `NotImplementedError`. `TensorGraphSAGELayer(aggr="max")` and `GraphClassifier(pooling="max")` work correctly.
 - **Heterogeneous and temporal graphs.**
 
 ---
@@ -116,15 +115,36 @@ out.sum().backward()   # all learned stages are differentiable
 
 ## Concept: tensor-aware node features
 
-In a standard GNN a node carries a vector `x_i ∈ ℝ^d`. In TGraphX a node carries a tensor `X_i ∈ ℝ^{C×H×W}`. `ConvMessagePassing` computes messages as:
+In a standard GNN a node carries a vector `x_i ∈ ℝ^d`. In TGraphX a node carries a tensor `X_i ∈ ℝ^{C×H×W}`. Every layer follows the standard message-passing template:
 
 ```
-M_ij = Conv1×1( Concat(X_i, X_j) )   shape [C_out, H, W]
+M_{i→j} = φ( X_i, X_j, E_{i→j} )                   # per-edge messages
+A_j     = AGG_{i ∈ N(j)} M_{i→j}                    # permutation-invariant aggregation
+X'_j    = ψ( X_j, A_j )                             # update
 ```
 
-Aggregated messages for node `j` are then processed by a stack of 3×3 convolutions (`DeepCNNAggregator`) before updating `X_j`. Spatial dimensions `H` and `W` are preserved at every step.
+Each layer instantiates this with its own `(φ, AGG, ψ)`:
 
-The graph structure — which nodes are connected — is **not learned by the model**. Users supply `edge_index` based on domain knowledge (e.g., spatial proximity of patches, IoU overlap of bounding boxes).
+| Layer | `φ` (message) | `AGG` | `ψ` (update) |
+|-------|---------------|-------|--------------|
+| `ConvMessagePassing` | `Conv1×1(Concat(X_i, X_j[, E_ij]))` | `sum` / `mean` / `max` | `DeepCNNAggregator(A_j)` (+ optional residual) |
+| `TensorGATLayer`     | `α_{ij}^k · W^k X_i` with `α_{ij}^k = softmax_i(LeakyReLU(a_dst·pool(W^k X_j) + a_src·pool(W^k X_i) + b^k(e_ij)))` | sum (weighted) | concat or mean over heads, optional residual |
+| `TensorGraphSAGELayer` | `W_neigh(X_i)` (+ optional spatial cat or vector bias from `e_ij`) | `mean` / `max` | `W_self(X_j) + AGG`, optional L2 normalise |
+| `TensorGINLayer`       | `X_i` or `ReLU(X_i + φ_e(e_ij))` (GINEConv) | `sum` | `MLP((1+ε)·X_j + Σ_i M_ij)` |
+| `LinearMessagePassing` | `Linear(Concat(x_i, x_j[, e_ij]))` | `sum` / `mean` / `max` | identity (override to customise) |
+
+Spatial dimensions `H` and `W` are preserved through every learned transform. All aggregations are permutation-invariant over the order of incoming edges, and every layer is permutation-equivariant over node reindexing (verified by `tests/test_math.py`).
+
+The graph structure — which nodes are connected — is **not learned by the model**. Users supply `edge_index` based on domain knowledge (e.g., spatial proximity of patches, IoU overlap of bounding boxes, kNN on patch centres).
+
+### Edge feature formats per layer
+
+| Layer | Vector `[E, D_e]` | Spatial `[E, C_e, H, W]` |
+|-------|:----:|:----:|
+| `ConvMessagePassing` | ✗ | ✓ (concatenated along channels) |
+| `TensorGATLayer` | ✓ (additive attention bias on logits) | ✗ |
+| `TensorGraphSAGELayer` | ✓ (additive channel bias post-`W_neigh`) | ✓ (concatenated to source) |
+| `TensorGINLayer` | ✓ (broadcast bias before ReLU) | ✓ (1×1 Conv2d projection) |
 
 ---
 
@@ -146,6 +166,15 @@ python examples/tensor_graphsage_minimal.py
 
 # Custom user-defined message-passing layer subclass
 python examples/custom_message_passing.py
+
+# Trainability sanity: tiny overfit on a relational synthetic task with GAT
+python examples/tiny_overfit_tensor_gat.py
+
+# Edge-feature dependency: GAT/GIN/SAGE with vector edge features
+python examples/tiny_overfit_edge_features.py
+
+# Deep 8-layer stack gradient sanity for every GNN family
+python examples/gradient_sanity_stack.py
 ```
 
 ---
@@ -241,19 +270,30 @@ layer = TensorGATLayer(
     residual=True,          # auto 1×1 projection if in/out channels differ
     bias=True,
     add_self_loops=False,   # True ensures every node has at least 1 in-edge
+    use_edge_features=False,  # set True to enable EGAT-style vector edge bias
+    edge_dim=None,            # required when use_edge_features=True
 )
 out = layer(x, edge_index)                                  # [N, 32, H, W]
 
 # Inspect attention weights (e.g. for visualisation or testing):
 out, attn = layer(x, edge_index, return_attention=True)
 # attn shape: [E, num_heads]; sums to 1 over incoming edges per destination per head.
+
+# EGAT-style vector edge attention bias (e.g. relative box coords, IoU,
+# distances, scale ratio):
+layer_e = TensorGATLayer(
+    in_channels=16, out_channels=32, num_heads=4,
+    use_edge_features=True, edge_dim=3,
+)
+out = layer_e(x, edge_index, edge_features=ef)   # ef: [E, 3]
 ```
 
 Attention is **scalar per `(edge, head)`** in this implementation: the
 projected query and key feature maps are mean-pooled over `H × W` before
 being scored, while the value tensors keep their full spatial layout
 during aggregation. Per-pixel and per-channel attention modes are not yet
-supported. Edge features are not yet supported.
+supported. **Spatial** edge feature tensors are not supported by this
+layer — use `TensorGraphSAGELayer` or `TensorGINLayer` for those.
 
 ### `TensorGraphSAGELayer`
 
@@ -270,16 +310,25 @@ layer = TensorGraphSAGELayer(
     bias=True,
     residual=False,
     use_edge_features=False,
-    edge_dim=None,          # required when use_edge_features=True
+    edge_dim=None,             # required when use_edge_features=True
+    edge_features_kind="spatial",  # or "vector" — see below
 )
 out = layer(x, edge_index)                                  # [N, 32, H, W]
 
-# With spatial edge features [E, edge_dim, H, W]
-layer_e = TensorGraphSAGELayer(
+# Spatial edge features [E, edge_dim, H, W] — concatenated to source.
+layer_s = TensorGraphSAGELayer(
     in_channels=16, out_channels=32,
-    use_edge_features=True, edge_dim=4,
+    use_edge_features=True, edge_dim=4, edge_features_kind="spatial",
 )
-out = layer_e(x, edge_index, edge_features=edge_feat)
+out = layer_s(x, edge_index, edge_features=ef_spatial)
+
+# Vector edge features [E, edge_dim] — projected to channel bias and added
+# to W_neigh(h_src) before aggregation.
+layer_v = TensorGraphSAGELayer(
+    in_channels=16, out_channels=32,
+    use_edge_features=True, edge_dim=3, edge_features_kind="vector",
+)
+out = layer_v(x, edge_index, edge_features=ef_vector)        # ef_vector: [E, 3]
 ```
 
 Isolated nodes (no incoming edges) receive only the self transform — the
@@ -312,12 +361,20 @@ custom_mlp = nn.Sequential(
 )
 layer = TensorGINLayer(in_channels=16, out_channels=32, mlp=custom_mlp)
 
-# GINEConv-style edge inclusion: messages = ReLU(h_src + φ(e_ij))
-layer_e = TensorGINLayer(
+# GINEConv-style spatial edge inclusion: messages = ReLU(h_src + φ(e_ij))
+layer_s = TensorGINLayer(
     in_channels=16, out_channels=32,
-    use_edge_features=True, edge_dim=4,
+    use_edge_features=True, edge_dim=4, edge_features_kind="spatial",
 )
-out = layer_e(x, edge_index, edge_features=edge_feat)
+out = layer_s(x, edge_index, edge_features=ef_spatial)
+
+# Vector edge features [E, edge_dim] — projected to [E, in_channels, 1, 1]
+# and broadcast over H × W before ReLU.
+layer_v = TensorGINLayer(
+    in_channels=16, out_channels=32,
+    use_edge_features=True, edge_dim=3, edge_features_kind="vector",
+)
+out = layer_v(x, edge_index, edge_features=ef_vector)        # ef_vector: [E, 3]
 ```
 
 ### Custom layers via `TensorMessagePassingLayer`
@@ -494,7 +551,7 @@ batch.to(device)
 - **No patch extraction:** Users split images into patches before passing them to the model.
 - **`AttentionMessagePassing` is not GAT.** It uses per-edge sigmoid gating without softmax normalisation. Use `TensorGATLayer` for true multi-head GAT.
 - **Scalar attention only in `TensorGATLayer`.** Per-channel and per-pixel attention modes are not implemented.
-- **No edge features in `TensorGATLayer`.** `TensorGraphSAGELayer` and `TensorGINLayer` do support spatial edge features; an EGAT-style edge bias is planned.
+- **GAT edge features are vector-only.** `TensorGATLayer` accepts `[E, edge_dim]` vector edge features as an additive attention bias. Spatial edge tensors `[E, C_e, H, W]` are not supported in GAT (use `TensorGraphSAGELayer` or `TensorGINLayer` for those).
 - **2-D aggregation only:** All layers expect node features of shape `[N, C, H, W]`. 3-D / volumetric inputs `[N, C, D, H, W]` are not supported end-to-end.
 - **Differentiability:** All learned parameters (CNN encoder, message-passing layers, classifier) are end-to-end differentiable. The graph topology (`edge_index`) is user-provided and is not learned by the model.
 
@@ -502,17 +559,19 @@ batch.to(device)
 
 | GNN family | Implemented? | Tested? | Limitations |
 |------------|-------------|---------|------------|
-| Tensor-aware GCN-style (Conv message passing) | yes (`ConvMessagePassing`) | yes | `aggr="max"` raises `NotImplementedError`; 2-D spatial only |
-| Tensor-aware GAT (multi-head) | yes (`TensorGATLayer`) | yes | scalar attention per `(edge, head)`; no edge features yet |
-| Tensor-aware GraphSAGE | yes (`TensorGraphSAGELayer`) | yes | mean / max only; no LSTM aggregator |
-| Tensor-aware GIN / GINEConv | yes (`TensorGINLayer`) | yes | 2-D spatial only |
-| MPNN-style custom layer | yes (`TensorMessagePassingLayer` base class) | yes (subclass test + example) | `aggr="max"` not implemented in base |
-| Edge-conditioned message passing | partial (`ConvMessagePassing` w/ `use_edge_features`, `TensorGraphSAGELayer`, `TensorGINLayer`) | yes | edge features must be spatial `[E, C_e, H, W]` |
-| Graph Transformer | **no** | — | not implemented; planned future work |
-| Heterogeneous graphs | **no** | — | not supported |
-| Temporal / spatiotemporal graphs | **no** | — | not supported |
-| Learned graph construction | **no** | — | `edge_index` is always user-supplied |
-| 3-D / volumetric aggregation | **no** | — | layers are 2-D only (`Conv2d` aggregators) |
+| Tensor-aware GCN-style (Conv message passing) | ✅ `ConvMessagePassing` | ✅ | 2-D spatial only; edge features must be spatial `[E, C_e, H, W]` |
+| Tensor-aware GAT (multi-head) | ✅ `TensorGATLayer` | ✅ | scalar attention per `(edge, head)`; vector edge bias `[E, D_e]` supported; no spatial edge features |
+| Tensor-aware GraphSAGE | ✅ `TensorGraphSAGELayer` | ✅ | mean / max only; no LSTM aggregator |
+| Tensor-aware GIN / GINEConv | ✅ `TensorGINLayer` | ✅ | 2-D spatial only |
+| MPNN-style custom layer | ✅ `TensorMessagePassingLayer` base | ✅ (subclass test + example) | — |
+| Edge-conditioned MP (spatial) | ✅ `ConvMessagePassing`, `TensorGraphSAGELayer`, `TensorGINLayer` | ✅ | edge features `[E, C_e, H, W]` |
+| Edge-conditioned MP (vector) | ✅ `TensorGATLayer`, `TensorGraphSAGELayer`, `TensorGINLayer` | ✅ | edge features `[E, D_e]`; `edge_features_kind="vector"` |
+| `aggr="sum"\|"mean"\|"max"` base | ✅ all three modes | ✅ hand-computed + backward | `ConvMessagePassing` `aggr="max"` routes through `scatter_max` |
+| Graph Transformer | ❌ | — | not implemented |
+| Heterogeneous graphs | ❌ | — | not supported |
+| Temporal / spatiotemporal graphs | ❌ | — | not supported |
+| Learned graph construction | ❌ | — | `edge_index` is always user-supplied |
+| 3-D / volumetric aggregation | ❌ | — | layers are 2-D only (`Conv2d` aggregators) |
 
 ---
 
@@ -549,13 +608,19 @@ TGraphX/
 │   ├── test_layers.py
 │   ├── test_models.py
 │   ├── test_devices.py
-│   └── test_gnn_families.py    # GAT, GraphSAGE, GIN, custom subclass
+│   ├── test_gnn_families.py    # GAT, GraphSAGE, GIN, custom subclass
+│   ├── test_math.py            # edge-order invariance, permutation-equivariance, H=W=1, isolated nodes
+│   ├── test_gradients.py       # single-layer backward, 8-layer stacks, tiny overfit
+│   └── test_edge_features.py   # vector edge features for GAT, SAGE, GIN
 ├── examples/
 │   ├── minimal_spatial_message_passing.py
 │   ├── minimal_graph_classifier.py
 │   ├── tensor_gat_minimal.py
 │   ├── tensor_graphsage_minimal.py
-│   └── custom_message_passing.py
+│   ├── custom_message_passing.py
+│   ├── tiny_overfit_tensor_gat.py      # trainability check per GNN family
+│   ├── tiny_overfit_edge_features.py   # vector edge feature dependency check
+│   └── gradient_sanity_stack.py        # 8-layer deep stack gradient norms
 ├── pyproject.toml
 ├── requirements.txt
 ├── environment.yml

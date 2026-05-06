@@ -83,13 +83,14 @@ class TestConvMessagePassing:
         out = self._layer("mean")(_spatial(), _ei())
         assert torch.isfinite(out).all()
 
-    # -- aggr="max" must raise NotImplementedError (H-02) --
+    # -- aggr="max" is now implemented (Batch 6.5) --
 
-    def test_aggr_max_raises_not_implemented(self):
-        """H-02: aggr='max' must raise NotImplementedError, not silently return sum."""
+    def test_aggr_max_runs_and_finite(self):
+        """Batch 6.5: aggr='max' runs through scatter_max in the base class."""
         layer = self._layer("max")
-        with pytest.raises(NotImplementedError, match="aggr='max'"):
-            layer(_spatial(), _ei())
+        out = layer(_spatial(), _ei())
+        assert out.shape == (N, self.OUT_C, H, W)
+        assert torch.isfinite(out).all()
 
     # -- backward pass --
 

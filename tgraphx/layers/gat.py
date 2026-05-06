@@ -7,7 +7,8 @@ Mathematics (split-attention form, equivalent to the original concat-and-dot):
 
     h_i^k       = W^k x_i                                # [N, C_head, H, W] per head k
     score_ij^k  = LeakyReLU( a_dst^k · pool(h_j^k)
-                           + a_src^k · pool(h_i^k) )    # scalar per edge per head
+                           + a_src^k · pool(h_i^k)
+                           + b^k(e_ij) )                  # optional vector edge bias
     α_ij^k      = softmax_i ( score_ij^k )              # over incoming edges to j
     o_j^k       = sum_i  α_ij^k * h_i^k                  # [N, C_head, H, W] per head
     o_j         = concat_k o_j^k   or   mean_k o_j^k    # head combination
@@ -18,6 +19,14 @@ themselves keep their full ``[C_head, H, W]`` layout when aggregated.  This
 is the "scalar attention per edge per head" mode requested by the design.
 Per-channel and per-pixel attention modes are reasonable next steps but are
 intentionally not implemented here.
+
+Edge features (optional, vector form):
+    When ``use_edge_features=True``, vector edge features ``[E, edge_dim]``
+    are projected via a learnable linear map ``b: ℝ^{edge_dim} → ℝ^{num_heads}``
+    and added to the pre-softmax attention logit per ``(edge, head)``.  This
+    is the standard EGAT-style edge bias.  Spatial edge feature tensors are
+    not supported for this layer; use ``TensorGINLayer`` or
+    ``TensorGraphSAGELayer`` for spatial edge features.
 """
 
 from __future__ import annotations
@@ -52,20 +61,33 @@ class TensorGATLayer(nn.Module):
         bias: Add a learnable output bias.
         add_self_loops: Append self-loops to ``edge_index`` so every node
             attends to itself.
+        use_edge_features: Enable EGAT-style vector edge attention bias.
+            When ``True``, ``edge_features`` of shape ``[E, edge_dim]`` is
+            projected to ``[E, num_heads]`` and added to the pre-softmax
+            logits.  Self-loops (when ``add_self_loops=True``) get a zero
+            bias entry.
+        edge_dim: Vector edge feature dimension; required when
+            ``use_edge_features=True``.
 
     Shape conventions:
-        * input  ``x``           : ``[N, in_channels, H, W]``
-        * input  ``edge_index``  : ``[2, E]`` (``dtype=torch.long``)
-        * output                 : ``[N, out_channels, H, W]``
-
-    Edge features are not yet supported.  Passing a non-``None``
-    ``edge_features`` raises ``NotImplementedError``.
+        * input  ``x``               : ``[N, in_channels, H, W]``
+        * input  ``edge_index``      : ``[2, E]`` (``dtype=torch.long``)
+        * input  ``edge_features``   : ``[E, edge_dim]`` (vector only) when
+          ``use_edge_features=True``; otherwise must be ``None``.
+        * output                     : ``[N, out_channels, H, W]`` (concat) or
+          ``[N, head_channels, H, W]`` (average).
 
     Examples:
         >>> layer = TensorGATLayer(in_channels=8, out_channels=16,
         ...                        num_heads=4, add_self_loops=True)
         >>> out, attn = layer(x, edge_index, return_attention=True)
         >>> attn.shape   # [E (+ N if self-loops added), num_heads]
+
+        >>> # With vector edge attention bias
+        >>> layer = TensorGATLayer(in_channels=8, out_channels=16,
+        ...                        num_heads=4, use_edge_features=True,
+        ...                        edge_dim=3)
+        >>> out = layer(x, edge_index, edge_features=ef)  # ef: [E, 3]
     """
 
     def __init__(
@@ -79,6 +101,8 @@ class TensorGATLayer(nn.Module):
         residual: bool = False,
         bias: bool = True,
         add_self_loops: bool = False,
+        use_edge_features: bool = False,
+        edge_dim: int | None = None,
     ) -> None:
         super().__init__()
         if num_heads < 1:
@@ -94,6 +118,10 @@ class TensorGATLayer(nn.Module):
         else:
             head_channels = out_channels
             out_total = head_channels  # heads averaged
+        if use_edge_features and (edge_dim is None or edge_dim <= 0):
+            raise ValueError(
+                "edge_dim must be a positive integer when use_edge_features=True."
+            )
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -105,6 +133,8 @@ class TensorGATLayer(nn.Module):
         self.attn_dropout_p = float(attn_dropout)
         self.residual = residual
         self.add_self_loops = add_self_loops
+        self.use_edge_features = use_edge_features
+        self.edge_dim = edge_dim
 
         # Linear projection W shared by source and destination (standard
         # GAT).  Implemented as a single 1x1 Conv2d producing
@@ -116,6 +146,12 @@ class TensorGATLayer(nn.Module):
         # Per-head split-attention parameters.
         self.a_dst = nn.Parameter(torch.empty(num_heads, head_channels))
         self.a_src = nn.Parameter(torch.empty(num_heads, head_channels))
+
+        # Optional EGAT-style vector edge bias: project [E, edge_dim] -> [E, K].
+        if use_edge_features:
+            self.edge_bias_proj: nn.Module = nn.Linear(edge_dim, num_heads, bias=False)
+        else:
+            self.edge_bias_proj = None
 
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_total))
@@ -133,6 +169,8 @@ class TensorGATLayer(nn.Module):
         nn.init.xavier_uniform_(self.W.weight)
         nn.init.xavier_uniform_(self.a_dst)
         nn.init.xavier_uniform_(self.a_src)
+        if self.edge_bias_proj is not None:
+            nn.init.xavier_uniform_(self.edge_bias_proj.weight)
         if self.res_proj is not None:
             nn.init.xavier_uniform_(self.res_proj.weight)
 
@@ -152,7 +190,9 @@ class TensorGATLayer(nn.Module):
         Args:
             x: ``[N, in_channels, H, W]`` node feature tensor.
             edge_index: ``[2, E]`` ``torch.long`` edge index.
-            edge_features: not yet supported — must be ``None``.
+            edge_features: ``[E, edge_dim]`` vector edge features when
+                ``use_edge_features=True``; otherwise must be ``None``.
+                Spatial edge features are not supported by this layer.
             return_attention: if ``True``, return ``(out, attn)`` where
                 ``attn`` has shape ``[E_eff, num_heads]`` with ``E_eff = E``
                 or ``E + N`` if ``add_self_loops=True``.
@@ -161,12 +201,6 @@ class TensorGATLayer(nn.Module):
             ``out`` of shape ``[N, out_channels, H, W]``, or
             ``(out, attn)`` if ``return_attention=True``.
         """
-        if edge_features is not None:
-            raise NotImplementedError(
-                "TensorGATLayer does not yet support edge features. "
-                "Pass edge_features=None or use TensorGraphSAGELayer / "
-                "TensorGINLayer for edge-feature support."
-            )
         if x.dim() != 4:
             raise ValueError(
                 f"x must have shape [N, C, H, W]; got {tuple(x.shape)}."
@@ -179,10 +213,39 @@ class TensorGATLayer(nn.Module):
             raise TypeError(
                 f"edge_index must have dtype torch.long; got {edge_index.dtype}."
             )
+        if (not self.use_edge_features) and edge_features is not None:
+            raise ValueError(
+                "Layer was constructed with use_edge_features=False; "
+                "do not pass edge_features. (For spatial edge features, use "
+                "TensorGraphSAGELayer or TensorGINLayer.)"
+            )
+        if self.use_edge_features and edge_features is None:
+            raise ValueError(
+                "Layer was constructed with use_edge_features=True; "
+                "edge_features must be provided."
+            )
+        if self.use_edge_features and edge_features is not None:
+            if edge_features.dim() != 2:
+                raise ValueError(
+                    f"TensorGATLayer expects vector edge features of shape "
+                    f"[E, edge_dim]; got {tuple(edge_features.shape)}. "
+                    f"Spatial edge tensors are not supported by this layer."
+                )
+            if edge_features.size(0) != edge_index.size(1):
+                raise ValueError(
+                    f"edge_features has {edge_features.size(0)} rows but "
+                    f"edge_index has {edge_index.size(1)} edges."
+                )
+            if edge_features.size(1) != self.edge_dim:
+                raise ValueError(
+                    f"edge_features.shape[-1]={edge_features.size(1)} does not "
+                    f"match edge_dim={self.edge_dim}."
+                )
 
         N, _, H, W = x.shape
         src = edge_index[0]
         dst = edge_index[1]
+        E_orig = src.size(0)
 
         if self.add_self_loops:
             loop = torch.arange(N, device=x.device, dtype=torch.long)
@@ -205,7 +268,18 @@ class TensorGATLayer(nn.Module):
         # ``[K, C_head]`` so the elementwise multiply broadcasts over E.
         score_src = (h_src_pool * self.a_src.unsqueeze(0)).sum(dim=-1)  # [E, K]
         score_dst = (h_dst_pool * self.a_dst.unsqueeze(0)).sum(dim=-1)
-        scores = F.leaky_relu(score_src + score_dst, negative_slope=self.negative_slope)
+        scores_pre = score_src + score_dst
+
+        # Optional EGAT-style vector edge bias, broadcast over (edge, head).
+        if self.use_edge_features and edge_features is not None:
+            edge_bias = self.edge_bias_proj(edge_features)  # [E_orig, K]
+            if self.add_self_loops:
+                # Self-loops have no real edge features → contribute zero bias.
+                pad = edge_bias.new_zeros(N, self.num_heads)
+                edge_bias = torch.cat([edge_bias, pad], dim=0)
+            scores_pre = scores_pre + edge_bias
+
+        scores = F.leaky_relu(scores_pre, negative_slope=self.negative_slope)
 
         # Edge softmax over destinations per head: each j has weights summing to 1.
         attn = edge_softmax(scores, dst, N)  # [E, K]
