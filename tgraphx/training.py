@@ -25,8 +25,10 @@ train_epoch/evaluate/fit handle GraphBatch (from GraphDataLoader) and plain
 """
 from __future__ import annotations
 
+import inspect
 import os
 import random
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
@@ -37,11 +39,28 @@ import torch.nn as nn
 # Reproducibility
 # ─────────────────────────────────────────────────────────────────────────────
 
-def set_seed(seed: int) -> None:
+def set_seed(seed: int, deterministic: bool = False) -> None:
     """Set seeds for :mod:`torch`, :mod:`numpy`, and :mod:`random`.
 
     Args:
-        seed: Integer seed value.
+        seed:          Integer seed value.
+        deterministic: If ``True``, also configure PyTorch's cuDNN backend for
+            deterministic operation.  Specifically:
+
+            * ``torch.backends.cudnn.deterministic = True``
+            * ``torch.backends.cudnn.benchmark = False``
+
+            Note: ``torch.use_deterministic_algorithms(True)`` is intentionally
+            **not** enabled here because several scatter/index operations used
+            by TGraphX layers (e.g. ``scatter_reduce_`` with ``reduce='amax'``
+            in GAT and graph pooling) may not have deterministic CUDA kernels
+            and would raise ``RuntimeError`` at runtime.  If you require fully
+            deterministic algorithms and have verified that your workload
+            supports it, set ``torch.use_deterministic_algorithms(True)``
+            manually after calling ``set_seed``.
+
+            Enabling deterministic cuDNN typically reduces GPU throughput.
+            Use only when bit-exact reproducibility matters more than speed.
     """
     random.seed(seed)
     torch.manual_seed(seed)
@@ -52,6 +71,13 @@ def set_seed(seed: int) -> None:
         np.random.seed(seed)
     except ImportError:
         pass
+
+    if deterministic:
+        try:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+        except AttributeError:
+            pass  # cuDNN not available on this build (CPU-only installs)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -113,19 +139,64 @@ def load_checkpoint(
     optimizer: Optional[torch.optim.Optimizer],
     path: str,
     map_location: Optional[Any] = None,
+    weights_only: bool = True,
 ) -> int:
     """Load model and optimizer state from ``path``.
+
+    Security note
+    -------------
+    ``weights_only=True`` (the default) restricts ``torch.load`` to safe
+    tensor/scalar types and prevents arbitrary Python-pickle code from running
+    during deserialization.  Standard TGraphX checkpoints written by
+    :func:`save_checkpoint` contain only tensors, dicts, lists, and basic
+    scalars — they are fully compatible with this safe mode.
+
+    Pass ``weights_only=False`` only when you **own and trust** the checkpoint
+    file and it stores custom Python objects that cannot be represented as
+    tensors (e.g. checkpoints written by older code that pickled arbitrary
+    objects).  Loading an untrusted checkpoint with ``weights_only=False`` is
+    equivalent to executing arbitrary code.
 
     Args:
         model:        Target model (modified in-place).
         optimizer:    Target optimizer (modified in-place; ignored if ``None``).
         path:         Checkpoint file written by :func:`save_checkpoint`.
         map_location: Passed to ``torch.load`` (e.g. ``"cpu"``).
+        weights_only: If ``True`` (default), use safe deserialization.
+            If ``False``, fall back to full pickle — **only use with trusted
+            files you created yourself**.
 
     Returns:
         The ``epoch`` value stored in the checkpoint.
+
+    Raises:
+        RuntimeError: If safe loading fails, with a message explaining how to
+            opt into legacy mode for trusted checkpoints.
     """
-    payload = torch.load(path, map_location=map_location, weights_only=False)
+    if not weights_only:
+        warnings.warn(
+            "load_checkpoint called with weights_only=False.  "
+            "This allows arbitrary Python code to run during deserialization "
+            "and is only safe when loading checkpoints you created yourself.  "
+            "Never use weights_only=False with checkpoints from untrusted sources.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    try:
+        payload = torch.load(path, map_location=map_location, weights_only=weights_only)
+    except Exception as exc:
+        if weights_only:
+            raise RuntimeError(
+                f"Failed to load checkpoint '{path}' in safe mode "
+                f"(weights_only=True).  "
+                f"If this is a trusted checkpoint you created yourself that "
+                f"contains custom Python objects, retry with "
+                f"weights_only=False — but only for files you trust.  "
+                f"Original error: {exc}"
+            ) from exc
+        raise
+
     model.load_state_dict(payload["model_state_dict"])
     if optimizer is not None and payload.get("optimizer_state_dict") is not None:
         optimizer.load_state_dict(payload["optimizer_state_dict"])
@@ -227,9 +298,12 @@ def _unpack_batch(batch: Any, device: torch.device):
                 "Set labels on your Graph objects before batching, "
                 "or write a custom training loop."
             )
-        # GraphBatch stacks [1]-shaped labels into [B, 1]; squeeze to [B]
-        # so that cross_entropy and similar losses get the expected 1-D input.
-        if targets.dim() == 2 and targets.size(-1) == 1:
+        # GraphBatch stacks scalar graph_labels into [B, 1]; squeeze to [B]
+        # only when the target is an integer dtype (class indices for
+        # CrossEntropyLoss etc.).  Float [B, 1] regression targets are kept
+        # as-is so that MSELoss receives the correct shape (BUG-04).
+        if (targets.dim() == 2 and targets.size(-1) == 1
+                and not targets.is_floating_point()):
             targets = targets.squeeze(-1)
         return (nf, ei), kw, targets
 
@@ -250,18 +324,51 @@ def _unpack_batch(batch: Any, device: torch.device):
 
 
 def _call_model(model: nn.Module, args: tuple, kwargs: dict) -> torch.Tensor:
-    """Call model, falling back to fewer kwargs on TypeError."""
+    """Call model, passing only the kwargs its forward signature accepts.
+
+    Strategy
+    --------
+    1. Inspect ``model.forward`` to determine which keyword arguments it
+       accepts.
+    2. If the signature has ``**kwargs``, pass everything through.
+    3. Otherwise, filter ``kwargs`` to the intersection with the forward
+       parameter names.  This avoids the old bare-``except TypeError``
+       approach which silently swallowed real errors inside the model.
+    4. If a ``TypeError`` is still raised after filtering it must originate
+       *inside* the model — re-raise with context so the user can diagnose it.
+    """
+    filtered_kwargs = kwargs
     try:
-        return model(*args, **kwargs)
-    except TypeError:
-        try:
-            return model(*args)
-        except Exception as exc:
-            raise RuntimeError(
-                "Could not call model with the provided batch inputs. "
-                "If your model has a custom forward signature, write "
-                "your own training loop."
-            ) from exc
+        sig = inspect.signature(model.forward)
+        params = sig.parameters
+        has_var_keyword = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD
+            for p in params.values()
+        )
+        if not has_var_keyword:
+            # Only pass kwargs that the model's forward explicitly declares.
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k in params}
+    except (ValueError, TypeError):
+        # Cannot introspect (e.g. C-extension backed forward); pass all.
+        pass
+
+    try:
+        return model(*args, **filtered_kwargs)
+    except TypeError as exc:
+        # At this point unsupported kwargs have already been filtered out, so a
+        # remaining TypeError comes from inside the model's forward — surface it.
+        raise RuntimeError(
+            f"model.forward raised a TypeError that likely indicates a bug "
+            f"inside the model rather than a batch-format mismatch. "
+            f"Original error: {exc!s}. "
+            "If your model has an unusual forward signature, write your own "
+            "training loop."
+        ) from exc
+
+
+# Per-run cache of metric names that have already triggered a warning so that
+# each failed metric only warns once (not once per batch).
+_warned_metrics: set = set()
 
 
 def _compute_metrics(
@@ -276,8 +383,18 @@ def _compute_metrics(
         for name, fn in metrics.items():
             try:
                 result[name] = float(fn(output.detach(), targets.detach()))
-            except Exception:
-                pass
+            except Exception as exc:
+                # Emit a single warning per metric name rather than silently
+                # swallowing the error so users can diagnose misconfigured
+                # metric functions (API-04).
+                if name not in _warned_metrics:
+                    _warned_metrics.add(name)
+                    warnings.warn(
+                        f"Metric '{name}' raised {type(exc).__name__}: {exc}. "
+                        "This metric will be absent from results. "
+                        "(This warning is shown only once per metric name per run.)",
+                        stacklevel=4,
+                    )
     return result
 
 
@@ -329,7 +446,10 @@ def train_epoch(
     amp_ctx = torch.autocast("cuda") if use_amp else _NullCtx()
 
     total_loss = 0.0
-    metric_acc: Dict[str, float] = {k: 0.0 for k in (metrics or {})}
+    # Only accumulate metrics that actually succeed (API-04).
+    # Pre-populating with every metric name would include failed metrics as 0.0
+    # in the final results, which is misleading — absent is better than wrong.
+    metric_acc: Dict[str, float] = {}
     n_batches = 0
 
     for batch in loader:
@@ -350,7 +470,7 @@ def train_epoch(
 
         if metrics:
             for k, v in _compute_metrics(metrics, output, targets).items():
-                metric_acc[k] += v
+                metric_acc[k] = metric_acc.get(k, 0.0) + v
 
         if log_level >= 2:
             print(f"  [batch {n_batches}] loss={loss.item():.4f}")
@@ -413,7 +533,7 @@ def evaluate(
     model.to(dev)
 
     total_loss = 0.0
-    metric_acc: Dict[str, float] = {k: 0.0 for k in (metrics or {})}
+    metric_acc: Dict[str, float] = {}  # populated only by successful metric calls
     n_batches = 0
 
     with torch.no_grad():
@@ -425,7 +545,7 @@ def evaluate(
             n_batches += 1
             if metrics:
                 for k, v in _compute_metrics(metrics, output, targets).items():
-                    metric_acc[k] += v
+                    metric_acc[k] = metric_acc.get(k, 0.0) + v
 
     if n_batches == 0:
         return {"loss": float("nan")}
@@ -471,7 +591,8 @@ def fit(
         metrics:      Dict ``{name: fn}`` of metric functions.
         logger:       Logger with ``log(**kwargs)`` (e.g. ``CSVLogger``,
                       ``TensorBoardLogger``).  ``None`` writes nothing.
-        log_level:    0 = silent; 1 = print per-epoch summary.
+        log_level:    0 = silent; 1 = print per-epoch summary;
+                      2 = per-epoch summary + per-batch progress lines.
         amp:          Wrap forward in CUDA autocast (CUDA only).
         grad_clip:    Gradient norm clip value (``None`` to disable).
 
@@ -494,11 +615,15 @@ def fit(
     history: List[Dict[str, float]] = []
 
     for ep in range(epochs):
+        # log_level >= 2 means the user wants per-batch progress; forward it
+        # so train_epoch can print each batch.  log_level 0 and 1 are handled
+        # by fit itself after the validation pass, so we suppress them here.
+        inner_log_level = log_level if log_level >= 2 else 0
         train_res = train_epoch(
             model, train_loader, optimizer, loss_fn,
             device=device, metrics=metrics,
             logger=None,  # we handle logging here after val
-            log_level=0,  # we handle printing here
+            log_level=inner_log_level,
             epoch=ep,
             amp=amp,
             grad_clip=grad_clip,

@@ -1,22 +1,85 @@
 name: Publish to PyPI
 
+# Trigger ONLY when a GitHub Release is published — never on push or PR.
 on:
   release:
     types: [published]
 
+# Minimal repository permissions — publishing is token-scoped only.
+permissions:
+  contents: read
+
 jobs:
   build-and-publish:
+    name: Build and publish to PyPI
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
-      - name: Install build tools
+          # Pin to a recent stable version; adjust when dropping Python 3.9.
+          python-version: "3.11"
+
+      # Install CPU-only PyTorch first so build doesn't pull CUDA wheels.
+      - name: Install CPU-only PyTorch
+        run: |
+          pip install torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install build and verification tools
         run: pip install build twine
-      - name: Build package
+
+      - name: Build sdist and wheel
         run: python -m build
+
+      # Verify metadata and description before uploading.
+      # This catches bad README rendering, missing classifiers, etc.
+      - name: Check distribution with twine
+        run: twine check --strict dist/*
+
+      # Sanity-check the wheel contains required static assets.
+      - name: Verify dashboard assets in wheel
+        run: |
+          python - <<'PY'
+          import zipfile, glob, sys
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as z:
+              names = z.namelist()
+          required = [
+              "tgraphx/dashboard/static/dashboard.css",
+              "tgraphx/dashboard/static/dashboard.js",
+          ]
+          missing = [r for r in required if not any(n.endswith(r) for n in names)]
+          if missing:
+              print("ERROR — missing from wheel:", missing)
+              sys.exit(1)
+          print("Wheel asset check OK")
+          PY
+
+      # Confirm the version tag matches the package version.
+      # Prevents accidentally uploading 0.1.2 under a v0.2.0 tag.
+      - name: Verify version matches release tag
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          tag = os.environ.get("GITHUB_REF_NAME", "")  # e.g. "v0.2.0"
+          tag_version = tag.lstrip("v")
+          import tgraphx
+          pkg_version = tgraphx.__version__
+          if tag_version != pkg_version:
+              print(f"ERROR: tag {tag!r} does not match package version {pkg_version!r}")
+              sys.exit(1)
+          print(f"Version match OK: tag={tag!r} pkg={pkg_version!r}")
+          PY
+
+      # Publish using the repository's PYPI_API_TOKEN secret.
+      # RECOMMENDATION: migrate to OIDC Trusted Publishing once the PyPI
+      # project is registered for it.  See:
+      # https://docs.pypi.org/trusted-publishers/
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__

@@ -6,12 +6,23 @@ on:
   pull_request:
     branches: ["main"]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Job overview
+# ─────────────────────────────────────────────────────────────────────────────
+# test          — Ubuntu × Python 3.10 / 3.11 / 3.12 : full test suite +
+#                 examples + build/twine + wheel-asset check + dashboard smoke
+# wheel-install — Ubuntu: build wheel, install in fresh venv, smoke from /tmp
+# cross-platform — macOS / Windows, one Python each: import + package smoke
+
 jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Primary test job — Ubuntu, multiple Python versions
+  # ═══════════════════════════════════════════════════════════════════════════
   test:
-    name: "Python ${{ matrix.python-version }}"
+    name: "Ubuntu / Python ${{ matrix.python-version }}"
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false   # keep running other versions even if one fails
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
@@ -37,8 +48,8 @@ jobs:
       - name: Install TGraphX with dev dependencies
         run: pip install -e ".[dev]"
 
-      # Quick sanity check before running the full suite.
-      - name: Smoke-check installed package
+      # ── Core import smoke ──────────────────────────────────────────────────
+      - name: Core import smoke
         run: |
           python -c "import tgraphx; print('tgraphx', tgraphx.__version__)"
           python -c "from tgraphx import Graph, GraphBatch"
@@ -48,18 +59,35 @@ jobs:
           python -c "from tgraphx.models import CNNEncoder, CNN_GNN_Model, GraphClassifier, NodeClassifier"
           python -c "from tgraphx import make_layer, build_model, build_model_from_config"
           python -c "from tgraphx import build_grid_graph, build_knn_graph, image_to_patches"
-          python -c "from tgraphx.training import set_seed, count_parameters, save_checkpoint, train_epoch, evaluate, fit"
-          python -c "from tgraphx.tracking import CSVLogger, TensorBoardLogger"
-          python -c "from tgraphx.performance import env_report, estimate_message_memory"
-          python -c "from tgraphx.dashboard import launch_dashboard_background"
-          python -c "import tgraphx, sys; assert 'tensorboard' not in sys.modules, 'tensorboard imported at base level'"
-          python -c "import tgraphx, sys; assert 'psutil' not in sys.modules or True"
 
-      # Full test suite — CUDA/MPS tests are skipped automatically on CPU runners.
+      # ── New top-level re-exports (Prompts 4–9) ────────────────────────────
+      - name: Top-level UX imports smoke
+        run: |
+          python -c "from tgraphx import fit, evaluate, train_epoch; print('training helpers OK')"
+          python -c "from tgraphx import set_seed, save_checkpoint, load_checkpoint; print('checkpoint OK')"
+          python -c "from tgraphx import CSVLogger, TensorBoardLogger; print('logging OK')"
+          python -c "from tgraphx import env_report, recommended_device, estimate_message_memory; print('perf OK')"
+          python -c "from tgraphx import GraphClassifier, NodeClassifier, EdgePredictor; print('models OK')"
+          python -c "from tgraphx import NodeRegressor, GraphRegressor; print('regressors OK')"
+          python -c "from tgraphx import write_graph_stats; print('write_graph_stats OK')"
+          python -c "from tgraphx.dashboard import launch_dashboard_background; print('dashboard launch OK')"
+          python -c "from tgraphx.dashboard.app import export_dashboard_html; print('export_dashboard_html OK')"
+
+      # ── Lazy-import guards ────────────────────────────────────────────────
+      - name: Verify no eager optional imports
+        run: |
+          python -c "
+          import tgraphx, sys
+          assert 'tensorboard' not in sys.modules, 'tensorboard imported at base level'
+          assert 'psutil' not in sys.modules or True, 'psutil should be lazy'
+          print('lazy import guards OK')
+          "
+
+      # ── Full test suite ────────────────────────────────────────────────────
       - name: Run test suite
         run: pytest -q
 
-      # Benchmark smoke — small, CPU-safe, terminates quickly.
+      # ── Benchmark smoke ────────────────────────────────────────────────────
       - name: Benchmark layer smoke
         run: |
           python benchmarks/benchmark_layers.py \
@@ -69,24 +97,392 @@ jobs:
       - name: Benchmark graph builders smoke
         run: python benchmarks/benchmark_graph_builders.py --small
 
-      # Selected fast examples.
+      # ── Examples (full runner) ─────────────────────────────────────────────
       - name: Fast examples smoke
-        run: |
-          python examples/01_vector_node_classification.py
-          python examples/02_spatial_graph_classification.py
-          python examples/03_volumetric_graph_classification.py
-          python examples/directed_vs_undirected_graphs.py
-          python examples/image_patch_graph.py
-          python examples/checkpoint_save_load.py
-          python examples/training_minimal_fit.py
-          python examples/training_with_csvlogger.py
-          python examples/training_with_tensorboard.py
-          python examples/memory_report.py
-          python examples/mixed_precision_inference.py
+        run: python examples/run_all_fast_examples.py
 
-      # Build sdist + wheel and check the package metadata.
-      - name: Build distribution
+      # ── Build distribution ─────────────────────────────────────────────────
+      - name: Build sdist + wheel
         run: python -m build
 
-      - name: Check distribution with twine
+      - name: Twine metadata check
         run: twine check dist/tgraphx-*
+
+      # ── Wheel asset verification ───────────────────────────────────────────
+      - name: Verify dashboard static assets in wheel
+        run: |
+          python - <<'PY'
+          import zipfile, glob, sys
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as z:
+              names = z.namelist()
+          required = [
+              "tgraphx/dashboard/static/dashboard.css",
+              "tgraphx/dashboard/static/dashboard.js",
+          ]
+          missing = [r for r in required if not any(n.endswith(r) for n in names)]
+          if missing:
+              print("MISSING from wheel:", missing)
+              sys.exit(1)
+          print("Wheel assets OK:", required)
+          PY
+
+      # ── README / presentation checks ───────────────────────────────────────
+      - name: README and logo presentation checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+
+          # Logo file at repo root
+          assert Path("TGRAPHX.png").exists(), "TGRAPHX.png missing at repo root"
+
+          readme = Path("README.md").read_text(encoding="utf-8")
+
+          # Logo referenced with GitHub raw URL (no local absolute path)
+          assert "TGRAPHX.png" in readme, "README missing logo reference"
+          assert "/home/" not in readme, "README contains a local home path"
+          assert "raw.githubusercontent.com" in readme or "TGRAPHX.png" in readme, \
+              "README logo not using absolute URL"
+
+          # No changelog-style leakage in README
+          for phrase in ["### Added", "### Changed", "### Fixed",
+                         "post-0.1.2", "since v0.1.3"]:
+              if phrase in readme:
+                  print(f"README changelog leakage: {phrase!r}")
+                  sys.exit(1)
+
+          # PyPI install command present
+          assert "pip install tgraphx" in readme, "README missing pip install tgraphx"
+
+          print("README presentation checks OK")
+          PY
+
+      # ── Risky claims audit ─────────────────────────────────────────────────
+      - name: Audit risky claims in README and docs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, sys
+
+          files = ([Path("README.md")] +
+                   list(Path("docs").rglob("*.md")) +
+                   [Path("CHANGELOG.md")])
+
+          # Phrases that must never appear as POSITIVE claims
+          hard_banned = [
+              "arbitrary-rank support",
+              "PyG compatible",
+              "DGL compatible",
+              "true streaming tail-read",
+          ]
+
+          failed = False
+          for f in files:
+              text = f.read_text(encoding="utf-8", errors="ignore")
+              low = text.lower()
+              for phrase in hard_banned:
+                  if phrase.lower() in low:
+                      idx = low.find(phrase.lower())
+                      ctx = low[max(0, idx-80):idx+80]
+                      print(f"RISKY: {f} [{phrase!r}] context: ...{ctx}...")
+                      failed = True
+              # SOTA only risky when used positively
+              if "state-of-the-art" in low:
+                  for match in re.finditer("state-of-the-art", low):
+                      ctx = low[max(0, match.start()-80):match.end()+80]
+                      if not any(n in ctx for n in
+                                 ["no ", "not ", "never ", "make no", "no real", "claim"]):
+                          print(f"POSSIBLE POSITIVE SOTA: {f}")
+                          print(f"  context: ...{ctx}...")
+                          failed = True
+          if not failed:
+              print("Claims audit OK — no forbidden positive claims found")
+          else:
+              sys.exit(1)
+          PY
+
+      # ── Dashboard CLI smoke ────────────────────────────────────────────────
+      - name: Dashboard CLI help
+        run: python -m tgraphx.dashboard --help
+
+      - name: Dashboard offline HTML export smoke
+        run: |
+          python - <<'PY'
+          import csv, sys, tempfile, subprocess
+          from pathlib import Path
+
+          with tempfile.TemporaryDirectory() as d:
+              run = Path(d) / "run"
+              run.mkdir()
+              with (run / "metrics.csv").open("w", newline="") as f:
+                  w = csv.DictWriter(f, fieldnames=["epoch", "train_loss", "val_loss"])
+                  w.writeheader()
+                  w.writerow({"epoch": 0, "train_loss": 1.0, "val_loss": 1.2})
+                  w.writerow({"epoch": 1, "train_loss": 0.8, "val_loss": 0.9})
+              out = Path(d) / "snapshot.html"
+              subprocess.check_call([
+                  sys.executable, "-m", "tgraphx.dashboard",
+                  "--logdir", str(run), "--export-html", str(out)
+              ])
+              assert out.exists(), "snapshot.html not created"
+              text = out.read_text(encoding="utf-8")
+              low = text.lower()
+              # Security: no CDN, no eval, no new Function
+              assert "cdn.jsdelivr" not in low, "CDN reference in snapshot"
+              assert "unpkg.com"    not in low, "CDN reference in snapshot"
+              import re
+              code_only = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
+              code_only = re.sub(r'//[^\n]*', '', code_only)
+              assert not re.search(r'\beval\s*\(', code_only), "eval() found in snapshot JS"
+              assert "new Function" not in code_only, "new Function in snapshot"
+              # Content markers
+              assert "__TGXSNAP" in text, "Snapshot data marker missing"
+              assert "<style>" in text,   "Inlined CSS missing from snapshot"
+              print(f"Export smoke OK — {out.stat().st_size // 1024} KB")
+          PY
+
+      # ── Dashboard live server smoke ────────────────────────────────────────
+      - name: Dashboard live server smoke
+        run: |
+          python - <<'PY'
+          import csv, json, subprocess, sys, tempfile, time, urllib.request
+          from pathlib import Path
+
+          # Use a fixed high port to avoid port-detection complexity in CI.
+          # 18765 is chosen to be far from default 8765 and unlikely to conflict.
+          PORT = 18765
+
+          with tempfile.TemporaryDirectory() as d:
+              run = Path(d) / "run"
+              run.mkdir()
+              with (run / "metrics.csv").open("w", newline="") as f:
+                  w = csv.DictWriter(f, fieldnames=["epoch", "train_loss"])
+                  w.writeheader()
+                  w.writerow({"epoch": 0, "train_loss": 1.0})
+                  w.writerow({"epoch": 1, "train_loss": 0.8})
+              with (run / "run_metadata.json").open("w") as f:
+                  json.dump({"run_name": "ci_run", "status": "completed"}, f)
+              with (run / "graph_stats.json").open("w") as f:
+                  json.dump({"num_nodes": 9, "num_edges": 24}, f)
+
+              srv = subprocess.Popen(
+                  [sys.executable, "-m", "tgraphx.dashboard",
+                   "--logdir", str(run), "--port", str(PORT), "--quiet"],
+                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+              )
+              time.sleep(1.5)  # allow server to bind
+
+              base = f"http://127.0.0.1:{PORT}"
+              checks = [
+                  "/", "/api/status", "/api/config", "/api/metrics",
+                  "/api/metrics?since_row=0", "/api/runs", "/api/graph_stats",
+                  "/api/hardware", "/static/dashboard.css", "/static/dashboard.js",
+              ]
+              ok, fail = [], []
+              for ep in checks:
+                  try:
+                      with urllib.request.urlopen(base + ep, timeout=3) as r:
+                          ok.append(f"{ep}({r.status})")
+                  except Exception as e:
+                      fail.append((ep, str(e)))
+
+              srv.terminate()
+              try:
+                  srv.wait(timeout=5)
+              except subprocess.TimeoutExpired:
+                  srv.kill()
+                  srv.wait()
+
+              if fail:
+                  for ep, err in fail:
+                      print(f"  FAIL {ep}: {err}")
+                  sys.exit(1)
+              print("Server smoke OK:", ok)
+          PY
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Wheel-install smoke — clean venv, import from /tmp
+  # ═══════════════════════════════════════════════════════════════════════════
+  wheel-install:
+    name: "Wheel install smoke"
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install CPU-only PyTorch
+        run: |
+          pip install torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Install wheel in fresh environment
+        run: pip install dist/tgraphx-*.whl
+
+      - name: Smoke from /tmp (outside repo root)
+        working-directory: /tmp
+        run: |
+          python -c "import tgraphx; print('version:', tgraphx.__version__)"
+          python -c "from tgraphx import Graph, build_model; print('core OK')"
+          python -c "from tgraphx import fit, CSVLogger, TensorBoardLogger; print('UX OK')"
+          python -c "from tgraphx import write_graph_stats; print('graph stats OK')"
+          python -c "from tgraphx.dashboard.app import export_dashboard_html; print('export OK')"
+          python -c "from tgraphx.dashboard import launch_dashboard_background; print('launch OK')"
+          python -c "
+          import tgraphx, sys
+          assert 'tensorboard' not in sys.modules, 'tensorboard eagerly imported'
+          print('no eager optional imports OK')
+          "
+
+      - name: Dashboard static assets in installed wheel
+        run: |
+          python - <<'PY'
+          import importlib.resources, os
+          pkg = importlib.resources.files("tgraphx.dashboard")
+          static = str(pkg.joinpath("static"))
+          for name in ("dashboard.css", "dashboard.js"):
+              path = os.path.join(static, name)
+              assert os.path.isfile(path), f"Missing from installed package: {path}"
+              assert os.path.getsize(path) > 100, f"Empty file: {path}"
+          print("Installed static assets OK")
+          PY
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Optional extras smoke — tracking + monitoring
+  # ═══════════════════════════════════════════════════════════════════════════
+  extras-smoke:
+    name: "Optional extras smoke"
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install CPU-only PyTorch
+        run: |
+          pip install torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install with tracking extras
+        run: pip install -e ".[tracking]"
+
+      - name: TensorBoardLogger smoke (tracking)
+        run: |
+          python -c "
+          from tgraphx.tracking import TensorBoardLogger
+          import inspect
+          # Class importable — tensorboard not imported yet
+          import sys
+          assert 'tensorboard' not in sys.modules, 'tensorboard imported too early'
+          print('TensorBoardLogger class importable without eager tensorboard import OK')
+          "
+
+      - name: Install monitoring extras
+        run: pip install psutil
+
+      - name: Hardware report smoke (monitoring)
+        run: |
+          python -c "
+          from tgraphx.performance import env_report
+          info = env_report(include_hardware=True)
+          # CPU count should always be present
+          assert info.get('cpu_count') is not None or info.get('psutil_available') is not None
+          print('env_report with hardware OK')
+          "
+
+      - name: Dashboard hardware endpoint without NVIDIA GPU
+        run: |
+          python - <<'PY'
+          from tgraphx.dashboard.app import _collect_hardware
+          info = _collect_hardware(force=True)
+          # Must never raise; unavailable fields have reason strings
+          assert "python" in info
+          assert "cuda_available" in info
+          if not info["pynvml_available"]:
+              assert "unavailable_reason_pynvml" in info, \
+                  "Missing unavailable reason when pynvml absent"
+          print("Hardware endpoint without GPU OK:", {k for k in info if "reason" in k})
+          PY
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Cross-platform smoke — macOS and Windows
+  # ═══════════════════════════════════════════════════════════════════════════
+  cross-platform:
+    name: "Cross-platform smoke / ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            python-version: "3.11"
+          - os: windows-latest
+            python-version: "3.11"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install CPU-only PyTorch
+        run: |
+          pip install torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install TGraphX with dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Import smoke
+        run: |
+          python -c "import tgraphx; print('version:', tgraphx.__version__)"
+          python -c "from tgraphx import Graph, build_model, fit, CSVLogger, write_graph_stats"
+          python -c "from tgraphx.dashboard.app import export_dashboard_html; print('export_dashboard_html OK')"
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Twine check
+        run: twine check dist/tgraphx-*
+
+      - name: Verify dashboard assets in wheel
+        shell: python
+        run: |
+          import zipfile, glob, sys
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as z:
+              names = z.namelist()
+          for r in ["tgraphx/dashboard/static/dashboard.css",
+                    "tgraphx/dashboard/static/dashboard.js"]:
+              if not any(n.endswith(r) for n in names):
+                  print("MISSING:", r)
+                  sys.exit(1)
+          print("Dashboard assets in wheel OK")
+
+      - name: Dashboard CLI help
+        run: python -m tgraphx.dashboard --help

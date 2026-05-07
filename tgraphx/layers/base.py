@@ -139,15 +139,37 @@ class TensorMessagePassingLayer(nn.Module):
 
 
 class LinearMessagePassing(TensorMessagePassingLayer):
-    r"""Message passing layer based on linear transformations (suitable for vector inputs).
+    r"""Message passing layer based on linear transformations for vector node features.
 
     This layer concatenates the source and destination node features (and optionally
     edge features) then passes the result through a learnable linear module.
+
+    Only 1-D per-node feature shapes ``(D,)`` are supported.  For 2-D spatial
+    ``(C, H, W)`` or 3-D volumetric ``(C, D, H, W)`` features use
+    :class:`ConvMessagePassing`, :class:`TensorGATLayer`,
+    :class:`TensorGraphSAGELayer`, or :class:`TensorGINLayer` instead.
     """
 
     def __init__(self, in_shape, out_shape, aggr='sum', use_edge_features=False,
                  dropout_prob=0.0, residual=False, use_batchnorm=False):
-        super().__init__(in_shape, out_shape, aggr, dropout_prob=dropout_prob, residual=residual, use_batchnorm=use_batchnorm)
+        in_shape = tuple(in_shape)
+        out_shape = tuple(out_shape)
+        if len(in_shape) != 1:
+            raise ValueError(
+                f"LinearMessagePassing supports vector node features [N, D] only "
+                f"(in_shape must be a 1-element tuple such as (32,)); "
+                f"got in_shape={in_shape}. "
+                f"For 2-D/3-D tensor features use ConvMessagePassing, "
+                f"TensorGATLayer, TensorGraphSAGELayer, or TensorGINLayer."
+            )
+        if len(out_shape) != 1:
+            raise ValueError(
+                f"LinearMessagePassing supports vector node features [N, D] only "
+                f"(out_shape must be a 1-element tuple such as (64,)); "
+                f"got out_shape={out_shape}."
+            )
+        super().__init__(in_shape, out_shape, aggr, dropout_prob=dropout_prob,
+                         residual=residual, use_batchnorm=use_batchnorm)
         self.use_edge_features = use_edge_features
         in_dim = in_shape[0]
         linear_in_dim = in_dim * 3 if use_edge_features else in_dim * 2
@@ -160,6 +182,6 @@ class LinearMessagePassing(TensorMessagePassingLayer):
             msg_input = torch.cat([src, dest], dim=-1)
         return self.message_linear(msg_input)
 
-    def update(self, node_feature, aggregated_message):
-        # In this simple example, we directly return the aggregated message.
-        return aggregated_message
+    # update() is intentionally NOT overridden here so that the base-class
+    # implementation runs and applies batchnorm → dropout → residual in the
+    # correct order whenever those flags were set at construction time.

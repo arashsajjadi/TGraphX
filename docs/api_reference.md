@@ -3,6 +3,23 @@
 Quick reference for TGraphX's public API.
 For full signatures see the source files; every public function has a docstring.
 
+**Preferred imports** — all symbols below are available directly from the
+top-level `tgraphx` namespace after `pip install tgraphx`.  Submodule paths
+(e.g. `from tgraphx.training import fit`) continue to work and are listed at
+the bottom of each section for advanced users.
+
+```python
+# Everything a typical user needs
+from tgraphx import (
+    Graph, GraphBatch, GraphDataLoader,
+    build_model, make_layer,
+    fit, evaluate, train_epoch,
+    CSVLogger, TensorBoardLogger,
+    env_report, recommended_device,
+    GraphClassifier, NodeClassifier, EdgePredictor,
+)
+```
+
 ## Top-level (`tgraphx`)
 
 ### Data structures
@@ -60,11 +77,17 @@ For full signatures see the source files; every public function has a docstring.
 
 ### Model classes
 
+All importable directly from `tgraphx`:
+
 | Symbol | Description |
 |---|---|
+| `GraphClassifier(...)` | ConvMessagePassing-based graph classifier |
+| `NodeClassifier(...)` | LinearMessagePassing-based node classifier |
 | `EdgePredictor(in_dim, hidden_dim, out_dim)` | MLP edge scorer |
 | `NodeRegressor(in_shape, hidden_shape, out_dim, ...)` | Vector node regression |
 | `GraphRegressor(in_shape, hidden_shape, out_dim, ...)` | Vector graph regression |
+
+Also available from `tgraphx.models`: `CNNEncoder`, `CNN_GNN_Model`, `PreEncoder`.
 
 ## `tgraphx.layers`
 
@@ -78,27 +101,36 @@ For full signatures see the source files; every public function has a docstring.
 | `AttentionMessagePassing(in_shape, out_shape, ...)` | vector or 2-D | Legacy sigmoid gating |
 | `make_layer(name, in_shape, out_shape, **kwargs)` | — | Factory |
 
-## `tgraphx.training`
+## `tgraphx.training` (also `from tgraphx import …`)
 
 | Symbol | Description |
 |---|---|
-| `set_seed(seed)` | Seeds torch / numpy / random |
+| `train_epoch(model, loader, optimizer, loss_fn, *, device, metrics, logger, log_level, epoch, amp, grad_clip)` | One supervised training epoch; returns `{"loss": …, …}`; `log_level=2` prints per-batch progress |
+| `evaluate(model, loader, loss_fn, *, metrics, device)` | Evaluation under `torch.no_grad()`; no file writes |
+| `fit(model, train_loader, val_loader, *, epochs, optimizer, loss_fn, device, metrics, logger, log_level, amp, grad_clip)` | Thin loop wrapper; `log_level=2` enables per-batch output |
+| `set_seed(seed, deterministic=False)` | Seeds torch / numpy / random; `deterministic=True` also sets cuDNN flags |
 | `count_parameters(model, trainable_only=True)` | Parameter count |
-| `save_checkpoint(model, optimizer, epoch, path, **extra)` | torch.save wrapper |
-| `load_checkpoint(model, optimizer, path, map_location)` | Returns saved epoch |
+| `save_checkpoint(model, optimizer, epoch, path, **extra)` | Saves checkpoint dict via `torch.save` |
+| `load_checkpoint(model, optimizer, path, map_location, weights_only=True)` | Loads checkpoint; defaults to safe deserialization; pass `weights_only=False` only for trusted legacy files |
 | `accuracy(logits, labels)` | Multi-class argmax accuracy |
 | `mean_absolute_error(predictions, targets)` | MAE |
 | `mean_squared_error(predictions, targets)` | MSE |
 
-## `tgraphx.tracking`
+## `tgraphx.tracking` (also `from tgraphx import …`)
 
 | Symbol | Description |
 |---|---|
-| `CSVLogger(logdir, filename="metrics.csv")` | Append-mode CSV logger |
+| `CSVLogger(logdir, filename="metrics.csv")` | Append-mode CSV logger; dashboard-compatible schema |
 | `logger.log(**metrics)` | Append one row; adds UTC timestamp automatically |
 | `logger.close()` | Flush and close |
+| `TensorBoardLogger(logdir, comment="")` | Optional TensorBoard logger; requires `pip install tensorboard`; **not imported at package load time** |
+| `tb_logger.log(**metrics)` | Write scalars; `epoch=0` / `step=0` handled correctly |
+| `tb_logger.log_scalar(tag, value, step)` | Write one scalar |
+| `tb_logger.log_metrics(metrics_dict, step)` | Write multiple scalars |
+| `tb_logger.close()` | Flush and close `SummaryWriter` |
+| `write_graph_stats(graph_or_dict, path)` | Write `graph_stats.json` for dashboard display |
 
-## `tgraphx.performance`
+## `tgraphx.performance` (also `from tgraphx import …`)
 
 | Symbol | Description |
 |---|---|
@@ -110,8 +142,24 @@ For full signatures see the source files; every public function has a docstring.
 
 | Symbol | Description |
 |---|---|
-| `launch_dashboard(logdir, host, port, token)` | Blocking server launch |
-| `launch_dashboard_background(logdir, ...)` | Background thread; returns server |
+| `launch_dashboard(logdir, host, port, token, refresh_interval_s)` | Blocking server launch |
+| `launch_dashboard_background(logdir, ...)` | Background daemon thread; returns server handle |
+| `export_dashboard_html(logdir, out_path)` | Standalone offline HTML snapshot (no server needed) |
+
+### Dashboard API endpoints
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/status` | Run name, status, epoch/step, timestamps |
+| `GET /api/metrics` | Full metrics payload |
+| `GET /api/metrics?since_row=N` | Incremental rows after index N |
+| `GET /api/metrics?run=<name>` | Metrics for named run (multi-run mode) |
+| `GET /api/runs` | `{mode, runs, capped}` — multi-run discovery |
+| `GET /api/hardware` | Versions + CPU/RAM/GPU sensors |
+| `GET /api/metadata` | `run_metadata.json` contents |
+| `GET /api/graph` | Graph summary ± edge_index |
+| `GET /api/graph_stats` | Precomputed stats from `graph_stats.json` |
+| `GET /api/config` | Server config (`poll_ms`, `max_metric_rows`, …); never exposes token |
 
 ## `tgraphx.core.utils`
 

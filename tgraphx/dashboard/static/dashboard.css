@@ -21,12 +21,44 @@
   --green:      #22c55e;
   --amber:      #f59e0b;
   --red:        #ef4444;
+  /* Default chart palette (modern, dark-bg friendly).
+     A perceptually-distinct color-blind safe palette is applied via
+     [data-palette="cb"] below using the Okabe-Ito sequence.  Series names
+     are always shown in legends, so color is never the sole signal. */
+  --series-1:  #06b6d4; /* train_loss / loss */
+  --series-2:  #8b5cf6; /* val_loss */
+  --series-3:  #22c55e; /* accuracy */
+  --series-4:  #f59e0b; /* learning_rate */
+  --series-5:  #ef4444; /* grad_norm */
+  --series-6:  #10b981; /* throughput */
+  --series-7:  #ec4899; /* extra */
+  --series-8:  #6366f1; /* extra */
   --sidebar-w:  224px;
   --topbar-h:   52px;
   --radius:     8px;
   --shadow:     0 2px 12px #00000040;
+  --focus:      0 0 0 3px rgba(6,182,212,.45);
   --font:       system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono:       "JetBrains Mono", "Fira Code", Consolas, monospace;
+}
+
+/* Okabe-Ito-inspired color-blind safe palette.
+   These eight colors are perceptually distinct for deuteranopia,
+   protanopia, and tritanopia.  Activated via the palette toggle. */
+[data-palette="cb"] {
+  --series-1: #0072B2; /* blue       — train */
+  --series-2: #E69F00; /* orange     — val */
+  --series-3: #009E73; /* green      — accuracy */
+  --series-4: #D55E00; /* vermillion — lr */
+  --series-5: #CC79A7; /* reddish    — grad */
+  --series-6: #56B4E9; /* sky        — throughput */
+  --series-7: #F0E442; /* yellow     — extra */
+  --series-8: #999999; /* neutral    — extra */
+  --accent:   #0072B2;
+  --purple:   #E69F00;
+  --green:    #009E73;
+  --amber:    #D55E00;
+  --red:      #CC79A7;
 }
 
 @media (prefers-color-scheme: light) {
@@ -461,3 +493,367 @@ pre {
   .grid-4 { gap: 20px; }
   #metrics-grid { grid-template-columns: repeat(auto-fill, minmax(520px, 1fr)); }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Accessibility — keyboard focus, skip link, reduced motion
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Visible focus ring for keyboard users.  We deliberately do NOT remove
+   the outline globally; we just upgrade :focus-visible to a higher-contrast
+   shadow that works on any background. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: var(--radius);
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* Skip-to-content link — visible only when focused, lets keyboard users
+   bypass the sidebar. */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  z-index: 9999;
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  font-size: .85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top .15s ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 8px;
+}
+
+/* Honour the user's OS-level "reduce motion" preference. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Top-bar utility buttons (pause, refresh, palette toggle)
+   ───────────────────────────────────────────────────────────────────────────── */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  color: var(--text2);
+  font-size: 1rem;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.icon-btn:hover { background: var(--border); color: var(--text); }
+.icon-btn[aria-pressed="true"] {
+  background: var(--bg3);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.link-btn {
+  background: none;
+  color: var(--text3);
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  font-size: .78rem;
+}
+.link-btn:hover { color: var(--accent); background: var(--border); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Stale-data banner
+   ───────────────────────────────────────────────────────────────────────────── */
+.stale-banner {
+  background: #3f2d12;
+  color: #fbbf24;
+  border-bottom: 1px solid var(--amber);
+  padding: 8px 20px;
+  font-size: .82rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stale-banner::before {
+  content: "\26A0\FE0F";
+  font-size: 1rem;
+}
+[data-theme="light"] .stale-banner {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Toolbar (per-section) — export buttons, range selector, palette toggle
+   ───────────────────────────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .82rem;
+  color: var(--text2);
+}
+.toolbar-group + .toolbar-group {
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+}
+.tb-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  font-size: .78rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.tb-btn:hover { background: var(--border); color: var(--text); }
+.tb-btn[disabled] {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.tb-select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  font-size: .78rem;
+  font-family: inherit;
+}
+.toolbar label {
+  font-size: .78rem;
+  color: var(--text3);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Hardware "unavailable" subtle row
+   ───────────────────────────────────────────────────────────────────────────── */
+.hw-unavail {
+  font-size: .78rem;
+  color: var(--text3);
+  font-style: italic;
+  padding: 8px 0;
+}
+.hw-unavail code {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: .76rem;
+  background: var(--bg3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text2);
+}
+.hw-timestamp {
+  font-size: .72rem;
+  color: var(--text3);
+  margin-top: 6px;
+  font-family: var(--mono);
+}
+
+/* Latest value pill (chart cards) */
+.latest-val {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: var(--mono);
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+/* Truncation/downsample disclosure */
+.disclosure {
+  font-size: .76rem;
+  color: var(--text3);
+  margin: 4px 0 0;
+  font-style: italic;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Tools section — copyable URL rows
+   ───────────────────────────────────────────────────────────────────────────── */
+.url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.url-row code {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: .82rem;
+  padding: 7px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.copy-btn {
+  background: var(--accent);
+  color: #fff;
+  padding: 7px 12px;
+  border-radius: var(--radius);
+  font-size: .8rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.copy-btn:hover { background: var(--accent2); }
+.copy-btn.copied { background: var(--green); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Print stylesheet — Save as PDF / Print
+   ───────────────────────────────────────────────────────────────────────────── */
+@media print {
+  /* Remove navigation, top bar, footer, dialogs, and TV overlay from the
+     print output — they don't carry information for a static PDF. */
+  #sidebar, #topbar, #footer, #tv-overlay, .skip-link,
+  .stale-banner, .toolbar, .icon-btn, .nav-btn,
+  #pause-btn, #refresh-btn, #palette-btn, #theme-btn,
+  #hamburger, .copy-btn {
+    display: none !important;
+  }
+  #app, #main-wrap, #content {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .sec { display: block !important; page-break-inside: avoid; margin-bottom: 16px; }
+  .card {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #94a3b8 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+  .card-title, .hw-label, .page-note { color: #475569 !important; }
+  .card-value, .hw-val, td, th { color: #0f172a !important; }
+  table { font-size: 10pt !important; }
+  pre { background: #f1f5f9 !important; color: #0f172a !important;
+        max-height: none !important; }
+  /* Force chart series to use solid greys/blacks for cheaper printing.
+     Series colors stay readable but ink-conservative. */
+  svg polyline, svg polygon { stroke: #1f2937 !important; }
+  svg text { fill: #0f172a !important; }
+  .latest-val { background: #ffffff !important; border-color: #94a3b8 !important;
+                color: #0f172a !important; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Chart hover tooltip — shown near cursor on mouse-over; hidden at rest.
+   Positioned as fixed so it can escape overflow:hidden chart containers.
+   Visual-only: keyboard users see the chart label; the tooltip is
+   not keyboard-accessible (adding keyboard-accessible details is complex
+   without a library and is documented as visual-only).
+   ───────────────────────────────────────────────────────────────────────────── */
+.chart-tooltip {
+  position: fixed;
+  z-index: 4000;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: .78rem;
+  font-family: var(--mono);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  display: none;
+}
+.chart-tooltip.visible { display: block; }
+.chart-tooltip-x   { color: var(--text3); font-size: .72rem; }
+.chart-tooltip-val { font-weight: 700; margin-top: 2px; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Thermal status chips (GPU hardware panel)
+   ───────────────────────────────────────────────────────────────────────────── */
+.thermal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.thermal-normal       { background: #1b4332; color: var(--green); }
+.thermal-warm         { background: #422006; color: var(--amber); }
+.thermal-near-throttle{ background: #3f1414; color: var(--red); }
+.thermal-unknown      { background: var(--border); color: var(--text3); }
+
+/* Run selector (multi-run mode) */
+.run-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-size: .85rem;
+  flex-shrink: 0;
+}
+.run-selector-bar label { color: var(--text2); font-weight: 500; }
+.run-selector-bar select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  font-size: .82rem;
+  font-family: inherit;
+  max-width: 280px;
+}
+.run-selector-bar .run-count { color: var(--text3); font-size: .78rem; }
+
+/* Power draw bar */
+.pw-bar-wrap { flex: 1; margin: 0 12px; height: 5px; background: var(--border);
+               border-radius: 3px; overflow: hidden; }
+.pw-bar { height: 100%; border-radius: 3px; transition: width .4s; background: var(--amber); }

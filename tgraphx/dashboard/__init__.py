@@ -47,6 +47,7 @@ def launch_dashboard(
     token: Optional[str] = None,
     verbose: bool = True,
     max_metric_rows: int = _DEFAULT_MAX_METRIC_ROWS,
+    refresh_interval_s: float = 2.0,
 ) -> None:
     """Start the dashboard and block until interrupted (Ctrl-C).
 
@@ -59,9 +60,12 @@ def launch_dashboard(
         verbose: Print startup message and access URL.
         max_metric_rows: Maximum rows returned by ``/api/metrics``.
             Older rows are omitted when the log exceeds this limit.
+        refresh_interval_s: Browser auto-refresh interval (seconds, clamped
+            to [0.5, 60]).
     """
     server = DashboardServer(logdir, host, port, token=token, verbose=verbose,
-                             max_metric_rows=max_metric_rows)
+                             max_metric_rows=max_metric_rows,
+                             refresh_interval_s=refresh_interval_s)
     if verbose:
         _print_banner(host, port, token)
     try:
@@ -79,6 +83,7 @@ def launch_dashboard_background(
     token: Optional[str] = None,
     verbose: bool = True,
     max_metric_rows: int = _DEFAULT_MAX_METRIC_ROWS,
+    refresh_interval_s: float = 2.0,
 ) -> DashboardServer:
     """Start the dashboard in a daemon background thread and return the server.
 
@@ -89,7 +94,8 @@ def launch_dashboard_background(
         The running :class:`DashboardServer` instance.
     """
     server = DashboardServer(logdir, host, port, token=token, verbose=verbose,
-                             max_metric_rows=max_metric_rows)
+                             max_metric_rows=max_metric_rows,
+                             refresh_interval_s=refresh_interval_s)
     if verbose:
         _print_banner(host, port, token)
     thread = threading.Thread(target=server.serve_forever, daemon=True, name="tgraphx-dashboard")
@@ -98,11 +104,12 @@ def launch_dashboard_background(
 
 
 def _print_banner(host: str, port: int, token: Optional[str]) -> None:
-    display = "127.0.0.1" if host == "0.0.0.0" else host
-    url = f"http://{display}:{port}"
-    print(f"\n  TGraphX Dashboard → {url}")
     if host == "0.0.0.0":
-        print(f"  LAN access enabled  (token required)")
+        print(f"\n  TGraphX Dashboard")
+        print(f"  Local  → http://127.0.0.1:{port}")
+        print(f"  LAN    → use this machine's LAN IP, port {port}  (token required)")
+    else:
+        print(f"\n  TGraphX Dashboard → http://{host}:{port}")
     print()
 
 

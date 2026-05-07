@@ -19,6 +19,7 @@ from tgraphx.layers import (
     ConvMessagePassing,
     AttentionMessagePassing,
     LinearMessagePassing,
+    TensorGATLayer,
 )
 
 
@@ -245,3 +246,253 @@ class TestLinearMessagePassing:
         out = layer(_vector(), _ei())
         assert out.shape == (N, 16)
         assert torch.isfinite(out).all()
+
+    # ── API-05: rank guard ────────────────────────────────────────────
+
+    def test_spatial_in_shape_raises(self):
+        """2-D spatial in_shape must raise ValueError (API-05)."""
+        with pytest.raises(ValueError, match="LinearMessagePassing supports vector"):
+            LinearMessagePassing(in_shape=(3, 8, 8), out_shape=(8, 8, 8))
+
+    def test_volumetric_in_shape_raises(self):
+        """3-D volumetric in_shape must raise ValueError (API-05)."""
+        with pytest.raises(ValueError, match="LinearMessagePassing supports vector"):
+            LinearMessagePassing(in_shape=(3, 4, 8, 8), out_shape=(8, 4, 8, 8))
+
+    def test_spatial_out_shape_raises(self):
+        """Spatial out_shape must raise ValueError even with vector in_shape."""
+        with pytest.raises(ValueError, match="out_shape must be a 1-element tuple"):
+            LinearMessagePassing(in_shape=(16,), out_shape=(8, 4, 4))
+
+    # ── BUG-02: dropout actually fires ───────────────────────────────
+
+    def test_dropout_changes_train_output(self):
+        """With dropout_prob=0.9, train-mode output must differ from eval-mode."""
+        layer = LinearMessagePassing(in_shape=(D,), out_shape=(D,), dropout_prob=0.9)
+        x = torch.ones(N, D)
+        ei = _ei()
+        layer.train()
+        # Run several times in train mode to make a collision astronomically unlikely.
+        outputs_train = [layer(x, ei).detach() for _ in range(5)]
+        layer.eval()
+        out_eval = layer(x, ei).detach()
+        # At least one train run must differ from eval (prob of all-same < 0.1^5).
+        assert any(not torch.equal(o, out_eval) for o in outputs_train), (
+            "dropout_prob=0.9 had no effect: train and eval outputs were identical"
+        )
+
+    def test_dropout_disabled_in_eval(self):
+        """Eval mode must be deterministic (dropout off)."""
+        layer = LinearMessagePassing(in_shape=(D,), out_shape=(D,), dropout_prob=0.5)
+        layer.eval()
+        x = torch.randn(N, D)
+        ei = _ei()
+        a = layer(x, ei)
+        b = layer(x, ei)
+        assert torch.equal(a, b), "eval-mode output must be deterministic"
+
+    # ── BUG-02: residual actually fires ──────────────────────────────
+
+    def test_residual_same_shape(self):
+        """residual=True with matching D must add the input to the output."""
+        layer = LinearMessagePassing(in_shape=(D,), out_shape=(D,), residual=True)
+        layer.eval()
+        x = torch.randn(N, D)
+        ei = _ei()
+        # Run once with residual, once with a copy of the layer where we manually
+        # zero the skip and compare: residual adds the identity.
+        out_with = layer(x, ei)
+        # Manually compute without residual by clearing the flag.
+        layer.residual = False
+        out_without = layer(x, ei)
+        layer.residual = True
+        # out_with == out_without + x  (both computed from same weights/state)
+        assert torch.allclose(out_with, out_without + x, atol=1e-5), (
+            "residual=True did not add the input to the output"
+        )
+
+    def test_residual_different_shape_no_crash(self):
+        """residual=True with mismatched shapes must silently skip the skip-connection."""
+        layer = LinearMessagePassing(in_shape=(D,), out_shape=(16,), residual=True)
+        out = layer(_vector(), _ei())
+        assert out.shape == (N, 16)
+
+    # ── BUG-02: batchnorm actually fires ─────────────────────────────
+
+    def test_batchnorm_module_created(self):
+        """use_batchnorm=True must create a BatchNorm1d on the layer."""
+        import torch.nn as nn
+        layer = LinearMessagePassing(in_shape=(D,), out_shape=(16,), use_batchnorm=True)
+        assert hasattr(layer, "bn"), "BatchNorm module not found"
+        assert isinstance(layer.bn, nn.BatchNorm1d)
+
+    def test_batchnorm_forward_works(self):
+        """Forward must succeed with use_batchnorm=True (at least 2 nodes needed)."""
+        layer = LinearMessagePassing(in_shape=(D,), out_shape=(16,), use_batchnorm=True)
+        layer.train()
+        # BatchNorm1d requires batch size ≥ 2 in training mode.
+        x = torch.randn(4, D)
+        ei = _ei(4)
+        out = layer(x, ei)
+        assert out.shape == (4, 16)
+        assert torch.isfinite(out).all()
+
+    def test_batchnorm_train_differs_from_eval(self):
+        """BN running stats cause train/eval divergence on fresh parameters."""
+        layer = LinearMessagePassing(in_shape=(D,), out_shape=(16,), use_batchnorm=True)
+        x = torch.randn(4, D)
+        ei = _ei(4)
+        layer.train()
+        out_train = layer(x, ei).detach()
+        layer.eval()
+        out_eval = layer(x, ei).detach()
+        # The very first eval pass after training accumulates running stats,
+        # so the outputs must differ unless the data is pathologically symmetric.
+        assert not torch.equal(out_train, out_eval), (
+            "BN train/eval outputs identical — batchnorm may not be active"
+        )
+
+
+# ──────────────────────────────────────────────────────────────────── #
+# BUG-03: TensorGATLayer add_self_loops deduplication                   #
+# ──────────────────────────────────────────────────────────────────── #
+
+class TestGATSelfLoopDedup:
+    """BUG-03 regression tests: add_self_loops=True must not duplicate existing loops."""
+
+    C_GAT, H_GAT, W_GAT = 4, 4, 4  # small spatial dims for speed
+    OUT_C = 8
+
+    def _layer(self, **kw):
+        return TensorGATLayer(
+            in_channels=self.C_GAT,
+            out_channels=self.OUT_C,
+            num_heads=2,
+            add_self_loops=True,
+            **kw,
+        )
+
+    def _x(self, n=4):
+        return torch.randn(n, self.C_GAT, self.H_GAT, self.W_GAT)
+
+    # ── no self-loops in input → all N are added ─────────────────────
+
+    def test_no_existing_self_loops_adds_all(self):
+        """When edge_index has no self-loops, N self-loops should be appended."""
+        n = 4
+        # directed cycle, no self-loops
+        src = torch.arange(n)
+        ei = torch.stack([src, (src + 1) % n])
+        layer = self._layer()
+        out, attn = layer(self._x(n), ei, return_attention=True)
+        # Each destination node must have at least its self-loop in the attn
+        assert out.shape == (n, self.OUT_C, self.H_GAT, self.W_GAT)
+        assert torch.isfinite(out).all()
+        # E_eff = E_orig + n (N new loops)
+        assert attn.shape[0] == ei.size(1) + n
+
+    # ── all self-loops already present → none added ───────────────────
+
+    def test_all_self_loops_present_no_duplicates(self):
+        """When every node already has a self-loop, no new loops are added."""
+        n = 4
+        src = torch.arange(n)
+        # cycle + self-loops for every node
+        cycle = torch.stack([src, (src + 1) % n])
+        loops = torch.stack([src, src])
+        ei = torch.cat([cycle, loops], dim=1)
+        E_orig = ei.size(1)
+        layer = self._layer()
+        out, attn = layer(self._x(n), ei, return_attention=True)
+        assert out.shape == (n, self.OUT_C, self.H_GAT, self.W_GAT)
+        assert torch.isfinite(out).all()
+        # No new loops added
+        assert attn.shape[0] == E_orig
+
+    # ── partial self-loops → only missing ones added ──────────────────
+
+    def test_partial_self_loops_adds_only_missing(self):
+        """Only nodes without a self-loop get one added."""
+        n = 4
+        # self-loop only for node 0
+        ei = torch.tensor([[0, 1, 2, 3, 0], [1, 2, 3, 0, 0]], dtype=torch.long)
+        E_orig = ei.size(1)  # 5 edges (4 cycle + 1 self-loop for node 0)
+        layer = self._layer()
+        out, attn = layer(self._x(n), ei, return_attention=True)
+        assert out.shape == (n, self.OUT_C, self.H_GAT, self.W_GAT)
+        assert torch.isfinite(out).all()
+        # n-1 = 3 missing self-loops should be added
+        assert attn.shape[0] == E_orig + (n - 1)
+
+    # ── edge_weight padded correctly ─────────────────────────────────
+
+    def test_edge_weight_padded_for_new_loops_only(self):
+        """edge_weight padding must match the number of newly added loops."""
+        n = 4
+        src = torch.arange(n)
+        # cycle (no self-loops)
+        ei = torch.stack([src, (src + 1) % n])
+        ew = torch.ones(ei.size(1))
+        layer = self._layer()
+        out = layer(self._x(n), ei, edge_weight=ew)
+        assert out.shape == (n, self.OUT_C, self.H_GAT, self.W_GAT)
+        assert torch.isfinite(out).all()
+
+    def test_edge_weight_no_padding_when_loops_already_present(self):
+        """When all self-loops exist, edge_weight must not be padded."""
+        n = 4
+        src = torch.arange(n)
+        cycle = torch.stack([src, (src + 1) % n])
+        loops = torch.stack([src, src])
+        ei = torch.cat([cycle, loops], dim=1)
+        ew = torch.ones(ei.size(1))
+        layer = self._layer()
+        out = layer(self._x(n), ei, edge_weight=ew)
+        assert out.shape == (n, self.OUT_C, self.H_GAT, self.W_GAT)
+        assert torch.isfinite(out).all()
+
+    # ── vector edge_features padded correctly ────────────────────────
+
+    def test_vector_edge_features_padded_for_new_loops(self):
+        """Vector edge_features bias must be padded for new loops only."""
+        n = 4
+        edge_dim = 3
+        src = torch.arange(n)
+        ei = torch.stack([src, (src + 1) % n])  # no self-loops
+        ef = torch.randn(ei.size(1), edge_dim)
+        layer = TensorGATLayer(
+            in_channels=self.C_GAT,
+            out_channels=self.OUT_C,
+            num_heads=2,
+            add_self_loops=True,
+            use_edge_features=True,
+            edge_dim=edge_dim,
+        )
+        out = layer(self._x(n), ei, edge_features=ef)
+        assert out.shape == (n, self.OUT_C, self.H_GAT, self.W_GAT)
+        assert torch.isfinite(out).all()
+
+    # ── softmax sums to 1 per destination ────────────────────────────
+
+    def test_attention_normalized_per_destination(self):
+        """Softmax must sum to 1.0 per destination across all K heads."""
+        n = 4
+        src = torch.arange(n)
+        ei = torch.stack([src, (src + 1) % n])
+        layer = self._layer()
+        layer.eval()
+        _, attn = layer(self._x(n), ei, return_attention=True)  # [E_eff, K]
+        # attn[e, k] for all e with dst==j must sum to 1 per head k
+        # Build dst for E_eff: first E_orig are cycle destinations, rest are self-loops
+        n_new = n  # no existing self-loops
+        dst_eff = torch.cat([
+            (src + 1) % n,           # cycle destinations
+            torch.arange(n),         # self-loop destinations
+        ])
+        for j in range(n):
+            for k in range(layer.num_heads):
+                mask = dst_eff == j
+                s = attn[mask, k].sum().item()
+                assert abs(s - 1.0) < 1e-4, (
+                    f"Node {j} head {k}: attention sums to {s:.6f} not 1.0"
+                )

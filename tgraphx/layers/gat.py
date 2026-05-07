@@ -238,10 +238,21 @@ class TensorGATLayer(nn.Module):
         dst = edge_index[1]
         E_orig = src.size(0)
 
+        # Self-loop insertion: only add a loop for nodes that do not already
+        # have one.  This matches the behaviour of Graph.add_self_loops() and
+        # prevents duplicate attention contributions for nodes with pre-existing
+        # self-loops (BUG-03).
+        n_new = 0  # number of self-loops actually inserted
         if self.add_self_loops:
-            loop = torch.arange(N, device=x.device, dtype=torch.long)
-            src = torch.cat([src, loop], dim=0)
-            dst = torch.cat([dst, loop], dim=0)
+            self_mask = edge_index[0] == edge_index[1]
+            already = torch.zeros(N, dtype=torch.bool, device=x.device)
+            if self_mask.any():
+                already[edge_index[0][self_mask]] = True
+            new_nodes = torch.arange(N, device=x.device, dtype=torch.long)[~already]
+            n_new = new_nodes.numel()
+            if n_new > 0:
+                src = torch.cat([src, new_nodes], dim=0)
+                dst = torch.cat([dst, new_nodes], dim=0)
         E_eff = src.size(0)
 
         # Linear projection: [N, K * C_head, *spatial] -> [N, K, C_head, *spatial].
@@ -251,12 +262,13 @@ class TensorGATLayer(nn.Module):
         h_src = h.index_select(0, src)  # [E_eff, K, C_head, *spatial]
         h_dst = h.index_select(0, dst)
 
-        # Resolve and broadcast edge_weight (with self-loop padding = 1).
+        # Resolve and broadcast edge_weight.
+        # Pad only for the n_new newly added self-loops (weight = 1.0).
         weight_b: torch.Tensor | None = None
         if edge_weight is not None:
             broadcast_edge_weight(edge_weight, x, num_edges=E_orig)  # validate against E_orig
-            if self.add_self_loops:
-                pad = edge_weight.new_ones(N)
+            if self.add_self_loops and n_new > 0:
+                pad = edge_weight.new_ones(n_new)
                 full_w = torch.cat([edge_weight, pad], dim=0)
             else:
                 full_w = edge_weight
@@ -273,8 +285,9 @@ class TensorGATLayer(nn.Module):
 
         if self.use_edge_features and edge_pool is not None:
             edge_bias = self.edge_bias_proj(edge_pool)  # [E_orig, K]
-            if self.add_self_loops:
-                pad = edge_bias.new_zeros(N, self.num_heads)
+            # Pad edge bias only for the n_new newly added self-loops (bias = 0).
+            if self.add_self_loops and n_new > 0:
+                pad = edge_bias.new_zeros(n_new, self.num_heads)
                 edge_bias = torch.cat([edge_bias, pad], dim=0)
             scores_pre = scores_pre + edge_bias
 

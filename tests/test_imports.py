@@ -82,3 +82,74 @@ def test_import_models_subpackage():
         NodeClassifier,
         PreEncoder,
     )
+
+
+# ------------------------------------------------------------------ #
+# API-02 / UX-01 / UX-08: new top-level re-exports                    #
+# ------------------------------------------------------------------ #
+
+def test_import_training_utilities_from_top():
+    from tgraphx import (  # noqa: F401
+        set_seed,
+        count_parameters,
+        save_checkpoint,
+        load_checkpoint,
+        accuracy,
+        mean_absolute_error,
+        mean_squared_error,
+        train_epoch,
+        evaluate,
+        fit,
+    )
+
+
+def test_import_logging_from_top():
+    from tgraphx import CSVLogger, TensorBoardLogger  # noqa: F401
+
+
+def test_import_performance_from_top():
+    from tgraphx import env_report, recommended_device, estimate_message_memory  # noqa: F401
+
+
+def test_import_model_classes_from_top():
+    from tgraphx import (  # noqa: F401
+        GraphClassifier,
+        NodeClassifier,
+        EdgePredictor,
+        NodeRegressor,
+        GraphRegressor,
+    )
+
+
+def test_tensorboard_not_imported_eagerly():
+    """Importing tgraphx must not force-install tensorboard (lazy import)."""
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "import tgraphx; import sys; "
+         "assert 'tensorboard' not in sys.modules, "
+         "'tensorboard was imported at tgraphx import time'"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, (
+        f"Eager tensorboard import detected:\n{result.stderr}"
+    )
+
+
+def test_top_level_fit_is_callable():
+    """fit imported from top level must be the function, not a module."""
+    import tgraphx
+    assert callable(tgraphx.fit)
+
+
+def test_top_level_csv_logger_is_class():
+    import tgraphx
+    import inspect
+    assert inspect.isclass(tgraphx.CSVLogger)
+
+
+def test_top_level_tensorboard_logger_is_class():
+    import tgraphx
+    import inspect
+    assert inspect.isclass(tgraphx.TensorBoardLogger)

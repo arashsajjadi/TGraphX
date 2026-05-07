@@ -4,7 +4,7 @@
 'use strict';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Configuration
+// Configuration (defaults; /api/config may override at startup)
 // ─────────────────────────────────────────────────────────────────────────────
 const CFG = {
   pollMs:      2000,
@@ -13,22 +13,39 @@ const CFG = {
   maxEdges:    1000,
   forceIter:   80,
   etaMinPts:   5,
+  staleAfterS: 30,   // show "stale data" banner after this many seconds
+  // Range/window options for chart truncation:
+  ranges: [
+    { id: 'all',  label: 'All',       n: 0    },
+    { id: '100',  label: 'Last 100',  n: 100  },
+    { id: '500',  label: 'Last 500',  n: 500  },
+    { id: '1000', label: 'Last 1000', n: 1000 },
+  ],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────────────────────────
 let S = {
-  sec:       'overview',
-  status:    null,
-  metrics:   null,
-  hardware:  null,
-  metadata:  null,
-  graph:     null,
-  smooth:    false,
-  tvMode:    false,
-  pollTimer: null,
-  lastFetch: null,
+  sec:            'overview',
+  status:         null,
+  metrics:        null,
+  hardware:       null,
+  metadata:       null,
+  graph:          null,
+  graphStats:     null,
+  config:         null,
+  runs:           null,     // {mode, runs, capped} from /api/runs
+  activeRun:      null,     // currently selected run name (multi-run mode)
+  smooth:         false,
+  paused:         false,
+  range:          'all',
+  palette:        localStorage.getItem('tgx-palette') || 'default',
+  tvMode:         false,
+  pollTimer:      null,
+  lastFetch:      null,
+  latestRowIndex: -1,       // -1 = never fetched, do full load next time
+  snapshotMode:   false,    // true when running from an offline HTML export
 };
 
 const SECTIONS = [
@@ -38,24 +55,59 @@ const SECTIONS = [
   { id:'hardware', label:'Hardware',  icon:'⚙'  },
   { id:'logs',     label:'Logs',      icon:'≡'  },
   { id:'config',   label:'Config',    icon:'❐'  },
+  { id:'tools',    label:'Tools',     icon:'⚒'  },
   { id:'about',    label:'About',     icon:'ℹ'  },
 ];
 
+// Chart colors are taken from CSS custom properties so the palette toggle
+// (default vs. color-blind-safe Okabe-Ito) re-skins all charts at once.
+const SERIES_KEYS = [
+  'series-1', 'series-2', 'series-3', 'series-4',
+  'series-5', 'series-6', 'series-7', 'series-8',
+];
+function seriesColor(key) {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue('--' + key).trim() || '#06b6d4';
+}
+
 const CHART_META = {
-  train_loss:      { label:'Train Loss',      color:'#06b6d4' },
-  val_loss:        { label:'Validation Loss', color:'#8b5cf6' },
-  loss:            { label:'Loss',            color:'#06b6d4' },
-  accuracy:        { label:'Accuracy',        color:'#22c55e' },
-  acc:             { label:'Accuracy',        color:'#22c55e' },
-  learning_rate:   { label:'Learning Rate',   color:'#f59e0b' },
-  lr:              { label:'Learning Rate',   color:'#f59e0b' },
-  grad_norm:       { label:'Grad Norm',       color:'#ef4444' },
-  samples_per_sec: { label:'Samples/s',       color:'#10b981' },
-  graphs_per_sec:  { label:'Graphs/s',        color:'#10b981' },
-  steps_per_sec:   { label:'Steps/s',         color:'#10b981' },
+  train_loss:      { label:'Train Loss',      key:'series-1' },
+  val_loss:        { label:'Validation Loss', key:'series-2' },
+  loss:            { label:'Loss',            key:'series-1' },
+  accuracy:        { label:'Accuracy',        key:'series-3' },
+  acc:             { label:'Accuracy',        key:'series-3' },
+  learning_rate:   { label:'Learning Rate',   key:'series-4' },
+  lr:              { label:'Learning Rate',   key:'series-4' },
+  grad_norm:       { label:'Grad Norm',       key:'series-5' },
+  samples_per_sec: { label:'Samples/s',       key:'series-6' },
+  graphs_per_sec:  { label:'Graphs/s',        key:'series-6' },
+  steps_per_sec:   { label:'Steps/s',         key:'series-6' },
 };
+function metaFor(name) {
+  const m = CHART_META[name];
+  if (m) return { label: m.label, color: seriesColor(m.key) };
+  // Fall back to a deterministic series color so unknown metrics still
+  // get a stable, palette-aware color across renders.
+  let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return { label: name, color: seriesColor(SERIES_KEYS[Math.abs(h) % SERIES_KEYS.length]) };
+}
 
 const SKIP_COLS = new Set(['epoch','step','timestamp','time']);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTML escaping — every user-controlled string flows through here before
+// reaching innerHTML.  Prevents accidental injection from run names, builder
+// names, metric keys, file paths, and run_metadata values.
+// ─────────────────────────────────────────────────────────────────────────────
+function esc(v) {
+  if (v == null) return '';
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Time utilities
@@ -121,11 +173,20 @@ const API = {
       return r.ok ? await r.json() : null;
     } catch { return null; }
   },
-  status()   { return this.get('/api/status'); },
-  metrics()  { return this.get('/api/metrics'); },
-  hardware() { return this.get('/api/hardware'); },
-  metadata() { return this.get('/api/metadata'); },
-  graph()    { return this.get('/api/graph'); },
+  status()           { return this.get('/api/status'); },
+  metrics(opts = {}) {
+    const parts = [];
+    if (opts.sinceRow != null) parts.push(`since_row=${opts.sinceRow}`);
+    if (opts.run)              parts.push(`run=${encodeURIComponent(opts.run)}`);
+    const qs = parts.length ? '?' + parts.join('&') : '';
+    return this.get('/api/metrics' + qs);
+  },
+  hardware()         { return this.get('/api/hardware'); },
+  metadata()         { return this.get('/api/metadata'); },
+  graph()            { return this.get('/api/graph'); },
+  graphStats()       { return this.get('/api/graph_stats'); },
+  runs()             { return this.get('/api/runs'); },
+  config()           { return this.get('/api/config'); },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -215,6 +276,12 @@ class SvgChart {
   <circle cx="${sx(lastX).toFixed(1)}" cy="${sy(lastY).toFixed(1)}" r="3.5" fill="${this.color}"/>
   <text x="${(l+iW/2).toFixed(1)}" y="${H-3}" font-size="9" text-anchor="middle" fill="var(--text3)">${this.xLabel}</text>
 </svg>`;
+    // Attach hover tooltip after inserting SVG into DOM.
+    const svgEl = this.el.querySelector('svg');
+    if (svgEl) {
+      Tooltip.attach(svgEl, data, this.label, this.color,
+                     {t, r, b, l}, W, H);
+    }
   }
 
   _ema(data) {
@@ -309,9 +376,18 @@ const Nav = {
     SECTIONS.forEach(({id, label, icon}) => {
       const li = document.createElement('li');
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'nav-btn' + (id === S.sec ? ' active' : '');
       btn.dataset.sec = id;
-      btn.innerHTML = `<span class="nav-icon">${icon}</span>${label}`;
+      btn.setAttribute('aria-label', `Go to ${label} section`);
+      if (id === S.sec) btn.setAttribute('aria-current', 'page');
+      // span elements escape the icon glyph automatically (textContent-style).
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'nav-icon';
+      iconSpan.setAttribute('aria-hidden', 'true');
+      iconSpan.textContent = icon;
+      btn.appendChild(iconSpan);
+      btn.appendChild(document.createTextNode(label));
       btn.addEventListener('click', () => { Nav.go(id); Nav.closeSidebar(); });
       li.appendChild(btn);
       list.appendChild(li);
@@ -335,7 +411,10 @@ const Nav = {
     const tgt = el(`sec-${secId}`);
     if (tgt) tgt.classList.add('active');
     document.querySelectorAll('.nav-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.sec === secId);
+      const active = b.dataset.sec === secId;
+      b.classList.toggle('active', active);
+      if (active) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
     });
     Render[secId] && Render[secId]();
   },
@@ -360,6 +439,299 @@ const Theme = {
   _apply() {
     document.documentElement.dataset.theme = this.current === 'auto' ? '' : this.current;
     el('theme-btn').textContent = this.current === 'light' ? '☽' : '☀';
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Color-blind safe palette toggle (Okabe-Ito).  Persists in localStorage.
+// ─────────────────────────────────────────────────────────────────────────────
+const Palette = {
+  init() {
+    this._apply();
+    const btn = el('palette-btn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      S.palette = (S.palette === 'cb') ? 'default' : 'cb';
+      localStorage.setItem('tgx-palette', S.palette);
+      this._apply();
+      // Re-render whatever section is active so charts pick up new colors.
+      Render[S.sec] && Render[S.sec]();
+      if (S.tvMode) TV.render();
+    });
+  },
+  _apply() {
+    const root = document.documentElement;
+    const btn  = el('palette-btn');
+    if (S.palette === 'cb') root.dataset.palette = 'cb';
+    else delete root.dataset.palette;
+    if (btn) btn.setAttribute('aria-pressed', S.palette === 'cb' ? 'true' : 'false');
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pause / refresh / stale-data controls
+// ─────────────────────────────────────────────────────────────────────────────
+const Controls = {
+  init() {
+    const pause = el('pause-btn');
+    const refresh = el('refresh-btn');
+    if (pause) {
+      pause.addEventListener('click', () => Controls.togglePause());
+    }
+    if (refresh) {
+      refresh.addEventListener('click', () => poll());
+    }
+  },
+  togglePause() {
+    S.paused = !S.paused;
+    const btn = el('pause-btn');
+    if (btn) {
+      btn.setAttribute('aria-pressed', S.paused ? 'true' : 'false');
+      btn.textContent = S.paused ? '▶' : '⏸';
+      btn.setAttribute('aria-label', S.paused ? 'Resume auto-refresh' : 'Pause auto-refresh');
+      btn.title = S.paused ? 'Resume auto-refresh' : 'Pause auto-refresh';
+    }
+    if (S.paused) {
+      if (S.pollTimer) clearInterval(S.pollTimer);
+    } else {
+      startPolling();
+    }
+  },
+  // Show/hide the stale-data banner based on lastFetch age.
+  updateStale() {
+    const banner = el('stale-banner');
+    const txt = el('stale-text');
+    if (!banner || !txt) return;
+    const lastIso = S.lastFetch;
+    if (!lastIso) { banner.hidden = true; return; }
+    const ageS = (Date.now() - new Date(lastIso).getTime()) / 1000;
+    const threshold = (S.config?.stale_after_s) || CFG.staleAfterS;
+    if (ageS > threshold) {
+      banner.hidden = false;
+      txt.textContent = `Data is stale (${Math.round(ageS)}s since last successful fetch).` +
+                        (S.paused ? '  Auto-refresh is paused.' : '  Reconnect attempts continue.');
+    } else {
+      banner.hidden = true;
+    }
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Range / window selector — limits how many trailing rows feed each chart
+// ─────────────────────────────────────────────────────────────────────────────
+const Range = {
+  apply(rows) {
+    if (S.range === 'all') return rows;
+    const opt = CFG.ranges.find(r => r.id === S.range);
+    if (!opt || !opt.n || rows.length <= opt.n) return rows;
+    return rows.slice(rows.length - opt.n);
+  },
+  applySeries(series) {
+    const out = {};
+    Object.keys(series).forEach(k => { out[k] = Range.apply(series[k]); });
+    return out;
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export utilities — CSV (table or chart data), SVG (chart), print/PDF
+// All client-side; no server writes; no external dependency.
+// ─────────────────────────────────────────────────────────────────────────────
+const Export = {
+  // Trigger a browser download of a Blob with a chosen filename.
+  _download(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 100);
+  },
+
+  // Sanitize a string into a safe filename component.
+  _safeName(s) {
+    return String(s || 'export').replace(/[^\w.-]+/g, '_').slice(0, 64) || 'export';
+  },
+
+  // Export the loaded metrics CSV as-is (already a CSV; we just re-encode
+  // the visible window from the in-memory state).
+  metricsCsv() {
+    const m = S.metrics;
+    if (!m || !m.headers || !m.rows?.length) {
+      alert('No metrics loaded yet.');
+      return;
+    }
+    const esc = v => {
+      const s = (v == null) ? '' : String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [m.headers.map(esc).join(',')];
+    m.rows.forEach(r => lines.push(r.map(esc).join(',')));
+    const blob = new Blob([lines.join('\n') + '\n'], {type: 'text/csv;charset=utf-8'});
+    Export._download(blob, 'tgraphx_metrics.csv');
+  },
+
+  // Export a single chart's (x, y) pairs as a small two-column CSV.
+  chartCsv(metricName, points) {
+    if (!points || !points.length) {
+      alert(`No data for "${metricName}".`);
+      return;
+    }
+    const xLabel = (S.metrics?.headers || []).indexOf('epoch') >= 0 ? 'epoch' : 'step';
+    const lines = [`${xLabel},${metricName}`];
+    points.forEach(p => lines.push(`${p.x},${p.y}`));
+    const blob = new Blob([lines.join('\n') + '\n'], {type: 'text/csv;charset=utf-8'});
+    Export._download(blob, `tgraphx_chart_${Export._safeName(metricName)}.csv`);
+  },
+
+  // Export the chart's SVG element as a standalone .svg file.  The chart
+  // module renders inline SVG, so we can serialize the first <svg> child.
+  chartSvg(container, metricName) {
+    if (!container) return;
+    const svg = container.querySelector('svg');
+    if (!svg) {
+      alert('Chart not yet rendered.');
+      return;
+    }
+    // Inline computed colors so the exported file renders outside the
+    // dashboard.  We resolve common CSS variables to their current values.
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const root = document.documentElement;
+    const cs = getComputedStyle(root);
+    const vars = ['--bg','--bg2','--bg3','--card','--border','--grid',
+                  '--text','--text2','--text3','--accent'];
+    let css = ':root{';
+    vars.forEach(v => { css += `${v}:${cs.getPropertyValue(v).trim()};`; });
+    css += '}';
+    const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    style.textContent = css;
+    clone.insertBefore(style, clone.firstChild);
+    const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+                new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([xml], {type: 'image/svg+xml;charset=utf-8'});
+    Export._download(blob, `tgraphx_chart_${Export._safeName(metricName)}.svg`);
+  },
+
+  // Print/Save-as-PDF via the browser's native print dialog.
+  printPage() {
+    window.print();
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Copy-to-clipboard with visual feedback
+// ─────────────────────────────────────────────────────────────────────────────
+async function copyText(text, btn) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // Fallback for very old browsers / non-secure contexts
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1200);
+    }
+  } catch (e) { /* fail silently */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chart hover tooltip — dependency-free, nearest x-value lookup.
+// Visual-only (mouse / pointer events).  Not shown on touch-primary devices
+// (hover events don't fire reliably on touch), which is acceptable because
+// the latest-value pill on each chart card provides the key data point.
+// ─────────────────────────────────────────────────────────────────────────────
+const Tooltip = {
+  _el: null,
+
+  init() {
+    if (this._el) return;
+    const d = document.createElement('div');
+    d.className = 'chart-tooltip';
+    d.setAttribute('aria-hidden', 'true');  // visual-only
+    d.setAttribute('role', 'tooltip');
+    document.body.appendChild(d);
+    this._el = d;
+  },
+
+  show(x, y, xLabel, metricName, yVal, color) {
+    if (!this._el) return;
+    const d = this._el;
+    d.innerHTML =
+      `<div class="chart-tooltip-x">${esc(xLabel)}: ${esc(String(isFinite(x) ? (Number.isInteger(x) ? x : x.toFixed(2)) : '—'))}</div>` +
+      `<div class="chart-tooltip-val" style="color:${esc(color)}">${esc(metricName)}: ${esc(fmt(yVal))}</div>`;
+    d.classList.add('visible');
+  },
+
+  move(clientX, clientY) {
+    if (!this._el) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const tw = this._el.offsetWidth + 14, th = this._el.offsetHeight + 14;
+    const lx = clientX + 12 + tw > W ? clientX - tw : clientX + 12;
+    const ly = clientY - 10 - th < 0 ? clientY + 14 : clientY - 10 - th;
+    this._el.style.left = `${Math.max(0, lx)}px`;
+    this._el.style.top  = `${Math.max(0, ly)}px`;
+  },
+
+  hide() {
+    if (!this._el) return;
+    this._el.classList.remove('visible');
+  },
+
+  // Attach pointer event handlers to an SVG element's data area.
+  // data: [{x, y}] — the same array passed to SvgChart.render().
+  // pad, W, H — the SVG geometry from SvgChart.
+  attach(svgEl, data, metricName, color, pad, W, H) {
+    if (!svgEl || !data || data.length === 0) return;
+    // Re-derive scale constants matching SvgChart.
+    const xs = data.map(d => d.x), ys = data.map(d => d.y);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), xR = x1 - x0 || 1;
+    const iW = W - pad.l - pad.r;
+
+    // Overlay an invisible rect to capture mouse events in the chart area.
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', pad.l);
+    rect.setAttribute('y', pad.t);
+    rect.setAttribute('width', iW);
+    rect.setAttribute('height', H - pad.t - pad.b);
+    rect.setAttribute('fill', 'transparent');
+    rect.style.cursor = 'crosshair';
+    svgEl.appendChild(rect);
+
+    const getBBox = () => svgEl.getBoundingClientRect();
+
+    rect.addEventListener('pointermove', e => {
+      e.preventDefault();
+      const bb = getBBox();
+      const mx = e.clientX - bb.left;
+      // Map mouse-x to data-x.
+      const dataX = x0 + ((mx - pad.l) / iW) * xR;
+      // Find nearest data point by x-distance.
+      let best = data[0], bestDist = Infinity;
+      for (const pt of data) {
+        const d = Math.abs(pt.x - dataX);
+        if (d < bestDist) { bestDist = d; best = pt; }
+      }
+      Tooltip.show(best.x, best.y, 'epoch', metricName, best.y, color);
+      Tooltip.move(e.clientX, e.clientY);
+    });
+
+    rect.addEventListener('pointerleave', () => Tooltip.hide());
   },
 };
 
@@ -395,20 +767,21 @@ const TV = {
 
     el('tv-body').innerHTML = `
       <div class="tv-card"><div class="tv-label">Status</div>
-        <div class="tv-value" style="font-size:2rem">${st.status||'—'}</div>
-        <div class="tv-sub">${st.run_name||''}</div></div>
+        <div class="tv-value" style="font-size:2rem">${esc(st.status||'—')}</div>
+        <div class="tv-sub">${esc(st.run_name||'')}</div></div>
       <div class="tv-card tv-chart" id="tv-chart-wrap"></div>
       <div class="tv-card"><div class="tv-label">Train Loss</div>
-        <div class="tv-value">${fmt(loss)}</div>
-        <div class="tv-sub">Epoch ${st.epoch||'—'}${st.total_epochs?' / '+st.total_epochs:''}</div></div>
+        <div class="tv-value">${esc(fmt(loss))}</div>
+        <div class="tv-sub">Epoch ${esc(st.epoch??'—')}${st.total_epochs?' / '+esc(st.total_epochs):''}</div></div>
       <div class="tv-card"><div class="tv-label">Elapsed / ETA</div>
-        <div class="tv-value" style="font-size:2.2rem">${T.elapsed(elapsed)}</div>
-        <div class="tv-sub">ETA: ${eta!=null?(eta<10?'Estimating…':T.elapsed(eta)):'—'}</div></div>`;
+        <div class="tv-value" style="font-size:2.2rem">${esc(T.elapsed(elapsed))}</div>
+        <div class="tv-sub">ETA: ${esc(eta!=null?(eta<10?'Estimating…':T.elapsed(eta)):'—')}</div></div>`;
 
     if (lossKey && series[lossKey]) {
       const wrap = el('tv-chart-wrap');
-      const c = new SvgChart(wrap, {color: CHART_META[lossKey]?.color||'#06b6d4',
-        label: CHART_META[lossKey]?.label||lossKey, height: wrap.clientHeight||300});
+      const meta = metaFor(lossKey);
+      const c = new SvgChart(wrap, {color: meta.color,
+        label: meta.label, height: wrap.clientHeight||300});
       c.render(series[lossKey], S.smooth);
     }
   },
@@ -439,30 +812,31 @@ const Render = {
 
     const statsHtml = [
       card('Status',
-        `<span class="chip ${statusCls}">${st.status||'unknown'}</span>`,
-        st.run_name||st.task||'', 'card-accent'),
+        `<span class="chip ${statusCls}">${esc(st.status||'unknown')}</span>`,
+        esc(st.run_name||st.task||''), 'card-accent'),
       card('Progress',
         totalEp
-          ? `${epoch} <span style="font-size:.9rem;color:var(--text2)">/ ${totalEp}</span>`
-          : String(epoch),
+          ? `${esc(epoch)} <span style="font-size:.9rem;color:var(--text2)">/ ${esc(totalEp)}</span>`
+          : esc(epoch),
         progress != null
           ? `<div class="progress-outer"><div class="progress-inner" style="width:${progress.toFixed(1)}%"></div></div>`
           : 'epochs', ''),
-      card('Elapsed', T.elapsed(elapsed),
-        `ETA: ${eta != null ? (eta < 10 ? 'done' : T.elapsed(eta)) : (elapsed && elapsed > 0 && m.rows?.length < CFG.etaMinPts ? 'estimating…' : '—')}`, ''),
-      card('Train Loss', fmt(loss),
-        vLoss != null ? `val loss: ${fmt(vLoss)}` : (acc != null ? `acc: ${fmt(acc)}` : ''), 'card-accent'),
+      card('Elapsed', esc(T.elapsed(elapsed)),
+        `ETA: ${esc(eta != null ? (eta < 10 ? 'done' : T.elapsed(eta)) : (elapsed && elapsed > 0 && m.rows?.length < CFG.etaMinPts ? 'estimating…' : '—'))}`, ''),
+      card('Train Loss', esc(fmt(loss)),
+        vLoss != null ? `val loss: ${esc(fmt(vLoss))}` : (acc != null ? `acc: ${esc(fmt(acc))}` : ''), 'card-accent'),
     ].join('');
 
     const hw1Html = [
-      card('Device', st.device||hw.cuda_available?'CUDA':'CPU', hw.torch?`PyTorch ${hw.torch}`:'', ''),
-      card('LR', fmt(lr), lr != null ? 'learning rate' : '', 'card-amber'),
-      card('Last update', T.ago(st.last_update)||'—',
-        st.last_update ? `at ${T.local(st.last_update)}` : '', ''),
+      card('Device', esc(st.device || (hw.cuda_available?'CUDA':'CPU')),
+           hw.torch?`PyTorch ${esc(hw.torch)}`:'', ''),
+      card('LR', esc(fmt(lr)), lr != null ? 'learning rate' : '', 'card-amber'),
+      card('Last update', esc(T.ago(st.last_update)||'—'),
+        st.last_update ? `at ${esc(T.local(st.last_update))}` : '', ''),
     ].join('');
 
     sec.innerHTML = `
-      <div class="page-title">Overview</div>
+      <h2 id="sec-overview-title" class="page-title">Overview</h2>
       <div class="grid-4">${statsHtml}</div>
       <div class="grid-3">${hw1Html}</div>
       <div class="card chart-card" style="margin-bottom:16px">
@@ -478,7 +852,8 @@ const Render = {
       </div></div>` : ''}`;
 
     // Draw overview chart
-    const series = metricsToSeries(S.metrics);
+    const seriesAll = metricsToSeries(S.metrics);
+    const series = Range.applySeries(seriesAll);
     const lossKey = ['train_loss','loss'].find(k => series[k]?.length);
     const valKey  = ['val_loss'].find(k => series[k]?.length);
     const container = el('ov-chart');
@@ -486,8 +861,9 @@ const Render = {
     if (lossKey && container) {
       container.style.height = '180px';
       // Multi-series: draw val on same SVG by overlaying
+      const lossMeta = metaFor(lossKey);
       const c = new SvgChart(container, {
-        color: CHART_META[lossKey]?.color || '#06b6d4',
+        color: lossMeta.color,
         label: 'Loss',
         height: 180,
       });
@@ -496,6 +872,7 @@ const Render = {
       // Overlay val loss as a separate polyline
       if (valKey && series[valKey]?.length) {
         const existingSvg = container.querySelector('svg');
+        const valMeta = metaFor(valKey);
         if (existingSvg) {
           const W = existingSvg.viewBox.baseVal.width || 540;
           const H = 180;
@@ -512,7 +889,7 @@ const Render = {
           const line = document.createElementNS('http://www.w3.org/2000/svg','polyline');
           line.setAttribute('points', pts);
           line.setAttribute('fill', 'none');
-          line.setAttribute('stroke', '#8b5cf6');
+          line.setAttribute('stroke', valMeta.color);
           line.setAttribute('stroke-width', '2');
           line.setAttribute('stroke-dasharray', '5,3');
           line.setAttribute('stroke-linejoin', 'round');
@@ -523,7 +900,7 @@ const Render = {
           label.setAttribute('y', PAD.t-6);
           label.setAttribute('font-size', '10');
           label.setAttribute('text-anchor', 'end');
-          label.setAttribute('fill', '#8b5cf6');
+          label.setAttribute('fill', valMeta.color);
           label.setAttribute('font-weight', '700');
           label.textContent = `val: ${fmt(last.y)}`;
           existingSvg.appendChild(label);
@@ -537,27 +914,59 @@ const Render = {
   // ── Metrics ─────────────────────────────────────────────────────────────────
   metrics() {
     const sec = el('sec-metrics');
-    const series = metricsToSeries(S.metrics);
+    const seriesAll = metricsToSeries(S.metrics);
+    const series = Range.applySeries(seriesAll);
     const keys = Object.keys(series);
     const truncNote = S.metrics?.truncated
-      ? `<div class="page-note" style="color:var(--amber);margin-bottom:10px">
-           &#9888; Showing latest ${S.metrics.rows?.length ?? 0} of
-           ${S.metrics.total_row_count} rows.
+      ? `<div class="disclosure" style="color:var(--amber);margin-bottom:10px">
+           &#9888; Showing latest ${esc(S.metrics.rows?.length ?? 0)} of
+           ${esc(S.metrics.total_row_count)} rows.
            Raw <code>metrics.csv</code> is unchanged.
          </div>`
       : '';
+    const rangeNote = (S.range !== 'all' && keys.length)
+      ? `<div class="disclosure">Window: ${esc(S.range)} most-recent points (server data unchanged).</div>`
+      : '';
+
+    const rangeOpts = CFG.ranges.map(r =>
+      `<option value="${esc(r.id)}"${S.range===r.id?' selected':''}>${esc(r.label)}</option>`
+    ).join('');
 
     sec.innerHTML = `
-      <div class="page-title">Metrics</div>
+      <h2 id="sec-metrics-title" class="page-title">Metrics</h2>
       ${truncNote}
-      <div class="smoothing-row">
-        <label><input type="checkbox" id="smooth-cb"${S.smooth?' checked':''}> Smooth curves
-          <span class="label-note">(exponential moving average, α=${CFG.smoothAlpha})</span></label>
+      <div class="toolbar" role="toolbar" aria-label="Metrics controls">
+        <div class="toolbar-group">
+          <label for="range-sel">Window:</label>
+          <select id="range-sel" class="tb-select" aria-label="Number of trailing points to show">
+            ${rangeOpts}
+          </select>
+        </div>
+        <div class="toolbar-group">
+          <label for="smooth-cb">
+            <input type="checkbox" id="smooth-cb"${S.smooth?' checked':''}
+                   aria-label="Apply exponential moving average smoothing">
+            Smooth (EMA α=${esc(CFG.smoothAlpha)})
+          </label>
+        </div>
+        <div class="toolbar-group">
+          <button class="tb-btn" id="export-metrics-csv" type="button"
+                  aria-label="Download metrics.csv">CSV</button>
+          <button class="tb-btn" id="print-btn-metrics" type="button"
+                  aria-label="Print or save as PDF">Print / PDF</button>
+        </div>
       </div>
+      ${rangeNote}
       <div id="metrics-grid"></div>`;
 
     const cb = el('smooth-cb');
     if (cb) cb.addEventListener('change', () => { S.smooth = cb.checked; Render.metrics(); });
+    const sel = el('range-sel');
+    if (sel) sel.addEventListener('change', () => { S.range = sel.value; Render.metrics(); });
+    const csvBtn = el('export-metrics-csv');
+    if (csvBtn) csvBtn.addEventListener('click', () => Export.metricsCsv());
+    const printBtn = el('print-btn-metrics');
+    if (printBtn) printBtn.addEventListener('click', () => Export.printPage());
 
     const grid = el('metrics-grid');
     if (!keys.length || !S.metrics?.rows?.length) {
@@ -567,15 +976,40 @@ const Render = {
 
     keys.forEach(key => {
       if (!series[key] || !series[key].length) return;
-      const meta = CHART_META[key] || {label: key, color: '#06b6d4'};
+      const meta = metaFor(key);
+      const lastY = series[key][series[key].length - 1].y;
       const card = document.createElement('div');
       card.className = 'card chart-card';
-      card.innerHTML = `<div class="chart-title">${meta.label}</div>
-        <div class="chart-container" style="height:180px"></div>`;
+      // Note: meta.label and key flow through esc() because metric names come
+      // from user-controlled CSV column headers.
+      card.innerHTML = `
+        <div class="chart-title">${esc(meta.label)}
+          <span class="latest-val" aria-label="latest value">${esc(fmt(lastY))}</span>
+        </div>
+        <div class="chart-container" style="height:180px"></div>
+        <div class="toolbar" style="margin-top:10px;margin-bottom:0;padding:6px 8px">
+          <div class="toolbar-group">
+            <button class="tb-btn" type="button"
+                    data-action="csv" data-key="${esc(key)}"
+                    aria-label="Download ${esc(meta.label)} data as CSV">CSV</button>
+            <button class="tb-btn" type="button"
+                    data-action="svg" data-key="${esc(key)}"
+                    aria-label="Download ${esc(meta.label)} chart as SVG">SVG</button>
+          </div>
+        </div>`;
       grid.appendChild(card);
-      const c = new SvgChart(card.querySelector('.chart-container'),
-        {color: meta.color, label: meta.label, height: 180});
+      const cont = card.querySelector('.chart-container');
+      const c = new SvgChart(cont, {color: meta.color, label: meta.label, height: 180});
       c.render(series[key], S.smooth);
+      // Wire per-card export buttons.
+      card.querySelectorAll('button[data-action]').forEach(b => {
+        b.addEventListener('click', () => {
+          const k = b.dataset.key;
+          const action = b.dataset.action;
+          if (action === 'csv') Export.chartCsv(k, series[k]);
+          else if (action === 'svg') Export.chartSvg(cont, k);
+        });
+      });
     });
   },
 
@@ -583,9 +1017,36 @@ const Render = {
   graph() {
     const sec = el('sec-graph');
     const g   = S.graph;
+    const gs  = S.graphStats;
+
+    // Precomputed stats card (from graph_stats.json) — shown even without graph_metadata.json.
+    const statFields = (gs && gs.available) ? [
+      ['Nodes',      gs.num_nodes],
+      ['Edges',      gs.num_edges],
+      ['Directed',   gs.directed != null ? (gs.directed ? 'Yes' : 'No') : null],
+      ['Self-loops', gs.self_loops != null ? (gs.self_loops ? 'Yes' : 'No') : null],
+      ['Avg degree', gs.avg_degree != null ? fmt(gs.avg_degree) : null],
+      ['Min degree', gs.min_degree],
+      ['Max degree', gs.max_degree],
+      ['Density',    gs.density != null ? gs.density.toFixed(6) : null],
+      ['Components', gs.connected_components],
+      ['Isolated',   gs.isolated_nodes],
+    ].filter(([, v]) => v != null) : [];
+
+    const statsCardHtml = statFields.length
+      ? `<div class="card" style="margin-bottom:16px">
+           <div class="card-title">Precomputed Statistics
+             <span style="font-size:.72rem;color:var(--text3)"> (graph_stats.json)</span>
+           </div>
+           ${statFields.map(([k, v]) =>
+             `<div class="hw-row"><span class="hw-label">${esc(k)}</span>
+              <span class="hw-val">${esc(String(v))}</span></div>`
+           ).join('')}
+         </div>` : '';
 
     if (!g || !g.available) {
-      sec.innerHTML = `<div class="page-title">Graph</div>
+      sec.innerHTML = `<h2 id="sec-graph-title" class="page-title">Graph</h2>
+        ${statsCardHtml}
         ${emptyState('No graph metadata available.',
           'Add graph logging to your training script. See README for details.')}`;
       return;
@@ -608,28 +1069,29 @@ const Render = {
       ? `<div class="card-title">Degree distribution</div>
          <div class="degree-bar">${histogram.map((v,i) =>
            `<div class="degree-bar-col" style="height:${(v/Math.max(...histogram)*100).toFixed(1)}%"
-             title="degree ${i}: ${v} nodes"></div>`).join('')}</div>
-         <div class="card-sub">min ${degStats.min??'—'} · max ${degStats.max??'—'} · mean ${fmt(degStats.mean)}</div>`
+             title="degree ${esc(i)}: ${esc(v)} nodes"></div>`).join('')}</div>
+         <div class="card-sub">min ${esc(degStats.min??'—')} · max ${esc(degStats.max??'—')} · mean ${esc(fmt(degStats.mean))}</div>`
       : `<div class="card-title">Degree stats</div>
-         <div class="hw-row"><span class="hw-label">Min</span><span class="hw-val">${degStats.min??'—'}</span></div>
-         <div class="hw-row"><span class="hw-label">Max</span><span class="hw-val">${degStats.max??'—'}</span></div>
-         <div class="hw-row"><span class="hw-label">Mean</span><span class="hw-val">${fmt(degStats.mean)}</span></div>`;
+         <div class="hw-row"><span class="hw-label">Min</span><span class="hw-val">${esc(degStats.min??'—')}</span></div>
+         <div class="hw-row"><span class="hw-label">Max</span><span class="hw-val">${esc(degStats.max??'—')}</span></div>
+         <div class="hw-row"><span class="hw-label">Mean</span><span class="hw-val">${esc(fmt(degStats.mean))}</span></div>`;
 
     const builderHtml = g.builder
       ? `<div class="hw-row"><span class="hw-label">Builder</span>
-           <span class="hw-val">${g.builder}</span></div>
+           <span class="hw-val">${esc(g.builder)}</span></div>
          ${g.builder_params ? Object.entries(g.builder_params).map(([k,v])=>
-           `<div class="hw-row"><span class="hw-label">${k}</span><span class="hw-val">${v}</span></div>`
+           `<div class="hw-row"><span class="hw-label">${esc(k)}</span><span class="hw-val">${esc(v)}</span></div>`
          ).join('') : ''}`
       : '<div class="card-sub">No builder metadata</div>';
 
     sec.innerHTML = `
-      <div class="page-title">Graph</div>
+      <h2 id="sec-graph-title" class="page-title">Graph</h2>
+      ${statsCardHtml}
       <div class="grid-2" style="margin-bottom:16px">
         <div class="card">
           <div class="card-title">Summary</div>
-          ${stats.map(([k,v])=>`<div class="hw-row"><span class="hw-label">${k}</span>
-            <span class="hw-val">${v}</span></div>`).join('')}
+          ${stats.map(([k,v])=>`<div class="hw-row"><span class="hw-label">${esc(k)}</span>
+            <span class="hw-val">${esc(v)}</span></div>`).join('')}
         </div>
         <div class="card">${degHtml}</div>
       </div>
@@ -673,57 +1135,109 @@ const Render = {
       ['CPU cores', hw.cpu_count],
     ].filter(([,v]) => v != null);
 
+    // Compact "unavailable" footer that distinguishes optional-dep vs sensor.
+    const unavailRow = (label, reason) => reason
+      ? `<div class="hw-unavail"><strong>${esc(label)}:</strong> ${esc(reason)}</div>`
+      : '';
+
     const cpuHtml = hw.psutil_available ? `
       <div class="card">
         <div class="card-title">CPU &amp; Memory</div>
         <div class="hw-row">
           <span class="hw-label">CPU</span>
-          <div class="hw-bar-wrap"><div class="hw-bar hw-bar-cpu" style="width:${hw.cpu_percent||0}%"></div></div>
-          <span class="hw-val">${(hw.cpu_percent??'—')}%</span>
+          <div class="hw-bar-wrap"><div class="hw-bar hw-bar-cpu" style="width:${esc(hw.cpu_percent||0)}%"></div></div>
+          <span class="hw-val">${esc((hw.cpu_percent??'—'))}%</span>
         </div>
         <div class="hw-row">
           <span class="hw-label">RAM</span>
-          <div class="hw-bar-wrap"><div class="hw-bar hw-bar-ram" style="width:${hw.ram_percent||0}%"></div></div>
-          <span class="hw-val">${(hw.ram_percent??'—')}%</span>
+          <div class="hw-bar-wrap"><div class="hw-bar hw-bar-ram" style="width:${esc(hw.ram_percent||0)}%"></div></div>
+          <span class="hw-val">${esc((hw.ram_percent??'—'))}%</span>
         </div>
-        <div class="card-sub">${(hw.ram_used_gb??'—')} / ${(hw.ram_total_gb??'—')} GB</div>
-        ${hw.process_ram_mb != null ? `<div class="card-sub">This process: ${hw.process_ram_mb} MB</div>` : ''}
+        <div class="card-sub">${esc((hw.ram_used_gb??'—'))} / ${esc((hw.ram_total_gb??'—'))} GB</div>
+        ${hw.process_ram_mb != null ? `<div class="card-sub">This process: ${esc(hw.process_ram_mb)} MB</div>` : ''}
       </div>` : `<div class="card"><div class="card-title">CPU &amp; Memory</div>
-        <div class="card-sub">Install psutil for CPU/RAM monitoring:<br><code>pip install psutil</code></div></div>`;
+        ${unavailRow('CPU/RAM',
+            hw.unavailable_reason_psutil ||
+            'psutil not installed; CPU/RAM metrics unavailable.')}
+        <div class="card-sub" style="margin-top:8px">Install with:
+          <code>pip install "tgraphx[monitoring]"</code></div></div>`;
 
-    const gpuHtml = hw.cuda_available ? `
-      <div class="card">
-        <div class="card-title">CUDA GPU</div>
+    const gpuRows = hw.cuda_available ? `
         <div class="hw-row"><span class="hw-label">Device</span>
-          <span class="hw-val" style="font-size:.78rem">${hw.cuda_device_name||'—'}</span></div>
+          <span class="hw-val" style="font-size:.78rem">${esc(hw.cuda_device_name||'—')}</span></div>
         <div class="hw-row"><span class="hw-label">VRAM used</span>
-          <span class="hw-val">${hw.cuda_mem_allocated_mb??'—'} MB</span></div>
+          <span class="hw-val">${esc(hw.cuda_mem_allocated_mb??'—')} MB</span></div>
         <div class="hw-row"><span class="hw-label">VRAM reserved</span>
-          <span class="hw-val">${hw.cuda_mem_reserved_mb??'—'} MB</span></div>
+          <span class="hw-val">${esc(hw.cuda_mem_reserved_mb??'—')} MB</span></div>
         <div class="hw-row"><span class="hw-label">VRAM total</span>
-          <span class="hw-val">${hw.cuda_mem_total_mb??'—'} MB</span></div>
+          <span class="hw-val">${esc(hw.cuda_mem_total_mb??'—')} MB</span></div>
         ${hw.gpu_util_pct != null
           ? `<div class="hw-row"><span class="hw-label">Utilization</span>
-              <div class="hw-bar-wrap"><div class="hw-bar hw-bar-gpu" style="width:${hw.gpu_util_pct}%"></div></div>
-              <span class="hw-val">${hw.gpu_util_pct}%</span></div>` : ''}
+              <div class="hw-bar-wrap"><div class="hw-bar hw-bar-gpu" style="width:${esc(hw.gpu_util_pct)}%"></div></div>
+              <span class="hw-val">${esc(hw.gpu_util_pct)}%</span></div>`
+          : unavailRow('GPU utilization',
+                       hw.unavailable_reason_gpu_util || hw.unavailable_reason_pynvml)}
         ${hw.gpu_temp_c != null
-          ? `<div class="hw-row"><span class="hw-label">Temperature</span>
-              <span class="hw-val">${hw.gpu_temp_c}°C</span></div>` : ''}
-      </div>` : hw.mps_available ? `
-      <div class="card"><div class="card-title">Apple MPS</div>
-        <div class="card-sub">Apple Silicon MPS backend is available.</div></div>`
-      : `<div class="card"><div class="card-title">GPU</div>
-        <div class="card-sub">No CUDA GPU detected.</div></div>`;
+          ? (() => {
+              const status = hw.gpu_thermal_status || 'unknown';
+              const cls = `thermal-chip thermal-${esc(status)}`;
+              const icon = status === 'near-throttle' ? '⚠' : status === 'warm' ? '▲' : '✓';
+              return `<div class="hw-row">
+                <span class="hw-label">Temperature</span>
+                <span class="hw-val">${esc(hw.gpu_temp_c)}°C
+                  <span class="${cls}" aria-label="Thermal status: ${esc(status)}">${esc(icon)} ${esc(status)}</span>
+                </span>
+              </div>`;
+            })()
+          : unavailRow('GPU temperature',
+                       hw.unavailable_reason_gpu_temp || hw.unavailable_reason_pynvml)}
+        ${hw.gpu_fan_pct != null
+          ? `<div class="hw-row"><span class="hw-label">Fan</span>
+              <span class="hw-val">${esc(hw.gpu_fan_pct)}%</span></div>`
+          : unavailRow('GPU fan',
+                       hw.unavailable_reason_gpu_fan)}
+        ${hw.gpu_power_w != null
+          ? (() => {
+              const limit = hw.gpu_power_limit_w;
+              const pct   = limit ? Math.min(100, (hw.gpu_power_w / limit * 100)).toFixed(0) : null;
+              return `<div class="hw-row">
+                <span class="hw-label">Power draw</span>
+                ${pct != null
+                  ? `<div class="pw-bar-wrap"><div class="pw-bar" style="width:${esc(pct)}%"></div></div>`
+                  : ''}
+                <span class="hw-val">${esc(hw.gpu_power_w)} W${limit ? ` / ${esc(limit)} W` : ''}</span>
+              </div>`;
+            })()
+          : unavailRow('GPU power', hw.unavailable_reason_gpu_power)}
+    ` : '';
+
+    const gpuHtml = hw.cuda_available
+      ? `<div class="card"><div class="card-title">CUDA GPU</div>${gpuRows}</div>`
+      : hw.mps_available
+        ? `<div class="card"><div class="card-title">Apple MPS</div>
+            <div class="card-sub">Apple Silicon MPS backend is available.</div>
+            ${unavailRow('CUDA', hw.unavailable_reason_cuda)}</div>`
+        : `<div class="card"><div class="card-title">GPU</div>
+            ${unavailRow('CUDA', hw.unavailable_reason_cuda || 'No CUDA-capable GPU detected')}
+            ${unavailRow('GPU sensors', hw.unavailable_reason_pynvml)}</div>`;
+
+    const ageNote = (hw.collected_at || hw.cached_age_s != null)
+      ? `<div class="hw-timestamp">
+           Collected: ${esc(hw.collected_at ? T.localFull(hw.collected_at) : '—')}
+           ${hw.cached_age_s != null ? ` · cached ${esc(hw.cached_age_s)}s` : ''}
+         </div>` : '';
 
     sec.innerHTML = `
-      <div class="page-title">Hardware &amp; Environment</div>
+      <h2 id="sec-hardware-title" class="page-title">Hardware &amp; Environment</h2>
       <p class="page-note">Monitoring is best-effort and depends on optional system packages.
-        Missing sensor data does not indicate a training problem.</p>
+        Missing sensor data does not indicate a training problem; reasons are shown
+        per-row to distinguish "optional dep not installed" from "sensor not reported".</p>
       <div class="grid-2" style="margin-bottom:16px">
         <div class="card">
           <div class="card-title">Versions &amp; Environment</div>
           ${verRows.map(([k,v])=>`<div class="hw-row">
-            <span class="hw-label">${k}</span><span class="hw-val">${v}</span></div>`).join('')}
+            <span class="hw-label">${esc(k)}</span><span class="hw-val">${esc(v)}</span></div>`).join('')}
+          ${ageNote}
         </div>
         ${cpuHtml}
       </div>
@@ -748,18 +1262,32 @@ const Render = {
     const rows  = [...lastN].reverse();
 
     sec.innerHTML = `
-      <div class="page-title">Metrics Log <span style="font-size:.8rem;color:var(--text3)">(last 50 rows, newest first)</span></div>
+      <h2 id="sec-logs-title" class="page-title">Metrics Log
+        <span style="font-size:.8rem;color:var(--text3)">(last 50 rows, newest first)</span>
+      </h2>
+      <div class="toolbar" role="toolbar" aria-label="Logs controls">
+        <div class="toolbar-group">
+          <button class="tb-btn" id="export-logs-csv" type="button"
+                  aria-label="Download metrics.csv">CSV</button>
+          <button class="tb-btn" id="print-btn-logs" type="button"
+                  aria-label="Print or save as PDF">Print / PDF</button>
+        </div>
+      </div>
       <div class="card" style="padding:0">
         <div class="tbl-wrap">
           <table>
-            <thead><tr>${hdrs.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+            <thead><tr>${hdrs.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead>
             <tbody>${rows.map(row=>`<tr>${row.map((v,i)=>{
-              if (i===tsIdx && typeof v==='string') return `<td>${T.local(v)}</td>`;
-              return `<td>${typeof v==='number'?fmt(v):v}</td>`;
+              if (i===tsIdx && typeof v==='string') return `<td>${esc(T.local(v))}</td>`;
+              return `<td>${esc(typeof v==='number'?fmt(v):v)}</td>`;
             }).join('')}</tr>`).join('')}</tbody>
           </table>
         </div>
       </div>`;
+    const csvBtn = el('export-logs-csv');
+    if (csvBtn) csvBtn.addEventListener('click', () => Export.metricsCsv());
+    const printBtn = el('print-btn-logs');
+    if (printBtn) printBtn.addEventListener('click', () => Export.printPage());
   },
 
   // ── Config ────────────────────────────────────────────────────────────────────
@@ -768,17 +1296,99 @@ const Render = {
     const meta = S.metadata;
 
     if (!meta || !Object.keys(meta).length) {
-      sec.innerHTML = `<div class="page-title">Run Configuration</div>
+      sec.innerHTML = `<h2 id="sec-config-title" class="page-title">Run Configuration</h2>
         ${emptyState('No run_metadata.json found.',
           'Create a run_metadata.json in your logdir with training configuration.')}`;
       return;
     }
 
+    // textContent on the <pre> ensures untrusted metadata strings are
+    // rendered safely (no innerHTML interpolation).
     sec.innerHTML = `
-      <div class="page-title">Run Configuration</div>
+      <h2 id="sec-config-title" class="page-title">Run Configuration</h2>
       <div class="card" style="padding:0">
-        <pre>${JSON.stringify(meta, null, 2)}</pre>
+        <pre id="config-pre"></pre>
       </div>`;
+    const pre = el('config-pre');
+    if (pre) pre.textContent = JSON.stringify(meta, null, 2);
+  },
+
+  // ── Tools ─────────────────────────────────────────────────────────────────────
+  tools() {
+    const sec = el('sec-tools');
+    const cfg = S.config || {};
+    const here = window.location;
+    const localUrl = `${here.protocol}//${here.host}${here.pathname}`;
+    const port = cfg.port || here.port || 8765;
+    // We can't see the LAN IP from JS, but the user's browser address bar
+    // already shows whatever URL they reached us at — reflect that as one
+    // of the copyable URLs.  For the LAN case, instruct the user.
+    const lanRow = cfg.lan_mode ? `
+      <div class="url-row">
+        <code id="lan-url-tip">Use this machine's LAN IP, port ${esc(port)}${cfg.has_token ? ' (token required)' : ''}</code>
+        <button class="copy-btn" type="button" data-target="lan-url-tip"
+                aria-label="Copy LAN URL hint">Copy</button>
+      </div>` : '';
+
+    sec.innerHTML = `
+      <h2 id="sec-tools-title" class="page-title">Tools</h2>
+      <p class="page-note">Client-side exports — nothing is uploaded.  CSV files are
+      generated from the data already loaded in your browser.</p>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Share / Copy URL</div>
+        <div class="url-row">
+          <code id="local-url">${esc(localUrl)}</code>
+          <button class="copy-btn" type="button" data-target="local-url"
+                  aria-label="Copy local URL">Copy</button>
+        </div>
+        ${lanRow}
+        ${cfg.has_token ? '<p class="card-sub">LAN clients must include the token (e.g. <code>?token=…</code> or <code>Authorization: Bearer …</code>).</p>' : ''}
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Export</div>
+        <div class="toolbar-group" style="flex-wrap:wrap">
+          <button class="tb-btn" id="tools-csv" type="button"
+                  aria-label="Download metrics CSV">Metrics CSV</button>
+          <button class="tb-btn" id="tools-print" type="button"
+                  aria-label="Print or save as PDF">Print / PDF</button>
+        </div>
+        <p class="card-sub" style="margin-top:8px">
+          Per-chart CSV/SVG buttons appear next to each chart on the Metrics page.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Refresh</div>
+        <div class="hw-row">
+          <span class="hw-label">Auto-refresh interval</span>
+          <span class="hw-val">${esc((cfg.refresh_interval_s ?? CFG.pollMs/1000))}s</span>
+        </div>
+        <div class="hw-row">
+          <span class="hw-label">Status</span>
+          <span class="hw-val">${S.paused ? 'Paused' : 'Running'}</span>
+        </div>
+        <div class="hw-row">
+          <span class="hw-label">Stale threshold</span>
+          <span class="hw-val">${esc(cfg.stale_after_s ?? CFG.staleAfterS)}s</span>
+        </div>
+        <p class="card-sub" style="margin-top:8px">
+          The Pause/Refresh controls are in the top bar (icon buttons).
+        </p>
+      </div>`;
+
+    // Wire copy buttons.
+    sec.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = el(btn.dataset.target);
+        if (t) copyText(t.textContent, btn);
+      });
+    });
+    const csvBtn = el('tools-csv');
+    if (csvBtn) csvBtn.addEventListener('click', () => Export.metricsCsv());
+    const pBtn = el('tools-print');
+    if (pBtn) pBtn.addEventListener('click', () => Export.printPage());
   },
 
   // ── About ─────────────────────────────────────────────────────────────────────
@@ -786,31 +1396,39 @@ const Render = {
     const sec  = el('sec-about');
     const hw   = S.hardware || {};
     sec.innerHTML = `
-      <div class="page-title">About</div>
+      <h2 id="sec-about-title" class="page-title">About</h2>
       <div class="grid-2">
         <div class="card">
           <div class="card-title">TGraphX Dashboard</div>
-          <div class="hw-row"><span class="hw-label">TGraphX</span><span class="hw-val">${hw.tgraphx||'—'}</span></div>
-          <div class="hw-row"><span class="hw-label">Python</span><span class="hw-val">${hw.python||'—'}</span></div>
-          <div class="hw-row"><span class="hw-label">PyTorch</span><span class="hw-val">${hw.torch||'—'}</span></div>
-          <div class="hw-row"><span class="hw-label">Platform</span><span class="hw-val">${hw.platform||'—'}</span></div>
+          <div class="hw-row"><span class="hw-label">TGraphX</span><span class="hw-val">${esc(hw.tgraphx||'—')}</span></div>
+          <div class="hw-row"><span class="hw-label">Python</span><span class="hw-val">${esc(hw.python||'—')}</span></div>
+          <div class="hw-row"><span class="hw-label">PyTorch</span><span class="hw-val">${esc(hw.torch||'—')}</span></div>
+          <div class="hw-row"><span class="hw-label">Platform</span><span class="hw-val">${esc(hw.platform||'—')}</span></div>
           <div class="card-sub" style="margin-top:12px">
             Local-first monitoring · No external dependencies · Read-only
           </div>
         </div>
         <div class="card">
           <div class="card-title">Usage</div>
-          <pre style="font-size:.75rem">tgraphx-dashboard --logdir runs/demo
-
-# LAN mode (token required)
-tgraphx-dashboard --logdir runs/demo \\
-  --host 0.0.0.0 --token MY_TOKEN
-
-# Python API
-from tgraphx.dashboard import launch_dashboard
-launch_dashboard("runs/demo")</pre>
+          <pre id="about-usage" style="font-size:.75rem"></pre>
         </div>
       </div>`;
+    // Use textContent so the example stays as plain text and is never
+    // interpreted as HTML.
+    const pre = el('about-usage');
+    if (pre) {
+      pre.textContent = [
+        'tgraphx-dashboard --logdir runs/demo',
+        '',
+        '# LAN mode (token required)',
+        'tgraphx-dashboard --logdir runs/demo \\',
+        '  --host 0.0.0.0 --token MY_TOKEN',
+        '',
+        '# Python API',
+        'from tgraphx.dashboard import launch_dashboard',
+        'launch_dashboard("runs/demo")',
+      ].join('\n');
+    }
   },
 };
 
@@ -936,19 +1554,81 @@ const GraphViz = {
 // ─────────────────────────────────────────────────────────────────────────────
 async function poll() {
   if (document.hidden) return;
+  if (S.paused) {
+    Controls.updateStale();
+    return;
+  }
 
-  const [status, metrics, hardware, metadata, graph] = await Promise.all([
-    API.status(), API.metrics(), API.hardware(), API.metadata(), API.graph(),
+  // ── Metrics: use incremental API when we already have a base load. ──────
+  let metricsPromise;
+  if (S.latestRowIndex >= 0) {
+    // Request only rows after the last known index.
+    const opts = {sinceRow: S.latestRowIndex};
+    if (S.activeRun) opts.run = S.activeRun;
+    metricsPromise = API.metrics(opts).then(inc => {
+      if (!inc) return null;  // network failure — keep existing data
+      if (inc.reset_required) {
+        // File was replaced/truncated — full reload needed.
+        S.latestRowIndex = -1;
+        return API.metrics(S.activeRun ? {run: S.activeRun} : {});
+      }
+      // Append new rows to existing data.
+      if (S.metrics && inc.rows.length > 0) {
+        const merged = {
+          ...S.metrics,
+          rows: [...S.metrics.rows, ...inc.rows],
+          total_row_count: inc.total_row_count,
+          truncated: inc.truncated,
+        };
+        // Trim to max_metric_rows to prevent unbounded growth.
+        const cap = S.config?.max_metric_rows || 5000;
+        if (merged.rows.length > cap) {
+          merged.rows = merged.rows.slice(merged.rows.length - cap);
+          merged.truncated = true;
+        }
+        S.latestRowIndex = inc.latest_row_index;
+        // Return merged so S.metrics gets updated below.
+        return merged;
+      }
+      if (inc.latest_row_index != null) {
+        S.latestRowIndex = inc.latest_row_index;
+      }
+      return null;  // no new rows — keep existing
+    });
+  } else {
+    // Full load.
+    const opts = S.activeRun ? {run: S.activeRun} : {};
+    metricsPromise = API.metrics(opts).then(m => {
+      if (m && m.total_row_count != null) {
+        S.latestRowIndex = m.total_row_count - 1;
+      }
+      return m;
+    });
+  }
+
+  const [status, metrics, hardware, metadata, graph, graphStats] = await Promise.all([
+    API.status(),
+    metricsPromise,
+    API.hardware(),
+    API.metadata(),
+    API.graph(),
+    API.graphStats(),
   ]);
 
-  S.status   = status   || S.status;
-  S.metrics  = metrics  || S.metrics;
-  S.hardware = hardware || S.hardware;
-  S.metadata = metadata || S.metadata;
-  S.graph    = graph    || S.graph;
-  S.lastFetch = new Date().toISOString();
+  // Keep the previous data when an individual fetch fails.
+  const anySucceeded = (status || metrics || hardware || metadata || graph || graphStats);
+  S.status     = status     || S.status;
+  S.metrics    = metrics    || S.metrics;
+  S.hardware   = hardware   || S.hardware;
+  S.metadata   = metadata   || S.metadata;
+  S.graph      = graph      || S.graph;
+  S.graphStats = graphStats || S.graphStats;
+  if (anySucceeded) {
+    S.lastFetch = new Date().toISOString();
+  }
 
   updateTopBar();
+  Controls.updateStale();
   Render[S.sec] && Render[S.sec]();
   if (S.tvMode) TV.render();
 }
@@ -956,7 +1636,7 @@ async function poll() {
 function updateTopBar() {
   const st = S.status || {};
 
-  // Run title
+  // Run title — textContent prevents HTML injection from run_name.
   const titleEl = el('run-title');
   if (titleEl) titleEl.textContent = st.run_name || 'TGraphX Dashboard';
 
@@ -976,7 +1656,9 @@ function updateTopBar() {
 
 function startPolling() {
   if (S.pollTimer) clearInterval(S.pollTimer);
-  S.pollTimer = setInterval(poll, CFG.pollMs);
+  if (S.paused) return;
+  const ms = (S.config?.poll_ms) || CFG.pollMs;
+  S.pollTimer = setInterval(poll, ms);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -990,16 +1672,76 @@ function tickClock() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Initialize
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-run selector — shown only when /api/runs returns mode="multi"
+// ─────────────────────────────────────────────────────────────────────────────
+const RunSelector = {
+  _bar: null,
+
+  async init() {
+    const runs = await API.runs();
+    if (!runs) return;
+    S.runs = runs;
+    if (runs.mode !== 'multi' || !runs.runs.length) return;
+    // First run is default.
+    if (!S.activeRun) S.activeRun = runs.runs[0];
+    this._render();
+  },
+
+  _render() {
+    if (!S.runs || S.runs.mode !== 'multi') return;
+    const wrap = el('main-wrap');
+    if (!wrap) return;
+
+    // Only create once.
+    if (this._bar) { this._updateSelect(); return; }
+    const bar = document.createElement('div');
+    bar.className = 'run-selector-bar';
+    bar.setAttribute('role', 'toolbar');
+    bar.setAttribute('aria-label', 'Run selector');
+    bar.innerHTML = `
+      <label for="run-select">Run:</label>
+      <select id="run-select" aria-label="Select active run">
+        ${S.runs.runs.map(r =>
+          `<option value="${esc(r)}"${r === S.activeRun ? ' selected' : ''}>${esc(r)}</option>`
+        ).join('')}
+      </select>
+      <span class="run-count">${esc(S.runs.runs.length)} runs${S.runs.capped ? ' (capped)' : ''}</span>`;
+    const content = el('content');
+    wrap.insertBefore(bar, content);
+    this._bar = bar;
+
+    el('run-select')?.addEventListener('change', e => {
+      const newRun = e.target.value;
+      if (newRun !== S.activeRun) {
+        S.activeRun = newRun;
+        S.latestRowIndex = -1;  // force full reload for new run
+        S.metrics = null;
+        poll();
+      }
+    });
+  },
+
+  _updateSelect() {
+    const sel = el('run-select');
+    if (!sel) return;
+    if (sel.value !== S.activeRun) sel.value = S.activeRun;
+  },
+};
+
 function init() {
   Nav.init();
   Theme.init();
+  Palette.init();
+  Controls.init();
   TV.init();
+  Tooltip.init();
 
   // Build initial section shells
   SECTIONS.forEach(({id}) => {
     const sec = el(`sec-${id}`);
     if (sec && !sec.innerHTML.trim()) {
-      sec.innerHTML = `<div class="page-title">${id.charAt(0).toUpperCase()+id.slice(1)}</div>
+      sec.innerHTML = `<h2 id="sec-${esc(id)}-title" class="page-title">${esc(id.charAt(0).toUpperCase()+id.slice(1))}</h2>
         <div class="chart-empty">Loading…</div>`;
     }
   });
@@ -1012,11 +1754,37 @@ function init() {
   // Pause polling when tab not visible
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) clearInterval(S.pollTimer);
-    else { startPolling(); poll(); }
+    else if (!S.paused) { startPolling(); poll(); }
   });
 
-  // Initial data load then start polling
-  poll().then(() => {
+  // Stale-data check — independent of poll() so we can still warn even when
+  // every API call is failing.
+  setInterval(() => Controls.updateStale(), 1000);
+
+  // ── Snapshot mode: offline HTML export pre-loads data ────────────────────
+  if (window.__TGXSNAP) {
+    S.snapshotMode = true;
+    S.paused = true;
+    const snap = window.__TGXSNAP;
+    S.metrics    = snap.metrics    || null;
+    S.metadata   = snap.metadata   || null;
+    S.graph      = snap.graph      || null;
+    S.graphStats = snap.graph_stats || null;
+    // Set latestRowIndex so stale warning shows "offline snapshot".
+    S.latestRowIndex = snap.metrics?.total_row_count
+      ? snap.metrics.total_row_count - 1 : -1;
+    S.lastFetch = new Date().toISOString();
+    Nav.go(S.sec);
+    return;  // skip live polling entirely
+  }
+
+  // Fetch server config first, then load data and start polling.  This lets
+  // the server inform the browser of its preferred refresh interval.
+  API.config().then(cfg => {
+    S.config = cfg || null;
+    // Fetch runs list in parallel — needed to know if multi-run mode.
+    return Promise.all([poll(), RunSelector.init()]);
+  }).then(() => {
     Nav.go(S.sec);
     startPolling();
   });

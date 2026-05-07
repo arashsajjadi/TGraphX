@@ -32,15 +32,30 @@ layer = make_layer("linear", in_shape=(32,), out_shape=(64,), aggr="mean")
 
 ### Key kwargs forwarded per layer
 
-| kwarg | Applies to |
-|---|---|
-| `aggr` | conv, sage, linear, legacy_attention |
-| `heads`, `concat` | gat |
-| `residual` | all |
-| `dropout` | gat (attn dropout), linear (dropout_prob) |
-| `use_edge_features`, `edge_dim` | all |
-| `edge_features_kind` | sage, gin |
-| `add_self_loops` | gat |
+| kwarg | Applies to | Notes |
+|---|---|---|
+| `aggr` | conv, sage, linear, legacy_attention | `"sum"`/`"mean"`/`"max"` |
+| `heads` | gat | number of attention heads |
+| `concat` | gat | concat heads (`True`) or average (`False`) |
+| `residual` | all | skip connection when shapes match |
+| `dropout` | gat (→`attn_dropout`), linear, legacy_attention (→`dropout_prob`) | |
+| `use_edge_features`, `edge_dim` | all | `edge_dim` required when `use_edge_features=True` |
+| `edge_features_kind` | sage, gin | `"spatial"` (default) or `"vector"` |
+| `add_self_loops` | gat | add self-loops inside forward |
+| `negative_slope` | gat | LeakyReLU slope (default `0.2`) |
+| `normalize` | sage | L2-normalise output |
+| `bias` | gat, sage | learnable bias |
+| `use_batchnorm` | gin, linear | BatchNorm after aggregation |
+| `eps` | gin | GIN ε initial value (default `0.0`) |
+| `train_eps` | gin | make ε a learnable `nn.Parameter` |
+| `hidden_channels` | gin | MLP hidden dim (defaults to `out_channels`) |
+
+**Not forwarded** (set directly on the constructor if needed):
+- `ConvMessagePassing`: `aggregator_params` dict (for deep CNN aggregator internals)
+- `TensorGraphSAGELayer`: no `dropout` or `use_batchnorm` at this time
+- `TensorGATLayer`: `edge_features_kind` is not applicable (handled by tensor rank detection)
+
+**Unknown kwargs** are silently ignored by the factory rather than causing an error; only the listed kwargs are forwarded.  Passing unrecognised kwargs does not crash, but has no effect.
 
 ## Model factory: `build_model`
 

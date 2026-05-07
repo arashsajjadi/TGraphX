@@ -18,13 +18,13 @@ See [Performance](performance.md) for performance-specific constraints.
 
 ## Training framework
 
-| Limitation | Status |
+| Feature | Status |
 |---|---|
-| `train_epoch` function | Not implemented; write your own loop |
-| `evaluate` function | Not implemented |
-| `fit` function | Not implemented |
-| `TensorBoardLogger` | Not implemented; use `torch.utils.tensorboard` directly |
-| `MLflowLogger` | Not implemented; use `mlflow` client directly |
+| `train_epoch` function | **Implemented** — see [training_utilities.md](training_utilities.md) |
+| `evaluate` function | **Implemented** — see [training_utilities.md](training_utilities.md) |
+| `fit` function | **Implemented** — thin `train_epoch` + `evaluate` wrapper; see [training_utilities.md](training_utilities.md) |
+| `TensorBoardLogger` | **Implemented** — optional; requires `pip install tensorboard` or `pip install "tgraphx[tracking]"`; see [training_utilities.md](training_utilities.md) |
+| `MLflowLogger` | Not implemented; use `mlflow` client directly (`pip install mlflow`) |
 | Neighbor sampling (GraphSAINT / ClusterGCN) | Not implemented |
 
 ## AMP / precision
@@ -35,6 +35,25 @@ See [Performance](performance.md) for performance-specific constraints.
 | Universal AMP support | Not claimed; device- and op-dependent |
 
 Use `bfloat16` or full precision for stable inference across all layers.
+
+## Deterministic algorithms
+
+`set_seed(seed, deterministic=True)` enables deterministic cuDNN operation
+but intentionally does **not** call `torch.use_deterministic_algorithms(True)`.
+Several scatter/index operations used by TGraphX layers (e.g. `scatter_reduce_`
+with `reduce='amax'` in `TensorGATLayer` attention and graph max-pooling) do
+not have deterministic CUDA kernels and would raise `RuntimeError` at runtime.
+
+Enabling deterministic cuDNN (`cudnn.deterministic = True`,
+`cudnn.benchmark = False`) typically reduces GPU throughput.
+
+## Checkpoint loading
+
+`load_checkpoint` defaults to `weights_only=True` (safe mode).
+Checkpoints created by `save_checkpoint` are fully compatible with this mode.
+Checkpoints created by older code or third-party tools that pickle custom Python
+objects may fail with a `RuntimeError` explaining how to use `weights_only=False`
+for trusted legacy files.
 
 ## Dashboard
 
@@ -57,5 +76,5 @@ semantics differ; there are no conversion utilities.
 
 ## Version
 
-These limitations apply to TGraphX 0.1.1. Deferred items may be addressed
-in future releases. See [CHANGELOG.md](../CHANGELOG.md).
+These limitations apply to the current TGraphX release. Deferred items may
+be addressed in future releases. See [CHANGELOG.md](../CHANGELOG.md).

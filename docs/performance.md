@@ -111,6 +111,22 @@ out = layer(x, edge_index, chunk_size=256)
 - **GAT, SAGE, GIN chunking is deferred.** GAT requires all edge scores
   for destination-wise softmax; two-pass chunking provides no memory benefit.
 
+## Dashboard performance overhead
+
+When the dashboard is **disabled** (the default): zero overhead — no timers,
+threads, or hardware polling.
+
+When the dashboard is **enabled**:
+
+- `/api/metrics` is mtime/size-cached; the CSV is re-parsed only when it
+  changes.  The browser fetches incremental rows via `?since_row=N`, reducing
+  payload size during long runs.  The server still parses the full CSV on a
+  cache miss; true byte-seek tail-reading is not yet implemented.
+- `/api/hardware` readings are cached for ~1.5 s; `pynvml.nvmlInit()` is
+  called at most once per process.
+- Polling frequency is set by `--refresh-interval` (default 2 s); the
+  browser pauses polling when the tab is hidden.
+
 ## Profiling
 
 No profiling or hardware polling is enabled by default.

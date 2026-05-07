@@ -23,7 +23,33 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu  
 pip install -e .   # from source (editable)
 ```
 
-## Your first graph
+## Your first graph — vector features
+
+If you only have flat feature vectors (no spatial structure), start here.
+
+```python
+import torch
+from tgraphx import Graph, LinearMessagePassing
+
+# Eight nodes with 32-dimensional feature vectors
+node_features = torch.randn(8, 32)           # [N, D]
+
+# A simple edge list (undirected cycle)
+src = torch.arange(8)
+edge_index = torch.stack([src, (src + 1) % 8])  # [2, 8]
+
+g = Graph(node_features, edge_index)
+print(g)  # Graph(num_nodes=8, num_edges=8, feature_shape=(32,))
+
+layer = LinearMessagePassing(in_shape=(32,), out_shape=(64,))
+out = layer(g.node_features, g.edge_index)   # [8, 64]
+out.sum().backward()                         # differentiable
+```
+
+## Spatial node features — image patches
+
+TGraphX's distinctive feature: keeping `[C, H, W]` spatial structure intact
+through message passing.
 
 ```python
 import torch
@@ -91,10 +117,11 @@ model = build_model_from_config({
 ## Save a checkpoint
 
 ```python
-from tgraphx.training import save_checkpoint, load_checkpoint
+from tgraphx import save_checkpoint, load_checkpoint
 
 save_checkpoint(model, optimizer, epoch=10, path="run/epoch10.pt")
 epoch = load_checkpoint(model, optimizer, path="run/epoch10.pt")
+# Default: safe deserialization (weights_only=True)
 ```
 
 ## Log metrics

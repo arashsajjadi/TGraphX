@@ -134,6 +134,51 @@ class TestMakeLayerGIN:
         with pytest.raises(ValueError, match="requires a 2-D"):
             make_layer("gin", (32,), (64,))
 
+    # ── API-01: newly forwarded GIN kwargs ───────────────────────────
+
+    def test_gin_eps_kwarg(self):
+        """eps= forwarded; layer has that epsilon value."""
+        layer = make_layer("gin", (4, 4, 4), (4, 4, 4), eps=0.5)
+        import torch
+        assert float(layer.eps) == pytest.approx(0.5)
+
+    def test_gin_train_eps_kwarg(self):
+        """train_eps=True makes eps a learnable nn.Parameter."""
+        import torch.nn as nn
+        layer = make_layer("gin", (4, 4, 4), (4, 4, 4), train_eps=True)
+        assert isinstance(layer.eps, nn.Parameter)
+
+    def test_gin_hidden_channels_kwarg(self):
+        """hidden_channels= is forwarded; layer runs forward correctly."""
+        layer = make_layer("gin", (4, 4, 4), (8, 4, 4), hidden_channels=16)
+        x = torch.randn(4, 4, 4, 4)
+        ei = build_grid_graph(2, 2, directed=False, self_loops=True)
+        out = layer(x, ei)
+        assert out.shape == (4, 8, 4, 4)
+
+    def test_gin_use_batchnorm_kwarg(self):
+        """use_batchnorm=True is forwarded; forward works."""
+        layer = make_layer("gin", (4, 4, 4), (8, 4, 4), use_batchnorm=True)
+        x = torch.randn(4, 4, 4, 4)
+        ei = build_grid_graph(2, 2, directed=False, self_loops=True)
+        out = layer(x, ei)
+        assert out.shape == (4, 8, 4, 4)
+        assert torch.isfinite(out).all()
+
+    def test_gin_combined_kwargs(self):
+        """Multiple GIN kwargs forwarded together."""
+        layer = make_layer(
+            "gin", (4, 4, 4), (4, 4, 4),
+            eps=0.1, train_eps=True, hidden_channels=32, use_batchnorm=True,
+        )
+        import torch.nn as nn
+        assert isinstance(layer.eps, nn.Parameter)
+        assert float(layer.eps.detach()) == pytest.approx(0.1)
+        x = torch.randn(4, 4, 4, 4)
+        ei = build_grid_graph(2, 2, directed=False, self_loops=True)
+        out = layer(x, ei)
+        assert out.shape == (4, 4, 4, 4)
+
 
 class TestMakeLayerLinear:
 
@@ -147,6 +192,45 @@ class TestMakeLayerLinear:
     def test_linear_spatial_raises(self):
         with pytest.raises(ValueError, match="vector in_shape"):
             make_layer("linear", (4, 8, 8), (8, 8, 8))
+
+    # ── BUG-02 factory kwargs ─────────────────────────────────────────
+
+    def test_linear_dropout_kwarg_forwarded(self):
+        """make_layer('linear', dropout=...) must honour the flag."""
+        layer = make_layer("linear", (32,), (32,), dropout=0.9)
+        x = torch.randn(4, 32)
+        ei = build_grid_graph(2, 2, directed=False, self_loops=True)
+        layer.train()
+        outputs = [layer(x, ei).detach() for _ in range(5)]
+        layer.eval()
+        out_eval = layer(x, ei).detach()
+        assert any(not torch.equal(o, out_eval) for o in outputs), (
+            "dropout kwarg forwarded but had no effect"
+        )
+
+    def test_linear_residual_kwarg_forwarded(self):
+        """make_layer('linear', residual=True) must add the skip connection."""
+        layer = make_layer("linear", (32,), (32,), residual=True)
+        layer.eval()
+        x = torch.randn(4, 32)
+        ei = build_grid_graph(2, 2, directed=False, self_loops=True)
+        out_with = layer(x, ei).detach()
+        layer.residual = False
+        out_without = layer(x, ei).detach()
+        layer.residual = True
+        assert torch.allclose(out_with, out_without + x, atol=1e-5)
+
+    def test_linear_use_batchnorm_kwarg_forwarded(self):
+        """make_layer('linear', use_batchnorm=True) must create a BN module."""
+        import torch.nn as nn
+        layer = make_layer("linear", (32,), (64,), use_batchnorm=True)
+        assert hasattr(layer, "bn")
+        assert isinstance(layer.bn, nn.BatchNorm1d)
+        # forward must work
+        x = torch.randn(4, 32)
+        ei = build_grid_graph(2, 2, directed=False, self_loops=True)
+        out = layer(x, ei)
+        assert out.shape == (4, 64)
 
 
 class TestMakeLayerErrors:

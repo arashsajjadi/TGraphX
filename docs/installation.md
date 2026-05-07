@@ -30,22 +30,23 @@ pip install -e .
 # Hardware monitoring in the dashboard (CPU %, RAM, GPU utilisation/temp)
 pip install "tgraphx[monitoring]"   # installs psutil and pynvml
 
-# Third-party experiment-tracking libraries (use their APIs directly)
-pip install "tgraphx[tracking]"     # installs tensorboard and mlflow
+# TensorBoard integration for TensorBoardLogger
+pip install "tgraphx[tracking]"     # installs tensorboard
 
 # Development tools (pytest, build, twine)
 pip install "tgraphx[dev]"
 ```
 
-> **Note:** `psutil`, `pynvml`, `tensorboard`, and `mlflow` are **never**
-> imported at base `import tgraphx` time. They are loaded lazily only when
-> you explicitly request them.
+> **Note:** `psutil`, `pynvml`, and `tensorboard` are **never** imported at
+> base `import tgraphx` time. They are loaded lazily only when you explicitly
+> request them (e.g. by instantiating `TensorBoardLogger` or calling
+> `env_report(include_hardware=True)`).
 
 ## Verify installation
 
 ```python
 import tgraphx
-print(tgraphx.__version__)          # e.g. "0.1.1"
+print(tgraphx.__version__)          # prints the installed version string
 
 from tgraphx import Graph, TensorGATLayer, build_grid_graph
 from tgraphx.performance import env_report

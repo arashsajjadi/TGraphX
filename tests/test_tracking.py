@@ -278,3 +278,143 @@ class TestTensorBoardLogger:
         tb.log(epoch=0, train_loss=0.5)
         tb.close()  # explicit close
         tb.close()  # double close must not raise
+
+
+# =========================================================================== #
+# TRACK-01: TensorBoardLogger.log zero-step / zero-epoch fix                   #
+# =========================================================================== #
+
+class _FakeWriter:
+    """Minimal SummaryWriter stand-in that records add_scalar calls."""
+
+    def __init__(self):
+        self.calls: list[tuple] = []  # (tag, value, global_step)
+
+    def add_scalar(self, tag: str, value: float, global_step: int) -> None:
+        self.calls.append((tag, float(value), int(global_step)))
+
+    def close(self) -> None:
+        pass
+
+
+def _make_logger(fake_writer: _FakeWriter):
+    """Build a TensorBoardLogger backed by a fake writer without TensorBoard."""
+    from tgraphx.tracking import TensorBoardLogger
+    logger = TensorBoardLogger.__new__(TensorBoardLogger)
+    logger._logdir = "/tmp/fake"
+    logger._writer = fake_writer
+    logger._step = 0
+    return logger
+
+
+class TestTensorBoardLoggerStepResolution:
+    """TRACK-01 regression tests — epoch=0 / step=0 must not be skipped."""
+
+    def test_epoch_zero_records_global_step_zero(self):
+        """epoch=0 must map to global_step=0, not to the internal counter."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(epoch=0, train_loss=0.5)
+        assert len(fw.calls) == 1
+        tag, val, gstep = fw.calls[0]
+        assert tag == "train_loss"
+        assert gstep == 0, f"Expected global_step=0, got {gstep}"
+
+    def test_step_zero_records_global_step_zero(self):
+        """step=0 must map to global_step=0 when epoch is absent."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(step=0, train_loss=0.5)
+        tag, val, gstep = fw.calls[0]
+        assert gstep == 0, f"Expected global_step=0, got {gstep}"
+
+    def test_epoch_nonzero_correct(self):
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(epoch=3, train_loss=0.3)
+        assert fw.calls[0][2] == 3
+
+    def test_auto_step_increments(self):
+        """Without explicit epoch/step the internal counter advances."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(train_loss=0.9)   # step 0
+        logger.log(train_loss=0.8)   # step 1
+        logger.log(train_loss=0.7)   # step 2
+        steps = [c[2] for c in fw.calls]
+        assert steps == [0, 1, 2]
+
+    def test_explicit_epoch_does_not_advance_auto_counter(self):
+        """Auto-counter must stay at 0 after two explicit epoch calls."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(epoch=0, train_loss=0.9)
+        logger.log(epoch=1, train_loss=0.8)
+        assert logger._step == 0, (
+            f"_step should not advance on explicit epoch; got {logger._step}"
+        )
+
+    def test_mixed_auto_then_explicit_epoch_zero(self):
+        """
+        Reproduce the original TRACK-01 scenario:
+          1. Two auto-step logs (counter reaches 2).
+          2. epoch=0 log — must use step 0, not the auto counter (2).
+          3. epoch=2 log — must use step 2, not collide.
+        """
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(train_loss=0.9)            # auto step 0
+        logger.log(train_loss=0.8)            # auto step 1
+        logger.log(epoch=0, train_loss=0.5)   # explicit step 0  ← bug repro
+        logger.log(epoch=2, train_loss=0.3)   # explicit step 2
+
+        # auto logs
+        assert fw.calls[0][2] == 0
+        assert fw.calls[1][2] == 1
+        # explicit epoch=0 must not use _step (which is now 2)
+        assert fw.calls[2][2] == 0, (
+            f"epoch=0 was recorded at step {fw.calls[2][2]} instead of 0 "
+            "(TRACK-01 regression)"
+        )
+        # explicit epoch=2
+        assert fw.calls[3][2] == 2
+
+    def test_epoch_key_missing_falls_to_step_key(self):
+        """'step' key is used when 'epoch' is absent."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(step=5, val_loss=0.4)
+        assert fw.calls[0][2] == 5
+
+    def test_epoch_none_falls_to_step(self):
+        """epoch=None must be treated as absent; step key used instead."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(epoch=None, step=7, val_loss=0.3)
+        assert fw.calls[0][2] == 7
+
+    def test_step_none_falls_to_auto(self):
+        """step=None with no epoch key must use auto counter."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(step=None, val_loss=0.3)
+        assert fw.calls[0][2] == 0   # auto starts at 0
+        assert logger._step == 1      # counter advanced
+
+    def test_timestamp_never_logged_as_scalar(self):
+        """'timestamp' key must be silently skipped."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(epoch=1, timestamp="2025-01-01T00:00:00Z", train_loss=0.5)
+        tags = [c[0] for c in fw.calls]
+        assert "timestamp" not in tags
+        assert "train_loss" in tags
+
+    def test_non_numeric_values_skipped(self):
+        """Non-numeric metric values must be silently skipped."""
+        fw = _FakeWriter()
+        logger = _make_logger(fw)
+        logger.log(epoch=1, label="graph_clf", train_loss=0.5)
+        tags = [c[0] for c in fw.calls]
+        assert "label" not in tags
+        assert "train_loss" in tags

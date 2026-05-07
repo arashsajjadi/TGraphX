@@ -30,7 +30,7 @@ result = train_epoch(
     device="auto",     # auto selects CUDA > MPS > CPU
     metrics={"accuracy": acc_fn},   # optional extra metrics
     logger=None,       # CSVLogger / TensorBoardLogger / None
-    log_level=0,       # 0=silent, 1=print epoch summary
+    log_level=0,       # 0=silent, 1=print epoch summary, 2=per-batch progress
     epoch=None,        # passed to logger if provided
     amp=False,         # CUDA autocast; no GradScaler — see note
     grad_clip=None,    # gradient norm clip value
@@ -46,9 +46,20 @@ result = train_epoch(
 | `(Tensor, Tensor)` | `model(x)` | second element |
 | Other | raises `ValueError` with a clear message | — |
 
-**GraphBatch label squeezing:** if `graph_labels` has shape `[B, 1]`, it is
-squeezed to `[B]` so `CrossEntropyLoss` and similar losses receive the
-expected 1-D input.  Multi-label `[B, K]` targets are passed through as-is.
+**GraphBatch label squeezing:** if `graph_labels` has shape `[B, 1]` and
+**integer dtype** (e.g. `torch.long` class indices), it is squeezed to `[B]`
+for `CrossEntropyLoss` compatibility.  Float `[B, 1]` regression targets are
+preserved as-is so `MSELoss` receives matching shapes.
+
+**Model compatibility:** `train_epoch` inspects the model's `forward`
+signature and passes only the kwargs it accepts.  Simple models (e.g.
+`torch.nn.Sequential`) work without receiving graph-specific kwargs.
+TGraphX factory models receive `batch=`, `edge_features=`, and `edge_weight=`
+when available.  A `TypeError` raised *inside* the model propagates as a
+`RuntimeError` with context — it is not swallowed.
+
+**Metric failures** emit a one-time `UserWarning` per metric name rather than
+silently disappearing from results.
 
 **AMP note:** `amp=True` wraps the forward pass in `torch.autocast("cuda")`.
 No `GradScaler` is used.  For stable float16 training, manage a
@@ -85,7 +96,7 @@ history = fit(
     device="auto",
     metrics={"accuracy": acc_fn},
     logger=None,       # no files written
-    log_level=1,       # print per-epoch summary
+    log_level=1,       # 0=silent, 1=per-epoch summary, 2=per-batch+per-epoch
 )
 # history: [{"epoch":0, "train_loss":0.9, "val_loss":0.85, ...}, ...]
 ```
@@ -102,6 +113,25 @@ from tgraphx.training import set_seed
 
 set_seed(42)   # sets torch, numpy (if installed), and random
 ```
+
+### Deterministic cuDNN (optional)
+
+```python
+# Also sets torch.backends.cudnn.deterministic=True
+# and torch.backends.cudnn.benchmark=False.
+set_seed(42, deterministic=True)
+```
+
+Enabling deterministic mode reduces GPU throughput.  Use it only when
+bit-exact reproducibility matters more than speed (e.g. debugging).
+
+> **Note:** `torch.use_deterministic_algorithms(True)` is intentionally
+> *not* set by `deterministic=True` because several scatter/index
+> operations used by TGraphX layers do not have deterministic CUDA
+> kernels and would raise `RuntimeError` at runtime.  If your workload
+> supports fully deterministic algorithms, call
+> `torch.use_deterministic_algorithms(True)` manually *after*
+> `set_seed(seed, deterministic=True)`.
 
 ## Parameter count
 
@@ -121,12 +151,31 @@ from tgraphx.training import save_checkpoint, load_checkpoint
 save_checkpoint(model, optimizer, epoch=10, path="runs/ep10.pt",
                 loss=0.12, tag="best")
 
+# Default: safe loading (weights_only=True)
 epoch = load_checkpoint(model, optimizer, path="runs/ep10.pt")
 epoch = load_checkpoint(model, None, path="runs/ep10.pt", map_location="cpu")
 ```
 
 The checkpoint is a plain `torch.save` dict with keys `epoch`,
 `model_state_dict`, `optimizer_state_dict`, and any extra kwargs.
+
+### Checkpoint security
+
+`load_checkpoint` defaults to `weights_only=True`, which restricts
+deserialization to safe tensor/scalar types.  Standard TGraphX checkpoints
+are fully compatible with this mode.
+
+```python
+# Default (safe, recommended for all TGraphX checkpoints)
+epoch = load_checkpoint(model, optimizer, path="best.pt")
+
+# Legacy/trusted checkpoints only — emits a UserWarning
+epoch = load_checkpoint(model, optimizer, path="old.pt", weights_only=False)
+```
+
+> **Warning:** never load a checkpoint from an untrusted source with
+> `weights_only=False`. Doing so allows arbitrary Python code to execute
+> during deserialization.
 
 ## Metrics
 

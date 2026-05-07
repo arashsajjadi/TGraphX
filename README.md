@@ -1,6 +1,11 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/arashsajjadi/TGraphX/main/TGRAPHX.png" alt="TGraphX logo" width="220">
+</p>
+
 # TGraphX
 
 [![Tests](https://github.com/arashsajjadi/TGraphX/actions/workflows/tests.yml/badge.svg)](https://github.com/arashsajjadi/TGraphX/actions/workflows/tests.yml)
+[![PyPI version](https://img.shields.io/pypi/v/tgraphx.svg)](https://pypi.org/project/tgraphx/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![PyTorch 1.13+](https://img.shields.io/badge/pytorch-1.13%2B-orange.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -234,78 +239,59 @@ Nothing is written unless you explicitly pass a logger.
 
 ## Dashboard
 
-TGraphX includes a local training dashboard — **off by default**, zero external dependencies.
+TGraphX includes a local training dashboard — **off by default**, zero external dependencies, no telemetry.
 
 ### Quick start
 
 ```bash
-# 1. Run a training script that writes metrics.csv and optionally run_metadata.json
-python examples/training_with_dashboard.py
-
-# 2. Launch the dashboard (localhost only)
+# Launch (localhost only, no token needed)
 tgraphx-dashboard --logdir runs/demo
 # → http://127.0.0.1:8765
+
+# LAN access — explicit token required
+tgraphx-dashboard --logdir runs/demo \
+  --host 0.0.0.0 --token MY_SECRET_TOKEN
+
+# Auto-generated token
+tgraphx-dashboard --logdir runs/demo --host 0.0.0.0 --token auto
+
+# Offline HTML snapshot — no server needed
+tgraphx-dashboard --logdir runs/demo --export-html snapshot.html
 ```
 
 ```python
-# Python API — non-blocking background thread (use during training)
-from tgraphx.dashboard import launch_dashboard_background
+# Python API — non-blocking background thread
+from tgraphx.dashboard import launch_dashboard_background, export_dashboard_html
 server = launch_dashboard_background("runs/demo", port=8765)
 # ... training loop ...
 server.shutdown()
+
+# Offline snapshot
+export_dashboard_html("runs/demo", "snapshot.html")
 ```
-
-### LAN / multi-device access
-
-```bash
-# Requires an explicit token — refused without one
-tgraphx-dashboard --logdir runs/demo \
-  --host 0.0.0.0 --port 8765 --token MY_SECRET_TOKEN
-```
-
-Each browser displays times in **its own local timezone** (UTC is stored, JS converts).
 
 ### Dashboard features
 
 | Section | Contents |
 |---------|----------|
-| **Overview** | Status chip, epoch progress, live loss, elapsed / ETA, device |
-| **Metrics** | SVG line charts for every logged column; optional EMA smoothing |
-| **Graph** | Graph summary, degree distribution, SVG preview for small graphs |
-| **Hardware** | CPU/RAM/GPU/MPS stats (requires optional `psutil` / `pynvml`) |
-| **Logs** | Last 50 metric rows as a table |
-| **Config** | `run_metadata.json` as formatted JSON |
-| **TV mode** | Full-screen large-font view for passive monitoring |
+| **Overview** | Status chip, epoch progress, live loss, elapsed / ETA |
+| **Metrics** | SVG line charts, window selector, EMA smoothing, per-chart CSV/SVG export |
+| **Graph** | Graph summary, degree stats, `graph_stats.json` precomputed cards, SVG preview |
+| **Hardware** | CPU/RAM/GPU/CUDA/MPS, power draw, thermal status (optional `psutil`/`pynvml`) |
+| **Logs** | Scrollable metric table with CSV export |
+| **Config** | `run_metadata.json` rendered safely |
+| **Tools** | Copy URL, export buttons, refresh controls |
+| **TV mode** | Full-screen large-font passive monitoring |
 
-### Logging format
+Key features:
 
-Write `metrics.csv` with a header row; all columns are auto-detected:
-
-```
-epoch,step,train_loss,val_loss,accuracy,learning_rate,timestamp
-1,50,0.82,0.91,0.56,0.001,2025-01-01T12:00:00Z
-```
-
-Timestamps in **ISO-8601 UTC** are displayed in the viewer's local timezone.
-
-Optional `run_metadata.json` (free-form dict) and `graph_metadata.json`:
-
-```json
-{
-  "num_nodes": 9, "num_edges": 33, "directed": false,
-  "builder": "build_grid_graph", "builder_params": {"rows": 3, "cols": 3},
-  "degree_stats": {"mean": 3.6, "min": 2, "max": 4},
-  "edge_index": [[...], [...]]
-}
-```
-
-### Graph visualization limits
-
-* Full SVG preview: ≤ 200 nodes and ≤ 1 000 edges (send `edge_index` in JSON).
-* Larger graphs: summary + degree histogram only (edge_index stripped automatically).
-* Grid graphs: 2-D grid layout rendered from `builder_params`; no `edge_index` needed.
-* 3-D grids: rendered as depth-slice panels.
-* **Never** writes large `edge_index` files silently — opt-in by including it in `graph_metadata.json`.
+- **Incremental updates** — browser requests only new rows via `?since_row=N`
+- **Multi-run selector** — point at a parent directory; select runs by name
+- **Color-blind-safe palette** — Okabe-Ito toggle, persisted in localStorage
+- **Accessible** — skip link, ARIA labels, focus-visible, reduced-motion support
+- **Export** — metrics CSV, per-chart CSV/SVG, print/save PDF, offline HTML snapshot
+- **Responsive** — phone, tablet, desktop, TV/large-monitor layouts
+- **Pause/resume** polling, configurable refresh interval
 
 ### Security model
 
@@ -316,16 +302,30 @@ Optional `run_metadata.json` (free-form dict) and `graph_metadata.json`:
 | `--host 0.0.0.0` + connecting from another device | **Yes** |
 | Starting LAN mode without `--token` | **Refused at startup** |
 
-The dashboard is **read-only**, serves no external assets, and restricts all file access to `--logdir`.
+Read-only · no external CDN · no telemetry · no token leakage in API responses · path-traversal protected.
+
+### Log files
+
+```
+metrics.csv          — epoch,train_loss,val_loss,... (ISO-8601 UTC timestamp column)
+run_metadata.json    — run name, status, total_epochs, device, task (free-form dict)
+graph_metadata.json  — optional graph summary + edge_index for preview (≤200 nodes)
+graph_stats.json     — optional precomputed stats (write with write_graph_stats())
+```
+
+```python
+from tgraphx import write_graph_stats
+write_graph_stats({"num_nodes": 100, "num_edges": 400, "density": 0.04},
+                  "runs/demo/graph_stats.json")
+```
 
 ### Hardware monitoring (optional)
 
 ```bash
-pip install psutil   # CPU %, RAM %, process memory
-pip install pynvml   # NVIDIA GPU util, temperature, VRAM
+pip install "tgraphx[monitoring]"   # psutil + pynvml
 ```
 
-Missing packages are gracefully hidden — no broken charts.
+Missing packages show a compact "unavailable" reason per row — no broken charts.
 
 ---
 
@@ -354,59 +354,73 @@ No `~/.tgraphx` directory or user-level config is created by default.
 
 ## Installation
 
-TGraphX is **not yet published as a stable release on PyPI**. Install from source:
+```bash
+pip install tgraphx
+```
+
+Optional extras:
+
+```bash
+pip install "tgraphx[tracking]"    # TensorBoard integration
+pip install "tgraphx[monitoring]"  # psutil + pynvml (dashboard hardware panel)
+pip install "tgraphx[dev]"         # pytest, build, twine
+```
+
+For a specific PyTorch build (e.g. CPU-only or a particular CUDA version), install PyTorch **before** TGraphX:
+
+```bash
+# CPU-only example
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install tgraphx
+```
+
+**Install from source:**
 
 ```bash
 git clone https://github.com/arashsajjadi/TGraphX.git
 cd TGraphX
-pip install -e .
+pip install -e ".[dev]"
 ```
 
-Runtime dependencies are installed automatically:
-
-```
-torch>=1.13
-torchvision>=0.14
-pyyaml>=5.4
-```
-
-For a specific PyTorch build (e.g., CPU-only or a particular CUDA version), install PyTorch first and then install TGraphX:
-
-```bash
-# Example: CPU-only
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install -e .
-```
-
-See [pytorch.org](https://pytorch.org/get-started/locally/) for GPU-specific install commands. A Conda environment file is provided in [`environment.yml`](environment.yml).
+See [pytorch.org](https://pytorch.org/get-started/locally/) for GPU-specific install commands.
+A Conda environment file is provided at [`environment.yml`](environment.yml).
 
 ---
 
 ## Quickstart
 
+**Vector node features** (simplest case):
+
 ```python
 import torch
-from tgraphx import Graph
-from tgraphx.layers import ConvMessagePassing
+from tgraphx import Graph, LinearMessagePassing, build_model, fit
 
-# 6 nodes, each a 16-channel 8×8 feature map
+# 8 nodes, 32-dimensional vector features
+x = torch.randn(8, 32)
+src = torch.arange(8)
+edge_index = torch.stack([src, (src + 1) % 8])
+
+g = Graph(x, edge_index)
+layer = LinearMessagePassing(in_shape=(32,), out_shape=(64,))
+out = layer(g.node_features, g.edge_index)   # [8, 64]
+out.sum().backward()
+```
+
+**Spatial node features** — `[C, H, W]` preserved through message passing:
+
+```python
+import torch
+from tgraphx import Graph, ConvMessagePassing
+
 N, C, H, W = 6, 16, 8, 8
 node_features = torch.randn(N, C, H, W)
-
-# Directed cycle: 0→1→2→3→4→5→0
 src = torch.arange(N)
-edge_index = torch.stack([src, (src + 1) % N])   # [2, N]
+edge_index = torch.stack([src, (src + 1) % N])
 
-g = Graph(node_features, edge_index)   # validates inputs
-
-layer = ConvMessagePassing(
-    in_shape=(C, H, W),     # per-node input shape
-    out_shape=(32, H, W),   # H and W are preserved; channels expand to 32
-)
+g = Graph(node_features, edge_index)
+layer = ConvMessagePassing(in_shape=(C, H, W), out_shape=(32, H, W))
 out = layer(g.node_features, g.edge_index)   # [6, 32, 8, 8]
-print(out.shape)
-
-out.sum().backward()   # all learned stages are differentiable
+out.sum().backward()
 ```
 
 ---
@@ -1090,12 +1104,13 @@ batch.to(device)
 ## Limitations
 
 - **Scope:** TGraphX provides tensor-aware adaptations of GCN-style, GAT, GraphSAGE, and GIN. It is **not** a drop-in PyTorch Geometric replacement: heterogeneous graphs, temporal graphs, graph transformers, and learned graph construction are all out of scope for the current release.
-- **No graph builders:** Users must supply `edge_index`. Common strategies for image-patch graphs include grid connectivity, kNN on patch centres, and IoU-based adjacency.
-- **No patch extraction:** Users split images into patches before passing them to the model.
 - **`AttentionMessagePassing` is not GAT.** It uses per-edge sigmoid gating without softmax normalisation. Use `TensorGATLayer` for true multi-head GAT.
 - **Scalar attention only in `TensorGATLayer`.** Per-channel and per-pixel attention modes are not implemented.
 - **GAT edge features (vector or spatial → pooled).** `TensorGATLayer` accepts `[E, edge_dim]` vectors and matching-rank spatial tensors (`[E, edge_dim, H, W]` when `spatial_rank=2`, `[E, edge_dim, D, H, W]` when `spatial_rank=3`). Spatial tensors are mean-pooled over their spatial dims before the per-`(edge, head)` attention bias projection — this keeps the scalar-attention regime stable. Mixed-rank edges (e.g. 5-D into a 2-D-configured GAT, or 4-D into a 3-D-configured GAT) raise `NotImplementedError`. `TensorGraphSAGELayer` and `TensorGINLayer` use matching-rank spatial edge tensors directly without pooling.
 - **Node-feature ranks supported.** TGraphX supports vector `[N, D]`, 2-D spatial `[N, C, H, W]`, and 3-D volumetric `[N, C, D, H, W]` node features for the listed layers. It does not claim arbitrary-rank tensor support. Vector node features are handled by `LinearMessagePassing`; 2-D / 3-D by `ConvMessagePassing`, `TensorGATLayer`, `TensorGraphSAGELayer`, and `TensorGINLayer` (with `spatial_rank=2` or `3` at construction time).
+- **Graph builders are included** (`build_grid_graph`, `build_knn_graph`, etc.) but cover common structural patterns only. More complex topology must be supplied as `edge_index` directly.
+- **Patch helpers are included** (`image_to_patches`, `volume_to_patches`) for extracting non-overlapping patches; they require exact-divisible dimensions and do not pad automatically.
+- **Dashboard** is a local-first lightweight monitor, not a TensorBoard replacement. See [Dashboard](#dashboard) and [docs/dashboard.md](docs/dashboard.md) for scope.
 - **Differentiability:** All learned parameters (CNN encoder, message-passing layers, classifier) are end-to-end differentiable. The graph topology (`edge_index`) is user-provided and is not learned by the model.
 
 ## GNN family coverage
@@ -1125,10 +1140,11 @@ batch.to(device)
 ```
 TGraphX/
 ├── tgraphx/
-│   ├── __init__.py          # public API re-exports
+│   ├── __init__.py          # public API re-exports (Graph, layers, builders, training, …)
 │   ├── core/
 │   │   ├── graph.py         # Graph, GraphBatch
 │   │   ├── dataloader.py    # GraphDataset, GraphDataLoader
+│   │   ├── graph_utils.py   # edge topology helpers
 │   │   └── utils.py         # load_config, get_device
 │   ├── layers/
 │   │   ├── base.py             # TensorMessagePassingLayer, LinearMessagePassing
@@ -1137,15 +1153,27 @@ TGraphX/
 │   │   ├── gat.py              # TensorGATLayer (true multi-head GAT)
 │   │   ├── sage.py             # TensorGraphSAGELayer
 │   │   ├── gin.py              # TensorGINLayer / GINEConv
+│   │   ├── factory.py          # make_layer()
 │   │   ├── _scatter.py         # internal: edge_softmax, scatter_*
 │   │   ├── aggregator.py       # DeepCNNAggregator
 │   │   └── safe_pool.py        # SafeMaxPool2d
-│   └── models/
-│       ├── cnn_encoder.py      # CNNEncoder
-│       ├── cnn_gnn_model.py    # CNN_GNN_Model
-│       ├── graph_classifier.py
-│       ├── node_classifier.py
-│       └── pre_encoder.py      # PreEncoder (optional ResNet-18)
+│   ├── models/
+│   │   ├── factory.py          # build_model(), build_model_from_config()
+│   │   ├── edge_predictor.py   # EdgePredictor
+│   │   ├── regressors.py       # NodeRegressor, GraphRegressor
+│   │   ├── graph_classifier.py # GraphClassifier
+│   │   ├── node_classifier.py  # NodeClassifier
+│   │   ├── cnn_encoder.py      # CNNEncoder
+│   │   ├── cnn_gnn_model.py    # CNN_GNN_Model
+│   │   └── pre_encoder.py      # PreEncoder (optional ResNet-18)
+│   ├── graph_builders.py    # build_grid_graph, build_knn_graph, image_to_patches, …
+│   ├── training.py          # train_epoch, evaluate, fit, set_seed, checkpointing, …
+│   ├── tracking.py          # CSVLogger, TensorBoardLogger, write_graph_stats
+│   ├── performance.py       # env_report, recommended_device, estimate_message_memory
+│   └── dashboard/
+│       ├── app.py           # DashboardServer, export_dashboard_html, CLI main()
+│       ├── __init__.py      # launch_dashboard, launch_dashboard_background
+│       └── static/          # dashboard.css, dashboard.js (packaged in wheel)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_imports.py

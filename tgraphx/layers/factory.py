@@ -39,6 +39,10 @@ add_self_loops     bool  self-loops in fwd   (gat)
 negative_slope     float leaky-ReLU slope    (gat)
 normalize          bool  L2-normalise output (sage)
 bias               bool  learnable bias      (gat, sage)
+use_batchnorm      bool  BatchNorm after agg (gin, linear)
+eps                float GIN epsilon         (gin)
+train_eps          bool  learn epsilon       (gin)
+hidden_channels    int   GIN MLP hidden dim  (gin; defaults to out_channels)
 """
 from __future__ import annotations
 
@@ -166,6 +170,10 @@ def make_layer(
         return TensorGINLayer(
             in_channels=in_ch,
             out_channels=out_ch,
+            hidden_channels=kwargs.get("hidden_channels", None),
+            eps=float(kwargs.get("eps", 0.0)),
+            train_eps=bool(kwargs.get("train_eps", False)),
+            use_batchnorm=bool(kwargs.get("use_batchnorm", False)),
             use_edge_features=bool(kwargs.get("use_edge_features", False)),
             edge_dim=kwargs.get("edge_dim", None),
             edge_features_kind=kwargs.get("edge_features_kind", "spatial"),
@@ -180,6 +188,7 @@ def make_layer(
             use_edge_features=bool(kwargs.get("use_edge_features", False)),
             dropout_prob=float(kwargs.get("dropout", 0.0)),
             residual=bool(kwargs.get("residual", False)),
+            use_batchnorm=bool(kwargs.get("use_batchnorm", False)),
         )
 
     if name == "legacy_attention":

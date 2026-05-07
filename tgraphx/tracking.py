@@ -217,17 +217,32 @@ class TensorBoardLogger:
         wall-clock time internally).  All other numeric values are logged
         as scalars.
 
+        Step resolution (explicit zero is respected):
+
+        1. If ``"epoch"`` is present and not ``None``, use ``int(epoch)``.
+        2. Else if ``"step"`` is present and not ``None``, use ``int(step)``.
+        3. Otherwise use the internal auto-step counter and advance it by 1.
+
+        The internal counter is **not** advanced when an explicit
+        ``epoch``/``step`` is provided, so callers that mix both styles
+        stay in sync.
+
         Args:
             **kwargs: Metric key→value pairs.  Non-numeric values and
                 ``"timestamp"`` are silently skipped.
         """
-        step = kwargs.get("epoch") or kwargs.get("step") or self._step
-        self._step += 1
+        if "epoch" in kwargs and kwargs["epoch"] is not None:
+            step = int(kwargs["epoch"])
+        elif "step" in kwargs and kwargs["step"] is not None:
+            step = int(kwargs["step"])
+        else:
+            step = self._step
+            self._step += 1
         for k, v in kwargs.items():
             if k in ("epoch", "step", "timestamp"):
                 continue
             if isinstance(v, (int, float)):
-                self._writer.add_scalar(k, float(v), global_step=int(step))
+                self._writer.add_scalar(k, float(v), global_step=step)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -245,4 +260,59 @@ class TensorBoardLogger:
         return f"TensorBoardLogger(logdir={self._logdir!r})"
 
 
-__all__ = ["CSVLogger", "TensorBoardLogger"]
+def write_graph_stats(graph_obj: Any, path: str) -> None:
+    """Write a precomputed graph-statistics JSON file readable by the dashboard.
+
+    The dashboard's ``/api/graph_stats`` endpoint serves this file from
+    ``{logdir}/graph_stats.json``.  Precomputing the statistics in your
+    training script (rather than on the dashboard server) keeps the server
+    fast and free of heavy graph-library dependencies.
+
+    Supported fields (all optional, pass what you have):
+
+    .. code-block:: python
+
+        write_graph_stats(
+            {
+                "num_nodes": 100,
+                "num_edges": 400,
+                "directed": False,
+                "self_loops": True,
+                "avg_degree": 4.0,
+                "min_degree": 1,
+                "max_degree": 8,
+                "density": 0.04,
+                "connected_components": 1,
+                "isolated_nodes": 0,
+            },
+            path="runs/demo/graph_stats.json",
+        )
+
+    Args:
+        graph_obj: Either a :class:`~tgraphx.Graph` instance or a plain
+            ``dict`` of pre-computed statistics. If a ``Graph`` is passed,
+            ``num_nodes`` and ``num_edges`` are extracted automatically;
+            all other fields are not computed here (pass them explicitly
+            or compute them yourself).
+        path: Destination file path.  Parent directory must exist.
+    """
+    import json as _json
+    import os as _os
+
+    if isinstance(graph_obj, dict):
+        stats: Any = dict(graph_obj)
+    else:
+        # Duck-typed Graph support: pull the two cheapest attributes.
+        stats = {}
+        for attr in ("num_nodes", "num_edges"):
+            if hasattr(graph_obj, attr):
+                val = getattr(graph_obj, attr)
+                stats[attr] = int(val) if hasattr(val, "__int__") else val
+
+    parent = _os.path.dirname(_os.path.abspath(path))
+    _os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        _json.dump(stats, f, ensure_ascii=False, indent=2)
+
+
+__all__ = ["CSVLogger", "TensorBoardLogger", "write_graph_stats"]

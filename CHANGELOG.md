@@ -5,6 +5,135 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+---
+
+## [0.2.0] - 2026-05-07
+
+### Security
+
+- `load_checkpoint` now defaults to `weights_only=True` (safe deserialization)
+  where supported by the installed PyTorch version.
+- Unsafe/legacy checkpoint loading requires explicit opt-in via
+  `weights_only=False` and emits a `UserWarning` on every call.  A clear
+  `RuntimeError` explains how to opt in when safe loading fails.
+
+### Fixed
+
+- Dashboard static assets (`dashboard.css`, `dashboard.js`) now correctly
+  included in wheel/sdist; PyPI-installed users no longer see a blank dashboard.
+- `TensorBoardLogger.log()` now handles `epoch=0` / `step=0` correctly; falsy
+  values no longer fall through to the internal auto-counter.
+- Dashboard `/api/status` no longer reports `epoch=None` when the last CSV row
+  contains `epoch=0`.
+- `LinearMessagePassing` now honours `dropout_prob`, `residual`, and
+  `use_batchnorm` flags; previously the `update()` override discarded them
+  silently.
+- `LinearMessagePassing` now rejects unsupported spatial/volumetric in-shapes
+  with a clear `ValueError` at construction time.
+- `TensorGATLayer(add_self_loops=True)` no longer duplicates self-loops that
+  already exist in `edge_index`.
+- Training utilities no longer hide internal `TypeError` exceptions inside
+  model `forward()` calls; they propagate as `RuntimeError` with context.
+- Failed metric functions emit a one-time `UserWarning` per metric name instead
+  of silently disappearing from results.
+- Float regression targets with shape `[B, 1]` are preserved; only integer
+  `[B, 1]` tensors are squeezed for classification-loss compatibility.
+- Stale `docs/limitations.md` rows for `train_epoch`, `evaluate`, `fit`, and
+  `TensorBoardLogger` corrected; those utilities were fully implemented.
+
+### Added
+
+- Top-level convenience re-exports: `from tgraphx import fit, CSVLogger,
+  env_report, write_graph_stats, ...` works without submodule paths.
+- `make_layer("gin", ...)` now forwards `eps`, `train_eps`, `hidden_channels`,
+  and `use_batchnorm` to `TensorGINLayer`.
+- `make_layer("linear", ...)` now forwards `use_batchnorm`.
+- `set_seed(seed, deterministic=False)`: optional `deterministic=True` sets
+  `cudnn.deterministic = True` and `cudnn.benchmark = False`.
+- Dashboard major upgrade:
+  - Responsive professional layout; phone/tablet/desktop/TV breakpoints.
+  - Okabe-Ito color-blind-safe palette toggle (persisted in localStorage).
+  - Print stylesheet for save-as-PDF via the browser.
+  - Focus-visible ring; skip-to-content link; ARIA labels; reduced-motion.
+  - Pause/resume polling controls; stale-data warning banner.
+  - Range/window selector for chart data (All / Last 100 / 500 / 1000).
+  - Per-chart CSV and SVG export; metrics-table CSV export.
+  - Print/save-as-PDF button.
+  - Copy local and LAN URL tools page.
+  - `/api/config` endpoint (exposes server config, never the token value).
+  - `/api/metrics?since_row=N` incremental rows API.
+  - `/api/runs` and `?run=<name>` multi-run selector.
+  - `/api/graph_stats` endpoint + `write_graph_stats()` helper.
+  - Offline standalone HTML snapshot export (`--export-html` CLI flag;
+    `export_dashboard_html()` Python API).
+  - GPU power draw and thermal status in hardware panel (requires `pynvml`).
+  - Hover tooltip on charts (dependency-free, visual-only).
+  - CLI flags: `--refresh-interval`, `--open-browser`, `--token auto`,
+    `--export-html`, `--max-metric-rows`.
+  - `no-referrer` policy; all user-controlled strings HTML-escaped.
+- `docs/comparison.md`: when to use TGraphX vs PyG / DGL / NetworkX.
+- CI hardening: wheel-install smoke, cross-platform (macOS/Windows), extras
+  smoke, dashboard server and export smoke, risky-claims audit, README checks.
+
+### Changed
+
+- Dashboard `0.0.0.0` banner prints `Local → http://127.0.0.1:<port>` and a
+  best-effort LAN URL with `?token=...` when applicable.
+- `fit(log_level=2)` now produces per-batch progress lines via `train_epoch`.
+- `load_checkpoint` wraps failed safe-mode loads in a `RuntimeError` that
+  explains how to opt in to legacy mode.
+- README/PyPI presentation: TGraphX logo added; PyPI badge added; stale
+  "not yet published" text removed; installation section updated.
+- `pyproject.toml` `Development Status` upgraded from Alpha (3) to Beta (4).
+- Quickstart and API docs are vector-first and current-state focused.
+- Dashboard documentation expanded: security model, export features, device
+  support, accessibility, and troubleshooting guide.
+
+### Documentation
+
+- `docs/quickstart.md` opens with a vector-feature example.
+- `docs/api_reference.md`, `docs/factories.md`, `docs/training_utilities.md`,
+  `docs/performance.md` updated to match current API surface.
+- README Limitations section corrected (graph builders and patch helpers are
+  implemented; stale claims removed).
+- `README.md` installation section updated: TGraphX is on PyPI; PyPI badge
+  and logo added.
+- `docs/comparison.md` — new page covering when to use TGraphX vs PyG / DGL /
+  NetworkX / TensorBoard.
+
+---
+
+## [0.1.2] — 2026-05-07
+
+### Added
+
+- Added the official Colab tutorial link to `README.md` and
+  `docs/quickstart.md` so users can open the interactive notebook directly
+  from the documentation.
+
+### Fixed
+
+- `docs/limitations.md` incorrectly stated that `train_epoch`, `evaluate`,
+  `fit`, and `TensorBoardLogger` were "not implemented". Those utilities are
+  fully implemented in `tgraphx.training` and `tgraphx.tracking`; the
+  limitation page now reflects reality and links to
+  `docs/training_utilities.md`.
+- `docs/api_reference.md` omitted `train_epoch`, `evaluate`, `fit`, and
+  `TensorBoardLogger` from the `tgraphx.training` and `tgraphx.tracking`
+  tables; all four are now documented there.
+- `docs/installation.md` contained a stale version comment
+  (`# e.g. "0.1.1"`) and incorrectly listed `mlflow` as an `[tracking]`
+  extra (it was removed in 0.1.1); both are corrected.
+- `pyproject.toml` was missing a `[tool.setuptools.package-data]` directive,
+  which caused `tgraphx/dashboard/static/dashboard.css` and `dashboard.js`
+  to be excluded from the wheel and sdist. Dashboard served a 404 on those
+  assets for every PyPI-installed user. Static files are now correctly
+  packaged.
+
+---
+
 ## [0.1.1] — 2026-05-05
 
 ### Fixed
@@ -162,5 +291,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+[Unreleased]: https://github.com/arashsajjadi/TGraphX/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.2.0
+[0.1.2]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.1.2
 [0.1.1]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.1.1
 [0.1.0]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.1.0
