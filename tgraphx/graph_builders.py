@@ -38,9 +38,14 @@ do **not** implement learned adjacency.
 """
 from __future__ import annotations
 
+import warnings
 from typing import Optional, Tuple, Union
 
 import torch
+
+# Thresholds above which O(N²) builders emit a runtime warning.
+_KNN_RADIUS_WARN_THRESHOLD = 10_000
+_FC_IOU_WARN_THRESHOLD = 5_000
 
 
 # --------------------------------------------------------------------------- #
@@ -254,6 +259,13 @@ def build_fully_connected_graph(
     if num_nodes < 1:
         raise ValueError(f"num_nodes must be >= 1; got {num_nodes}")
     N = num_nodes
+    if N > _FC_IOU_WARN_THRESHOLD:
+        warnings.warn(
+            f"build_fully_connected_graph: num_nodes={N} > {_FC_IOU_WARN_THRESHOLD}. "
+            f"Edge count is O(N²) ({N * (N - 1)} edges). "
+            f"Memory use grows quadratically — consider a sparser graph builder.",
+            stacklevel=2,
+        )
     idx = torch.arange(N, device=device, dtype=torch.long)
     src = idx.repeat_interleave(N)
     dst = idx.repeat(N)
@@ -303,6 +315,13 @@ def build_knn_graph(
         raise ValueError(
             f"k={k} must be less than num_nodes={N} "
             f"(self is excluded from kNN)"
+        )
+    if N > _KNN_RADIUS_WARN_THRESHOLD:
+        warnings.warn(
+            f"build_knn_graph: num_nodes={N} > {_KNN_RADIUS_WARN_THRESHOLD}. "
+            f"torch.cdist allocates an O(N²) distance matrix ({N}×{N} floats). "
+            f"For large graphs use an approximate-NN library instead.",
+            stacklevel=2,
         )
 
     dist = torch.cdist(coords.float(), coords.float())  # [N, N], O(N^2)
@@ -361,6 +380,13 @@ def build_radius_graph(
         raise ValueError(f"radius must be > 0; got {radius}")
 
     N = coords.size(0)
+    if N > _KNN_RADIUS_WARN_THRESHOLD:
+        warnings.warn(
+            f"build_radius_graph: num_nodes={N} > {_KNN_RADIUS_WARN_THRESHOLD}. "
+            f"torch.cdist allocates an O(N²) distance matrix ({N}×{N} floats). "
+            f"For large graphs use an approximate-NN library instead.",
+            stacklevel=2,
+        )
     dist = torch.cdist(coords.float(), coords.float())  # [N, N]
 
     eye = torch.eye(N, dtype=torch.bool, device=coords.device)
@@ -416,6 +442,13 @@ def build_iou_graph(
         raise ValueError(f"threshold must be in [0, 1]; got {threshold}")
 
     N = boxes.size(0)
+    if N > _FC_IOU_WARN_THRESHOLD:
+        warnings.warn(
+            f"build_iou_graph: num_nodes={N} > {_FC_IOU_WARN_THRESHOLD}. "
+            f"IoU computation allocates an O(N²) matrix ({N}×{N} elements). "
+            f"Memory use grows quadratically — consider a sparser approach for large N.",
+            stacklevel=2,
+        )
     b = boxes.float()
 
     areas = (b[:, 2] - b[:, 0]).clamp(min=0) * (b[:, 3] - b[:, 1]).clamp(min=0)

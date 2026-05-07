@@ -163,14 +163,14 @@ standard path with a warning.  GAT, SAGE, and GIN chunking are deferred
 
 ### Hardware compatibility
 
-| Platform | Forward | AMP | torch.compile | Notes |
-|----------|:-------:|:---:|:-------------:|-------|
-| CPU | ✅ | ⚠️ bfloat16 only | ✅ | Compile overhead may dominate small graphs |
-| CUDA | ✅ | ⚠️ float16 (op-dependent) | ✅ | index_add_ ops require dtype match |
-| MPS (Apple Silicon) | ✅ | limited | ⚠️ | Some ops may not be compiled |
-| Linux | ✅ | ✅ | ✅ | Fully supported |
-| Windows | ✅ | ✅ | ✅ | Fully supported |
-| macOS | ✅ | limited | ⚠️ | MPS support best-effort |
+| Platform | Forward | AMP | torch.compile | CI coverage | Notes |
+|----------|:-------:|:---:|:-------------:|:-----------:|-------|
+| CPU | ✅ | ⚠️ bfloat16 only | ✅ | Full CI | Compile overhead may dominate small graphs |
+| CUDA | ✅ | ⚠️ float16 (op-dependent) | ✅ | Full CI | `index_add_` ops require dtype match |
+| MPS (Apple Silicon) | ✅ | ⚠️ limited | ⚠️ | No CI | Best-effort; some ops may not compile |
+| Linux | ✅ | ✅ | ✅ | Full CI (ubuntu-latest) | Primary CI platform |
+| Windows | ✅ | ✅ | ✅ | No CI | Best-effort; no automated tests |
+| macOS | ✅ | ⚠️ limited | ⚠️ | No CI | MPS support best-effort |
 
 ---
 
@@ -548,10 +548,16 @@ The graph structure — which nodes are connected — is **not learned by the mo
 
 | Layer | Vector `[E, D_e]` | Spatial `[E, C_e, H, W]` |
 |-------|:----:|:----:|
-| `ConvMessagePassing` | ✗ | ✓ (concatenated along channels) |
-| `TensorGATLayer` | ✓ (additive attention bias on logits) | ✗ |
+| `ConvMessagePassing` | ✗ | ✓ (concatenated along channels; channel count must equal node channel count) |
+| `TensorGATLayer` | ✓ (additive attention bias on logits) | ⚠️ accepted; mean-pooled to scalar attention bias (no per-pixel attention) |
 | `TensorGraphSAGELayer` | ✓ (additive channel bias post-`W_neigh`) | ✓ (concatenated to source) |
 | `TensorGINLayer` | ✓ (broadcast bias before ReLU) | ✓ (1×1 Conv2d projection) |
+
+> **TensorGATLayer spatial edge features:** `[E, C_e, H, W]` (or `[E, C_e, D, H, W]` for 3-D nodes) are
+> accepted and mean-pooled over spatial dims before the attention bias projection.  Spatial dims do
+> **not** need to match the node spatial dims.  Mismatched rank (e.g. 5-D edges into a 2-D-configured
+> GAT) raises `NotImplementedError`.  Use `TensorGraphSAGELayer` or `TensorGINLayer` for full
+> spatial edge-feature processing (no pooling).
 
 ---
 
@@ -780,7 +786,7 @@ from tgraphx.layers import ConvMessagePassing
 layer = ConvMessagePassing(
     in_shape=(C, H, W),          # tuple: per-node input shape (spatial only)
     out_shape=(C_out, H, W),     # H and W must stay equal to in_shape's H, W
-    aggr="sum",                  # "sum" (default) | "mean"
+    aggr="sum",                  # "sum" (default) | "mean" | "max"
     use_edge_features=False,     # set True to concatenate edge tensors into messages
     aggregator_params=None,      # dict forwarded to DeepCNNAggregator; e.g.
                                  #   {"num_layers": 2, "dropout_prob": 0.1}
@@ -790,7 +796,9 @@ out = layer(node_features, edge_index)              # [N, C_out, H, W]
 out = layer(node_features, edge_index, edge_features)  # with edge features
 ```
 
-> `aggr="max"` raises `NotImplementedError`. Use `GraphClassifier(pooling="max")` for graph-level max readout.
+> **`aggr="max"`** is supported via `scatter_reduce_(reduce='amax')`.  When `chunk_size` is also
+> set, `aggr="max"` falls back to the unchunked path with a `warnings.warn`.
+> Use `GraphClassifier(pooling="max")` for graph-level max readout.
 
 ### `AttentionMessagePassing`
 
@@ -849,8 +857,14 @@ Attention is **scalar per `(edge, head)`** in this implementation: the
 projected query and key feature maps are mean-pooled over `H × W` before
 being scored, while the value tensors keep their full spatial layout
 during aggregation. Per-pixel and per-channel attention modes are not yet
-supported. **Spatial** edge feature tensors are not supported by this
-layer — use `TensorGraphSAGELayer` or `TensorGINLayer` for those.
+supported.
+
+**Spatial edge features** (`[E, C_e, H, W]` for `spatial_rank=2`;
+`[E, C_e, D, H, W]` for `spatial_rank=3`) are accepted: spatial dims are
+mean-pooled to a channel vector before the per-`(edge, head)` attention bias
+projection (spatial dims need not match node spatial dims).  Use
+`TensorGraphSAGELayer` or `TensorGINLayer` for full spatial edge-feature
+processing without pooling.
 
 ### `TensorGraphSAGELayer`
 
@@ -1098,6 +1112,94 @@ batch.to(device)
 | 3.11 | ≥ 1.13 | CI (ubuntu-latest) |
 | 3.12 | ≥ 1.13 | CI (ubuntu-latest) |
 | 3.9 | ≥ 1.13 | Should work; not in CI |
+
+---
+
+## Support status
+
+### Legend
+
+| Label | Meaning |
+|-------|---------|
+| ✅ Stable | Tested in CI; API is stable |
+| 🧪 Experimental | Available but not yet guaranteed-stable |
+| ⚠️ Best-effort | Works in practice; known constraints documented |
+| ⏳ Planned | On roadmap; not yet implemented |
+| ❌ Not supported | Out of scope for the current release |
+| 🔒 Opt-in | Disabled by default; explicitly enabled by the user |
+
+### Backend support
+
+| Backend | Forward | AMP | torch.compile | CI coverage | Status | Notes |
+|---------|:-------:|:---:|:-------------:|:-----------:|:------:|-------|
+| CPU | ✅ | ⚠️ bfloat16 | ✅ | Full CI | ✅ Stable | Compile overhead for small graphs |
+| CUDA | ✅ | ⚠️ op-dependent | ✅ | Full CI | ✅ Stable | `index_add_` requires dtype match under float16 |
+| MPS (Apple Silicon) | ✅ | ⚠️ limited | ⚠️ partial | No CI | ⚠️ Best-effort | PyTorch operator coverage varies |
+| Linux | ✅ | ✅ | ✅ | Full CI (ubuntu-latest) | ✅ Stable | Primary CI platform |
+| Windows | ✅ | ✅ | ✅ | No CI | ⚠️ Best-effort | Not in CI; known to install correctly |
+| macOS | ✅ | ⚠️ limited | ⚠️ | No CI | ⚠️ Best-effort | MPS path; no CI coverage |
+| Multi-GPU | ❌ | ❌ | ❌ | No CI | ❌ Not supported | — |
+
+> ⚠️ **Best-effort backend:** MPS support depends on PyTorch operator coverage per release.
+> CPU workflows are tested; MPS-specific AMP/compile paths may fall back or be skipped.
+>
+> ⚠️ **Windows/macOS:** The package installs and runs on Windows and macOS, but automated tests
+> run on Ubuntu only.  Regressions on those platforms may not be caught until user reports.
+
+### Feature support
+
+| Feature | Status | Notes |
+|---------|:------:|-------|
+| Vector node features `[N, D]` | ✅ Stable | `LinearMessagePassing`, `"linear"` factory |
+| 2-D spatial node features `[N, C, H, W]` | ✅ Stable | All four spatial layers |
+| 3-D volumetric node features `[N, C, D, H, W]` | ✅ Stable | `spatial_rank=3` |
+| Arbitrary-rank tensors (rank ≥ 4) | ❌ Not supported | Only vector, 2-D, 3-D |
+| Edge weights `[E]` | ✅ Stable | All layers |
+| Vector edge features `[E, D_e]` | ✅ Stable | GAT, SAGE, GIN |
+| Spatial edge features `[E, C_e, H, W]` | ⚠️ Best-effort | ConvMP (concat); GAT (mean-pooled); SAGE/GIN (full) |
+| Volumetric edge features `[E, C_e, D, H, W]` | ⚠️ Best-effort | Same as spatial; `spatial_rank=3` |
+| Graph Transformer | ❌ Not supported | ⏳ Planned v0.2.5 feasibility study |
+| Heterogeneous graphs | ❌ Not supported | ⏳ Planned v0.2.5+ |
+| Temporal graphs | ❌ Not supported | ⏳ Planned v0.2.5+ |
+| Learned graph construction | ❌ Not supported | `edge_index` is always user-supplied |
+| PyG/DGL converters | ❌ Not supported | ⏳ Planned v0.2.5 |
+| MLflowLogger | ❌ Not supported | Use `mlflow` client directly |
+| Dashboard | 🔒 Opt-in | Launch explicitly; zero overhead when off |
+| Offline dashboard export | ✅ Stable | `--export-html` or `export_dashboard_html()` |
+| Multi-run dashboard | ✅ Stable | Point `--logdir` at parent directory |
+| Hardware monitoring | 🔒 Opt-in | `pip install "tgraphx[monitoring]"` |
+| TensorBoard logging | 🔒 Opt-in | `pip install "tgraphx[tracking]"`; `TensorBoardLogger` |
+
+### Scalability support
+
+| Feature | Status | Notes |
+|---------|:------:|-------|
+| `ConvMessagePassing` chunked forward | ✅ Stable | `aggr="sum"` / `"mean"`; max falls back with warning |
+| `TensorGraphSAGELayer` chunked forward | ⏳ Planned v0.2.3 | Deferred |
+| `TensorGINLayer` chunked forward | ⏳ Planned v0.2.3 | Deferred |
+| `TensorGATLayer` chunked forward | ⏳ Planned v0.2.3+ | Destination-wise softmax makes chunking complex |
+| `build_grid_graph` / `build_grid_graph_3d` | ✅ Stable | O(E) — scales well |
+| `build_random_graph` | ✅ Stable | O(E) — scales well |
+| `build_knn_graph` / `build_radius_graph` | ⚠️ Best-effort | O(N²) via `torch.cdist`; N > 10 000 emits a warning |
+| `build_fully_connected_graph` / `build_iou_graph` | ⚠️ Best-effort | O(N²) edges; N > 5 000 emits a warning |
+| Dashboard metrics API | ✅ Stable | Incremental `?since_row=N`; `--max-metric-rows` cap |
+| Large `metrics.csv` tail-read | ⏳ Planned v0.2.3 | Current: mtime cache + full re-parse on miss |
+
+> ⚠️ **Scalability warning:** `build_knn_graph`, `build_radius_graph`, `build_fully_connected_graph`,
+> and `build_iou_graph` use pairwise `torch.cdist` or enumerate all pairs.  Memory and time grow as
+> **O(N²)**.  A `warnings.warn` is emitted when node count exceeds the threshold (10 000 for kNN/radius,
+> 5 000 for fully-connected/IoU).  For large graphs use an approximate-NN library instead.
+
+### Attention support
+
+| Feature | Status | Notes |
+|---------|:------:|-------|
+| Scalar attention per `(edge, head)` | ✅ Stable | Default in `TensorGATLayer` |
+| Vector edge attention bias | ✅ Stable | `use_edge_features=True, edge_dim=D` |
+| Spatial edge attention bias (2-D/3-D) | ⚠️ Best-effort | Accepted; mean-pooled to scalar before projection |
+| Per-channel attention | ❌ Not supported | ⏳ Planned v0.2.4 |
+| Per-pixel attention | ❌ Not supported | ⏳ Planned v0.2.4 |
+| Per-voxel attention | ❌ Not supported | ⏳ Planned v0.2.4 |
 
 ---
 

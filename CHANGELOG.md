@@ -1,5 +1,22 @@
 # Changelog
 
+
+## [0.2.1] - 2026-05-07
+
+### Fixed
+- Corrected README/support-table contradictions around TensorGATLayer spatial and volumetric edge features.
+- Corrected stale ConvMessagePassing `aggr="max"` documentation.
+- Replaced overconfident Windows/macOS support wording with best-effort/no-CI wording.
+
+### Added
+- Added README support-status legend and backend/feature/scalability/attention support tables.
+- Added runtime O(N²) warnings for large fully connected, kNN, radius, and IoU graph builders.
+- Added documentation-claim regression tests.
+- Added `docs/roadmap.md`.
+
+### Changed
+- Made README and docs more explicit about supported, best-effort, planned, and unsupported features.
+
 All notable changes to TGraphX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
