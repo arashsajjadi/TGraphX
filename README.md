@@ -81,39 +81,51 @@ what is stable, what is experimental, and what is intentionally out of scope.
 Full details are in [docs/limitations.md](docs/limitations.md) and
 [docs/roadmap.md](docs/roadmap.md).
 
-### Optional and experimental features (v0.2.4)
+### Optional and experimental capabilities
 
 | Feature | Status | Install / usage |
 |---------|:------:|---------|
-| `TensorGATLayer(attention_mode="channel")` | 🧪 Experimental | Constructor argument |
-| `TensorGATLayer(chunk_size=K)` forward | ✅ Stable | `forward(chunk_size=K)` |
-| `GraphTransformerLayer` (vector features only) | 🧪 Experimental | `from tgraphx.layers.graph_transformer import GraphTransformerLayer` |
-| `HeteroGraph` container | 🧪 Experimental | `from tgraphx.core.hetero_graph import HeteroGraph` |
-| `TemporalGraphSequence` container | 🧪 Experimental | `from tgraphx.core.temporal import TemporalGraphSequence` |
-| `MLflowLogger` | ✅ Opt-in | `pip install mlflow` or `pip install "tgraphx[mlflow]"` |
-| PyG / DGL converters | ✅ Opt-in | `from tgraphx.interop import to_pyg_data, to_dgl_graph, …` |
-| Learned graph helpers | ✅ Stable | `from tgraphx.learned_graph import soft_adjacency_from_embeddings, EdgeScorer, …` |
+| `TensorGATLayer(attention_mode="channel")` | 🧪 Experimental | Constructor argument; per-channel attention |
+| `TensorGATLayer(chunk_size=K)` two-pass chunked forward | ✅ Stable | `forward(chunk_size=K)` (log-sum-exp) |
+| `GraphTransformerLayer` (vector node features) | 🧪 Experimental | `from tgraphx.layers.graph_transformer import GraphTransformerLayer` |
+| Positional / structural encodings (degree, Laplacian, adjacency bias) | 🧪 Experimental | `tgraphx.layers.transformer_encodings` |
+| `HeteroGraph` + `HeteroGraphBatch` + `HeteroConv` + classifiers | 🧪 Experimental | `tgraphx.HeteroGraph`, `HeteroGraphBatch`, `tgraphx.layers.hetero.HeteroConv`, `tgraphx.models.hetero_models.*` |
+| `TemporalGraphSequence` + `TemporalGraphBatch` + readout + classifiers | 🧪 Experimental | `tgraphx.TemporalGraphSequence`, `TemporalGraphBatch`, `tgraphx.layers.temporal_readout`, `tgraphx.models.temporal_models.*` |
+| Subgraph / k-hop / neighbour / random-walk sampling | ✅ Stable | `tgraphx.sampling`, `tgraphx.SubgraphDataLoader`, `tgraphx.NeighborSamplerLoader` |
+| Hetero / temporal sampling (v0.2.8) | ✅ Stable | `tgraphx.hetero_induced_subgraph`, `tgraphx.hetero_neighbor_sample`, `tgraphx.temporal_window_sample`, `tgraphx.temporal_window_sample_batch` |
+| Distributed (DDP) helpers | ✅ Stable | `tgraphx.distributed`; never auto-initialises DDP |
+| `MLflowLogger` | ✅ Opt-in | `pip install "tgraphx[mlflow]"`; lazy `mlflow` import |
+| PyG / DGL data converters (homogeneous + hetero) | ✅ Opt-in | `tgraphx.interop` (lazy imports) |
+| Learned graph helpers | ✅ Stable | `tgraphx.learned_graph` |
 | Patch helper `padding="auto"` | ✅ Stable | `image_to_patches(imgs, ps, padding="auto")` |
 | Hardware monitoring dashboard | 🔒 Opt-in | `pip install "tgraphx[monitoring]"` |
 | TensorBoard logging | 🔒 Opt-in | `pip install "tgraphx[tracking]"` |
 
-### Scope boundaries (design decisions, not bugs)
+### Scope boundaries (true design limits)
 
-- **Spatial / volumetric node features:** `[N, D]`, `[N, C, H, W]`, and
-  `[N, C, D, H, W]` are the supported shapes.  Arbitrary-rank tensors
-  (rank ≥ 5 node features) are out of scope.
-- **GAT per-pixel / per-voxel attention:** score tensors would be
-  `O(E × K × H × W)` — prohibitive for typical spatial GNN workloads.
-  Planned for a future release after memory analysis.
-- **Full hetero/temporal GNN layers:** `HeteroGraph` and
-  `TemporalGraphSequence` are *containers*, not GNN implementations.
-- **PyG/DGL drop-in compatibility:** TGraphX is not a replacement.
-  The optional converters transfer data only; APIs differ.
-- **Neighbor sampling, distributed training, multi-GPU:** out of scope
-  for the current release.
-- **Profiling and file writes:** disabled by default; all are opt-in.
+These are intentional, not bugs.  Detailed write-ups live in
+[docs/limitations.md](docs/limitations.md); the roadmap is in
+[docs/roadmap.md](docs/roadmap.md).
 
-See [docs/roadmap.md](docs/roadmap.md) for the v0.2.5+ planned items.
+- **Supported node feature ranks:** `[N, D]`, `[N, C, H, W]`, and
+  `[N, C, D, H, W]`.  A universal arbitrary-rank layer that works
+  across every existing layer is a v0.3 design discussion.
+- **GAT per-pixel / per-voxel attention:** naive score tensors would
+  be `O(E · K · H · W)` — memory-prohibitive for typical spatial GNN
+  workloads.  Memory-safe variants (factorised / windowed / low-rank)
+  are deferred until designed honestly.  Per-channel attention is
+  shipped as `attention_mode="channel"`.
+- **PyG / DGL drop-in compatibility:** TGraphX is *not* a replacement.
+  `tgraphx.interop` ships data converters; layer APIs differ.
+- **Multi-GPU training framework:** TGraphX provides rank-zero /
+  world-size DDP *helpers* and a single-process smoke example.
+  Production-grade automatic multi-GPU training is the user's
+  responsibility (and is intentionally not bundled).
+- **Recurrent temporal memory (TGN / TGAT-style):** temporal workflows
+  use a stateless snapshot-loop pattern.  Memory-aware temporal
+  architectures are an open design question.
+- **Profiling and file writes:** disabled by default; every logger,
+  dashboard, and checkpoint write is opt-in.
 
 ---
 
@@ -163,13 +175,13 @@ python examples/mixed_precision_inference.py  # autocast forward demo (finite-ou
 python examples/memory_report.py             # env report + memory estimates
 ```
 
-**AMP policy (v0.2.2):**
+**AMP policy:**
 
 | Backend | Recommended dtype | Status | Notes |
 |---------|:-----------------:|:------:|-------|
-| CPU | bfloat16 | ⚠️ Best-effort | Tested in CI |
-| CUDA | float16 / bfloat16 | ⚠️ Best-effort | bfloat16 needs Ampere+ |
-| MPS | — | ❌ Not tested | PyTorch operator coverage varies |
+| CPU | bfloat16 | ✅ Tested | Covered by `tests/test_amp_compile.py` in full Linux CI |
+| CUDA | float16 / bfloat16 | ⚠️ Best-effort | Behaviour fixed in v0.2.2; bfloat16 needs Ampere+ |
+| MPS | — | ⚠️ Best-effort | PyTorch operator coverage varies; not in CI |
 
 v0.2.2 fixes: `broadcast_edge_weight` casts edge weights to activation dtype;
 `TensorGATLayer` casts attention weights before `index_add_`; `edge_softmax`
@@ -189,19 +201,25 @@ out = layer(x, edge_index, chunk_size=512)
 ```
 
 Supported aggregations: `"sum"` and `"mean"`.  `"max"` falls back to the
-standard path with a warning.  SAGE and GIN also support `chunk_size`; GAT
-uses a two-pass algorithm — all four layers accept `chunk_size` in `forward()`.
+standard path with a warning.  All four message-passing layers accept
+`chunk_size` in `forward()`:
+
+- `ConvMessagePassing`: sum / mean (max falls back).
+- `TensorGraphSAGELayer`: mean / max.
+- `TensorGINLayer`: sum.
+- `TensorGATLayer`: two-pass log-sum-exp.  Output matches unchunked
+  within float32 tolerance.
 
 ### Hardware compatibility
 
 | Platform | Forward | AMP | torch.compile | CI coverage | Notes |
 |----------|:-------:|:---:|:-------------:|:-----------:|-------|
-| CPU | ✅ | ⚠️ bfloat16 only | ✅ | Full CI | Compile overhead may dominate small graphs |
-| CUDA | ✅ | ⚠️ float16 (op-dependent) | ✅ | Full CI | `index_add_` ops require dtype match |
-| MPS (Apple Silicon) | ✅ | ⚠️ limited | ⚠️ | No CI | Best-effort; some ops may not compile |
-| Linux | ✅ | ✅ | ✅ | Full CI (ubuntu-latest) | Primary CI platform |
-| Windows | ✅ | ✅ | ✅ | No CI | Best-effort; no automated tests |
-| macOS | ✅ | ⚠️ limited | ⚠️ | No CI | MPS support best-effort |
+| CPU | ✅ | ⚠️ bfloat16 only | ✅ | Full CI (Ubuntu) | Compile overhead may dominate small graphs |
+| CUDA | ✅ | ⚠️ float16 (op-dependent) | ✅ | Local tests only | `index_add_` ops require dtype match; no GPU runners in CI |
+| MPS (Apple Silicon) | ✅ | ⚠️ limited | ⚠️ | Smoke CI (macOS) | Best-effort; PyTorch op coverage varies |
+| Linux | ✅ | ✅ | ✅ | Full CI (ubuntu-latest, Py 3.10/3.11/3.12) | Primary CI platform |
+| Windows | ✅ | ✅ | ✅ | Smoke CI (Py 3.11) | Imports + build + dashboard CLI smoke |
+| macOS | ✅ | ⚠️ limited | ⚠️ | Smoke CI (Py 3.11) | Same surface as Windows smoke |
 
 ---
 
@@ -701,6 +719,14 @@ model = build_model_from_config("config.yaml")
 
 ## Examples
 
+Run every fast example in one go:
+
+```bash
+python examples/run_all_fast_examples.py
+```
+
+Individual demos:
+
 ```bash
 # Tensor-aware GCN-style spatial message passing
 python examples/minimal_spatial_message_passing.py
@@ -708,8 +734,7 @@ python examples/minimal_spatial_message_passing.py
 # Graph classification — short training loop with synthetic data
 python examples/minimal_graph_classifier.py
 
-# Tensor-aware multi-head GAT (verifies that attention weights sum to 1
-# per destination per head)
+# Tensor-aware multi-head GAT (attention weights sum to 1 per destination per head)
 python examples/tensor_gat_minimal.py
 
 # Tensor-aware GraphSAGE (mean / max / with-edge-features variants)
@@ -718,33 +743,51 @@ python examples/tensor_graphsage_minimal.py
 # Custom user-defined message-passing layer subclass
 python examples/custom_message_passing.py
 
-# Trainability sanity: tiny overfit on a relational synthetic task with GAT
+# Trainability sanity: tiny overfit per GNN family
 python examples/tiny_overfit_tensor_gat.py
-
-# Edge-feature dependency: GAT/GIN/SAGE with vector edge features
 python examples/tiny_overfit_edge_features.py
 
-# Deep 8-layer stack gradient sanity for every GNN family
+# Deep 8-layer stack gradient sanity
 python examples/gradient_sanity_stack.py
 
-# Graph builder directedness and self-loop demo
+# Graph builders + patch helpers
 python examples/directed_vs_undirected_graphs.py
-
-# 2-D image → patch → GNN (ConvMP + GAT)
 python examples/image_patch_graph.py
-
-# 3-D volume → patch → GNN (ConvMP + GAT)
 python examples/volume_patch_graph.py
-
-# All four GNN families on a 2-D and 3-D grid graph
 python examples/gnn_family_with_graph_builders.py
 
-# Factory examples (graph builders + model factories)
+# Factory + model examples (numbered)
 python examples/01_vector_node_classification.py
 python examples/02_spatial_graph_classification.py
 python examples/03_volumetric_graph_classification.py
 python examples/04_config_based_model.py
 python examples/05_edge_prediction.py
+
+# Hetero / temporal / sampling / transformer demos
+python examples/hetero_graph_batch_demo.py
+python examples/hetero_graph_classifier_demo.py
+python examples/temporal_graph_batch_demo.py
+python examples/temporal_graph_classifier_demo.py
+python examples/neighbor_sampling_demo.py
+python examples/sampling_demo_v028.py        # random-walk + hetero + temporal sampling (v0.2.8)
+python examples/graph_transformer_demo.py
+python examples/gat_chunking_demo.py
+python examples/v024_new_features.py
+
+# Distributed-training helpers (single-process smoke)
+python examples/ddp_training_smoke.py
+
+# Performance / hardware
+python examples/memory_report.py
+python examples/mixed_precision_inference.py
+python examples/torch_compile_benchmark.py
+
+# Training + dashboard
+python examples/training_minimal_fit.py
+python examples/training_with_csvlogger.py
+python examples/training_with_tensorboard.py
+python examples/training_with_dashboard.py
+python examples/checkpoint_save_load.py
 ```
 
 ---
@@ -1127,10 +1170,10 @@ device = get_device(device_id=1)  # specific CUDA device
 
 | Device | Status |
 |--------|--------|
-| CPU | Tested (CI) |
-| NVIDIA CUDA | Tested (PyTorch 2.10, CUDA 12.8) |
-| Apple Silicon MPS | Code path exists in `get_device()`; not yet in CI |
-| Multi-GPU | Not supported |
+| CPU | ✅ Tested in full CI (Ubuntu 3.10 / 3.11 / 3.12) |
+| NVIDIA CUDA | ✅ Locally tested (PyTorch 2.x); no GPU runners in CI |
+| Apple Silicon MPS | ⚠️ Best-effort; macOS smoke CI imports + builds only |
+| Multi-GPU (DDP) | 🧰 Helpers shipped (`tgraphx.distributed`); full automatic DDP training framework intentionally out of scope |
 
 ```python
 from tgraphx.core.utils import get_device
@@ -1147,10 +1190,11 @@ batch.to(device)
 
 | Python | PyTorch | Status |
 |--------|---------|--------|
-| 3.10 | ≥ 1.13 | CI (ubuntu-latest) |
-| 3.11 | ≥ 1.13 | CI (ubuntu-latest) |
-| 3.12 | ≥ 1.13 | CI (ubuntu-latest) |
-| 3.9 | ≥ 1.13 | Should work; not in CI |
+| 3.10 | ≥ 1.13 | ✅ CI (ubuntu-latest) |
+| 3.11 | ≥ 1.13 | ✅ CI (ubuntu-latest, macos-latest, windows-latest) |
+| 3.12 | ≥ 1.13 | ✅ CI (ubuntu-latest) |
+| 3.9 | ≥ 1.13 | Listed in classifiers; not in CI matrix — should work but unverified |
+| 3.13 | ≥ 1.13 | Listed in classifiers; not in CI matrix — should work but unverified |
 
 ---
 
@@ -1171,19 +1215,19 @@ batch.to(device)
 
 | Backend | Forward | AMP | torch.compile | CI coverage | Status | Notes |
 |---------|:-------:|:---:|:-------------:|:-----------:|:------:|-------|
-| CPU | ✅ | ⚠️ bfloat16 | ✅ | Full CI | ✅ Stable | Compile overhead for small graphs |
-| CUDA | ✅ | ⚠️ op-dependent | ✅ | Full CI | ✅ Stable | `index_add_` requires dtype match under float16 |
-| MPS (Apple Silicon) | ✅ | ⚠️ limited | ⚠️ partial | No CI | ⚠️ Best-effort | PyTorch operator coverage varies |
+| CPU | ✅ | ⚠️ bfloat16 | ✅ | Full CI (Ubuntu Py 3.10/3.11/3.12) | ✅ Stable | Compile overhead for small graphs |
+| CUDA | ✅ | ⚠️ op-dependent | ✅ | Local only — no GPU runners | ✅ Stable | `index_add_` requires dtype match under float16 |
+| MPS (Apple Silicon) | ✅ | ⚠️ limited | ⚠️ partial | macOS smoke CI (import + build) | ⚠️ Best-effort | PyTorch operator coverage varies |
 | Linux | ✅ | ✅ | ✅ | Full CI (ubuntu-latest) | ✅ Stable | Primary CI platform |
-| Windows | ✅ | ✅ | ✅ | No CI | ⚠️ Best-effort | Not in CI; known to install correctly |
-| macOS | ✅ | ⚠️ limited | ⚠️ | No CI | ⚠️ Best-effort | MPS path; no CI coverage |
-| Multi-GPU | ❌ | ❌ | ❌ | No CI | ❌ Not supported | — |
+| Windows | ✅ | ✅ | ✅ | Smoke CI (Py 3.11) | ⚠️ Best-effort | Imports + build + twine + dashboard CLI |
+| macOS | ✅ | ⚠️ limited | ⚠️ | Smoke CI (Py 3.11) | ⚠️ Best-effort | MPS path; same smoke as Windows |
+| Multi-GPU (DDP) | 🧰 helpers | ⚠️ user-managed | ⚠️ user-managed | No CI | 🧰 Helpers only | Rank-zero / world-size / barrier; full multi-GPU framework out of scope |
 
 > ⚠️ **Best-effort backend:** MPS support depends on PyTorch operator coverage per release.
-> CPU workflows are tested; MPS-specific AMP/compile paths may fall back or be skipped.
+> CPU workflows are fully tested; MPS-specific AMP/compile paths may fall back or be skipped.
 >
-> ⚠️ **Windows/macOS:** The package installs and runs on Windows and macOS, but automated tests
-> run on Ubuntu only.  Regressions on those platforms may not be caught until user reports.
+> ⚠️ **Windows/macOS smoke CI:** automated import, build, twine-check, and dashboard CLI smoke
+> on every pull request.  Full pytest still runs on Ubuntu only.
 
 ### Feature support
 
@@ -1192,16 +1236,16 @@ batch.to(device)
 | Vector node features `[N, D]` | ✅ Stable | `LinearMessagePassing`, `"linear"` factory |
 | 2-D spatial node features `[N, C, H, W]` | ✅ Stable | All four spatial layers |
 | 3-D volumetric node features `[N, C, D, H, W]` | ✅ Stable | `spatial_rank=3` |
-| Arbitrary-rank tensors (rank ≥ 4) | ❌ Not supported | Only vector, 2-D, 3-D |
+| Arbitrary-rank tensors (rank ≥ 4 trailing) | ⛔ Out of scope | Only vector, 2-D, and 3-D layouts ship — see Scope boundaries |
 | Edge weights `[E]` | ✅ Stable | All layers |
 | Vector edge features `[E, D_e]` | ✅ Stable | GAT, SAGE, GIN |
-| Spatial edge features `[E, C_e, H, W]` | ⚠️ Best-effort | ConvMP (concat); GAT (mean-pooled); SAGE/GIN (full) |
-| Volumetric edge features `[E, C_e, D, H, W]` | ⚠️ Best-effort | Same as spatial; `spatial_rank=3` |
-| Graph Transformer (vector node features only) | 🧪 Experimental | `tgraphx.layers.graph_transformer.GraphTransformerLayer`; tensor-aware variant ⏳ planned |
-| Heterogeneous graphs (container + batch + HeteroConv + classifiers) | 🧪 Experimental | `HeteroGraph`, `HeteroGraphBatch`, `HeteroConv`, `HeteroGraphClassifier`, `HeteroNodeClassifier`; vector node features only |
-| Temporal graphs (container + batch + readout + classifier) | 🧪 Experimental | `TemporalGraphSequence`, `TemporalGraphBatch`, `temporal_readout`, `TemporalGraphClassifier`/`Regressor`; snapshot-loop pattern, no recurrent memory module |
+| Spatial edge features `[E, C_e, H, W]` | ⚠️ Best-effort | ConvMP (concat); GAT (mean-pooled scalar bias); SAGE/GIN (full) |
+| Volumetric edge features `[E, C_e, D, H, W]` | ⚠️ Best-effort | Same as spatial; pass `spatial_rank=3` |
+| `GraphTransformerLayer` (vector node features) | 🧪 Experimental | `tgraphx.layers.graph_transformer.GraphTransformerLayer`; positional / Laplacian / edge-bias supported |
+| Heterogeneous graphs (container + batch + `HeteroConv` + classifiers) | 🧪 Experimental | `HeteroGraph`, `HeteroGraphBatch`, `HeteroConv`, `HeteroGraphClassifier`, `HeteroNodeClassifier`; vector node features |
+| Temporal graphs (container + batch + readout + classifiers) | 🧪 Experimental | `TemporalGraphSequence`, `TemporalGraphBatch`, `temporal_readout`, `TemporalGraphClassifier`, `TemporalGraphRegressor`; snapshot-loop pattern (no recurrent memory module) |
 | Learned graph construction (soft adjacency, edge scorer) | ✅ Stable | `tgraphx.learned_graph` — discrete top-k is non-differentiable |
-| PyG / DGL converters | ✅ Opt-in | `tgraphx.interop` — data converters only, not API replacement |
+| PyG / DGL data converters (homogeneous + hetero) | ✅ Opt-in | `tgraphx.interop` — lazy imports; data-only, not API replacement |
 | MLflowLogger | ✅ Opt-in | Lazy `mlflow` import; `pip install "tgraphx[mlflow]"` |
 | Dashboard | 🔒 Opt-in | Launch explicitly; zero overhead when off |
 | Offline dashboard export | ✅ Stable | `--export-html` or `export_dashboard_html()` |
@@ -1214,19 +1258,20 @@ batch.to(device)
 | Feature | Status | Notes |
 |---------|:------:|-------|
 | `ConvMessagePassing` chunked forward | ✅ Stable | `aggr="sum"` / `"mean"`; max falls back with warning |
-| `TensorGraphSAGELayer` chunked forward | ✅ Stable | v0.2.3; mean and max; pass `chunk_size=K` to `forward()` |
-| `TensorGINLayer` chunked forward | ✅ Stable | v0.2.3; sum aggregation; pass `chunk_size=K` to `forward()` |
-| `TensorGATLayer` chunked forward | ⏳ Planned v0.2.4 | Requires two-pass algorithm for destination-wise softmax |
+| `TensorGraphSAGELayer` chunked forward | ✅ Stable | mean and max; pass `chunk_size=K` to `forward()` |
+| `TensorGINLayer` chunked forward | ✅ Stable | sum aggregation; pass `chunk_size=K` to `forward()` |
+| `TensorGATLayer` chunked forward | ✅ Stable | Two-pass log-sum-exp; pass `chunk_size=K` to `forward()`; output matches unchunked within float32 tolerance |
 | `build_grid_graph` / `build_grid_graph_3d` | ✅ Stable | O(E) — scales well |
-| `build_random_graph` | ✅ Stable | O(E) — scales well |
+| `build_random_graph` | ✅ Stable | O(E) sample mode for large N |
 | `build_knn_graph` / `build_radius_graph` | ⚠️ Best-effort | O(N²) time; `chunk_size=K` reduces peak memory to O(K×N) |
 | `build_fully_connected_graph` | ⚠️ Best-effort | O(N²) edges; N > 5 000 emits warning |
 | `build_iou_graph` | ⚠️ Best-effort | O(N²) IoU; `chunk_size=K` reduces peak memory to O(K×N) |
-| `build_random_graph` | ✅ Stable | `algorithm="sample"` uses O(num_edges) memory for large N |
-| Dashboard metrics API | ✅ Stable | Incremental `?since_row=N`; `--max-metric-rows` cap; byte-seek tail-read (v0.2.3) |
-| Large `metrics.csv` tail-read | ✅ Stable | v0.2.3: byte-seek on append; full reparse on rotation/truncation |
-| Subgraph / k-hop / neighbour sampling | ✅ Stable v0.2.6 | `tgraphx.sampling` + `SubgraphDataLoader` / `NeighborSamplerLoader` |
-| Distributed helpers (rank-zero, barrier) | ✅ Stable v0.2.6 | `tgraphx.distributed`; never auto-initialises DDP |
+| Dashboard metrics API | ✅ Stable | Incremental `?since_row=N`; `--max-metric-rows` cap; byte-seek tail-read |
+| Subgraph / k-hop / neighbour sampling | ✅ Stable | `tgraphx.sampling` + `SubgraphDataLoader` / `NeighborSamplerLoader` |
+| Random-walk sampling | ✅ Stable | `random_walk_sample(graph, seeds, walk_length, …)`; deterministic with `seed` |
+| Hetero sampling (induced + per-relation neighbour) | ✅ Stable | `tgraphx.hetero_induced_subgraph`, `tgraphx.hetero_neighbor_sample` |
+| Temporal window sampling (sequence + batch) | ✅ Stable | `tgraphx.temporal_window_sample`, `tgraphx.temporal_window_sample_batch` |
+| Distributed (DDP) helpers | ✅ Stable | `tgraphx.distributed`: rank-zero, world-size, barrier; never auto-initialises DDP |
 
 > ⚠️ **Scalability warning:** `build_knn_graph`, `build_radius_graph`, `build_fully_connected_graph`,
 > and `build_iou_graph` use pairwise `torch.cdist` or enumerate all pairs.  Memory and time grow as
@@ -1237,26 +1282,64 @@ batch.to(device)
 
 | Feature | Status | Notes |
 |---------|:------:|-------|
-| Scalar attention per `(edge, head)` | ✅ Stable | Default in `TensorGATLayer` |
+| Scalar attention per `(edge, head)` | ✅ Stable | Default `attention_mode="scalar"` |
+| Per-channel attention per `(edge, head, channel)` | 🧪 Experimental | `attention_mode="channel"`; score tensor `[E, K, C_head]` |
 | Vector edge attention bias | ✅ Stable | `use_edge_features=True, edge_dim=D` |
-| Spatial edge attention bias (2-D/3-D) | ⚠️ Best-effort | Accepted; mean-pooled to scalar before projection |
-| Per-channel attention | ❌ Not supported | ⏳ Planned v0.2.4 |
-| Per-pixel attention | ❌ Not supported | ⏳ Planned v0.2.4 |
-| Per-voxel attention | ❌ Not supported | ⏳ Planned v0.2.4 |
+| Spatial edge attention bias (2-D / 3-D) | ⚠️ Best-effort | Accepted; mean-pooled to scalar before projection |
+| Per-pixel attention | ⛔ Out of scope | Naive `[E, K, H, W]` score tensor is memory-prohibitive; deferred until a memory-safe variant is designed |
+| Per-voxel attention | ⛔ Out of scope | Same reason as per-pixel; `[E, K, D, H, W]` score tensor is memory-prohibitive |
 
 ---
 
 ## Limitations
 
-- **Scope:** TGraphX provides tensor-aware adaptations of GCN-style, GAT, GraphSAGE, and GIN. It is **not** a drop-in PyTorch Geometric replacement: heterogeneous graphs, temporal graphs, graph transformers, and learned graph construction are all out of scope for the current release.
-- **`AttentionMessagePassing` is not GAT.** It uses per-edge sigmoid gating without softmax normalisation. Use `TensorGATLayer` for true multi-head GAT.
-- **Scalar attention only in `TensorGATLayer`.** Per-channel and per-pixel attention modes are not implemented.
-- **GAT edge features (vector or spatial → pooled).** `TensorGATLayer` accepts `[E, edge_dim]` vectors and matching-rank spatial tensors (`[E, edge_dim, H, W]` when `spatial_rank=2`, `[E, edge_dim, D, H, W]` when `spatial_rank=3`). Spatial tensors are mean-pooled over their spatial dims before the per-`(edge, head)` attention bias projection — this keeps the scalar-attention regime stable. Mixed-rank edges (e.g. 5-D into a 2-D-configured GAT, or 4-D into a 3-D-configured GAT) raise `NotImplementedError`. `TensorGraphSAGELayer` and `TensorGINLayer` use matching-rank spatial edge tensors directly without pooling.
-- **Node-feature ranks supported.** TGraphX supports vector `[N, D]`, 2-D spatial `[N, C, H, W]`, and 3-D volumetric `[N, C, D, H, W]` node features for the listed layers. It does not claim arbitrary-rank tensor support. Vector node features are handled by `LinearMessagePassing`; 2-D / 3-D by `ConvMessagePassing`, `TensorGATLayer`, `TensorGraphSAGELayer`, and `TensorGINLayer` (with `spatial_rank=2` or `3` at construction time).
-- **Graph builders are included** (`build_grid_graph`, `build_knn_graph`, etc.) but cover common structural patterns only. More complex topology must be supplied as `edge_index` directly.
-- **Patch helpers are included** (`image_to_patches`, `volume_to_patches`) for extracting non-overlapping patches; they require exact-divisible dimensions and do not pad automatically.
-- **Dashboard** is a local-first lightweight monitor, not a TensorBoard replacement. See [Dashboard](#dashboard) and [docs/dashboard.md](docs/dashboard.md) for scope.
-- **Differentiability:** All learned parameters (CNN encoder, message-passing layers, classifier) are end-to-end differentiable. The graph topology (`edge_index`) is user-provided and is not learned by the model.
+TGraphX is a focused tensor-aware GNN library, not a drop-in replacement
+for PyTorch Geometric or DGL.  Detailed write-ups live in
+[docs/limitations.md](docs/limitations.md); the high-level boundaries are:
+
+- **Not a PyG / DGL drop-in.** `tgraphx.interop` ships data converters
+  (homogeneous + hetero, lazy imports), but layer APIs and call
+  conventions differ.
+- **`AttentionMessagePassing` is not GAT.** It uses per-edge sigmoid
+  gating without destination-wise softmax.  Use `TensorGATLayer` for
+  true multi-head GAT.
+- **Scalar (default) and per-channel (`attention_mode="channel"`,
+  experimental) attention** are the supported `TensorGATLayer` modes.
+  Per-pixel / per-voxel attention is intentionally not implemented —
+  naive scores `[E, K, H, W]` are memory-prohibitive and a memory-safe
+  variant has not yet been designed.
+- **GAT edge features (vector or matching-rank spatial → mean-pooled).**
+  `TensorGATLayer` accepts `[E, edge_dim]` vectors and matching-rank
+  spatial tensors (`[E, edge_dim, H, W]` for `spatial_rank=2`,
+  `[E, edge_dim, D, H, W]` for `spatial_rank=3`).  Spatial tensors are
+  mean-pooled before the per-`(edge, head)` attention bias projection.
+  Mismatched-rank edges raise `NotImplementedError`.  Use
+  `TensorGraphSAGELayer` or `TensorGINLayer` for spatial edge features
+  without pooling.
+- **Supported node feature ranks:** vector `[N, D]`, 2-D spatial
+  `[N, C, H, W]`, 3-D volumetric `[N, C, D, H, W]`.  Universal
+  arbitrary-rank tensor support across every layer is a v0.3 design
+  discussion.
+- **Hetero / temporal workflows are experimental.**  `HeteroConv`,
+  `HeteroGraphClassifier`, `HeteroNodeClassifier`,
+  `TemporalGraphClassifier`, `TemporalGraphRegressor` exist + are
+  tested, but the surface is intentionally small (vector-feature
+  hetero; stateless snapshot-loop temporal).  Full TGN / TGAT-style
+  recurrent memory and tensor-aware hetero classifiers are deferred.
+- **Graph builders** cover common structural patterns (grid, kNN,
+  radius, IoU, fully connected, random); custom topology is up to the
+  user.  kNN / radius / IoU / fully-connected scale O(N²) and emit
+  warnings on large N.
+- **Patch helpers** require exact-divisible dimensions by default;
+  use `padding="auto"` to right-pad.
+- **Multi-GPU.**  TGraphX provides DDP-aware helpers
+  (`tgraphx.distributed`) and a single-process smoke example, not an
+  automatic multi-GPU training framework.
+- **Dashboard** is a local-first lightweight monitor, not a
+  TensorBoard replacement.  See [docs/dashboard.md](docs/dashboard.md).
+- **Differentiability:** all learned parameters are end-to-end
+  differentiable; graph topology (`edge_index`) is user-supplied and
+  not learned by the model.
 
 ## GNN family coverage
 
@@ -1272,13 +1355,17 @@ batch.to(device)
 | 3-D / volumetric node features | ✅ `ConvMessagePassing`, `TensorGATLayer`, `TensorGraphSAGELayer`, `TensorGINLayer` | ✅ | `[N, C, D, H, W]`; pass `spatial_rank=3` to GAT/SAGE/GIN, or `(C, D, H, W)` `in_shape` to `ConvMessagePassing`. `DeepCNNAggregator` is rank-aware. `LinearMessagePassing` covers vector `[N, D]` and is unaffected. |
 | Edge-conditioned MP (vector) | ✅ `TensorGATLayer`, `TensorGraphSAGELayer`, `TensorGINLayer` | ✅ | edge features `[E, D_e]`; `edge_features_kind="vector"` |
 | `aggr="sum"\|"mean"\|"max"` base | ✅ all three modes | ✅ hand-computed + backward | `ConvMessagePassing` `aggr="max"` routes through `scatter_max` |
-| Graph Transformer (vector features) | 🧪 `GraphTransformerLayer` | ✅ | global multi-head self-attention `[N, D]`; O(N²); tensor-aware variant ⏳ planned |
-| Heterogeneous graphs | 🧪 `HeteroGraph`, `HeteroGraphBatch`, `HeteroConv`, `HeteroGraphClassifier`, `HeteroNodeClassifier` | ✅ | vector features; relation-dispatch wrapper + per-type classifier; full PyG-style layer zoo ⏳ planned |
-| Temporal graphs | 🧪 `TemporalGraphSequence`, `TemporalGraphBatch`, `temporal_readout`, `TemporalGraphClassifier`/`Regressor` | ✅ | snapshot loop + readout pattern; TGN/TGAT-style memory module ⏳ planned |
+| Graph Transformer (vector features) | 🧪 `GraphTransformerLayer` (+ degree / Laplacian / adjacency-bias encodings) | ✅ | global multi-head self-attention `[N, D]`; O(N²); tensor-aware variant intentionally deferred |
+| Heterogeneous graphs | 🧪 `HeteroGraph`, `HeteroGraphBatch`, `HeteroConv`, `HeteroGraphClassifier`, `HeteroNodeClassifier` | ✅ | vector features; relation-dispatch wrapper + per-type classifier; tensor-aware hetero classifiers intentionally deferred |
+| Temporal graphs | 🧪 `TemporalGraphSequence`, `TemporalGraphBatch`, `temporal_readout`, `TemporalGraphClassifier`, `TemporalGraphRegressor` | ✅ | stateless snapshot-loop + readout; recurrent (TGN / TGAT) memory intentionally deferred |
+| Sampling (homogeneous) | ✅ `induced_subgraph`, `edge_subgraph`, `k_hop_subgraph`, `sample_nodes`, `sample_edges`, `neighbor_sample`, `random_walk_sample` | ✅ | All deterministic with `seed`; per-call generator (no global RNG side effects) |
+| Sampling loaders | ✅ `SubgraphDataLoader`, `NeighborSamplerLoader` | ✅ | Plain Python iterables; deterministic with `seed` |
+| Sampling (hetero / temporal — v0.2.8) | ✅ `hetero_induced_subgraph`, `hetero_neighbor_sample`, `temporal_window_sample`, `temporal_window_sample_batch` | ✅ | Per-relation fanouts; window slicing on equal- and variable-length temporal batches |
+| Distributed (DDP) helpers | ✅ `tgraphx.distributed` (`get_rank`, `get_world_size`, `is_rank_zero`, `rank_zero_print`, `rank_zero_only`, `barrier`) | ✅ | Never auto-initialises DDP; safe to import in single-process / CPU-only contexts |
 | Learned graph construction | ✅ `tgraphx.learned_graph` | ✅ | soft adjacency, EdgeScorer (differentiable); top-k discrete (non-diff) |
-| PyG / DGL converters | ✅ `tgraphx.interop` | ✅ | data converters only (lazy imports); not an API replacement |
+| PyG / DGL converters (homogeneous + hetero) | ✅ `tgraphx.interop` | ✅ | data converters only (lazy imports); not an API replacement |
 | MLflowLogger | ✅ `tgraphx.tracking.MLflowLogger` | ✅ | lazy mlflow import; opt-in via `tgraphx[mlflow]` extra |
-| Arbitrary-rank tensor support beyond rank 0 / 2 / 3 | ❌ | — | only vector, 2-D, and 3-D shapes are supported |
+| Arbitrary-rank tensor support across every layer | ⛔ Out of scope | — | Only vector, 2-D, 3-D node-feature layouts ship — see Scope boundaries |
 
 ---
 
@@ -1287,63 +1374,65 @@ batch.to(device)
 ```
 TGraphX/
 ├── tgraphx/
-│   ├── __init__.py          # public API re-exports (Graph, layers, builders, training, …)
-│   ├── core/
+│   ├── __init__.py          # public API re-exports
+│   ├── core/                # Graph, GraphBatch, hetero & temporal containers + batches
 │   │   ├── graph.py         # Graph, GraphBatch
-│   │   ├── dataloader.py    # GraphDataset, GraphDataLoader
 │   │   ├── graph_utils.py   # edge topology helpers
+│   │   ├── dataloader.py    # GraphDataset, GraphDataLoader
+│   │   ├── hetero_graph.py  # HeteroGraph (typed nodes + edges)
+│   │   ├── hetero_batch.py  # HeteroGraphBatch
+│   │   ├── temporal.py      # TemporalGraphSequence
+│   │   ├── temporal_batch.py# TemporalGraphBatch
 │   │   └── utils.py         # load_config, get_device
-│   ├── layers/
+│   ├── layers/              # tensor-aware GNN layers + transformer + hetero/temporal
 │   │   ├── base.py             # TensorMessagePassingLayer, LinearMessagePassing
 │   │   ├── conv_message.py     # ConvMessagePassing
 │   │   ├── attention_message.py# AttentionMessagePassing (legacy sigmoid)
-│   │   ├── gat.py              # TensorGATLayer (true multi-head GAT)
+│   │   ├── gat.py              # TensorGATLayer (multi-head, scalar / channel modes, chunked)
 │   │   ├── sage.py             # TensorGraphSAGELayer
 │   │   ├── gin.py              # TensorGINLayer / GINEConv
+│   │   ├── graph_transformer.py# GraphTransformerLayer (vector)
+│   │   ├── transformer_encodings.py # degree / Laplacian / adjacency-bias encodings
+│   │   ├── hetero.py           # HeteroConv (relation-dispatch wrapper)
+│   │   ├── hetero_readout.py   # hetero_mean/sum/max/concat_pool
+│   │   ├── temporal_readout.py # temporal_readout (last/mean/max + mask)
 │   │   ├── factory.py          # make_layer()
-│   │   ├── _scatter.py         # internal: edge_softmax, scatter_*
 │   │   ├── aggregator.py       # DeepCNNAggregator
-│   │   └── safe_pool.py        # SafeMaxPool2d
-│   ├── models/
+│   │   ├── safe_pool.py        # SafeMaxPool2d
+│   │   └── _scatter.py / _dim.py  # internal helpers
+│   ├── models/              # task heads + factories
 │   │   ├── factory.py          # build_model(), build_model_from_config()
-│   │   ├── edge_predictor.py   # EdgePredictor
-│   │   ├── regressors.py       # NodeRegressor, GraphRegressor
 │   │   ├── graph_classifier.py # GraphClassifier
 │   │   ├── node_classifier.py  # NodeClassifier
+│   │   ├── edge_predictor.py   # EdgePredictor
+│   │   ├── regressors.py       # NodeRegressor, GraphRegressor
+│   │   ├── hetero_models.py    # HeteroGraphClassifier, HeteroNodeClassifier
+│   │   ├── temporal_models.py  # TemporalGraphClassifier, TemporalGraphRegressor
 │   │   ├── cnn_encoder.py      # CNNEncoder
 │   │   ├── cnn_gnn_model.py    # CNN_GNN_Model
 │   │   └── pre_encoder.py      # PreEncoder (optional ResNet-18)
-│   ├── graph_builders.py    # build_grid_graph, build_knn_graph, image_to_patches, …
-│   ├── training.py          # train_epoch, evaluate, fit, set_seed, checkpointing, …
-│   ├── tracking.py          # CSVLogger, TensorBoardLogger, write_graph_stats
+│   ├── graph_builders.py    # grid / kNN / radius / IoU / fully-connected / random + patch helpers
+│   ├── learned_graph.py     # soft adjacency, EdgeScorer, top-k edges
+│   ├── interop.py           # PyG / DGL converters (lazy imports; homogeneous + hetero)
+│   ├── sampling.py          # induced / edge / k-hop / neighbour / random-walk sampling
+│   ├── sampling_loaders.py  # SubgraphDataLoader, NeighborSamplerLoader
+│   ├── hetero_sampling.py   # hetero_induced_subgraph, hetero_neighbor_sample (v0.2.8)
+│   ├── temporal_sampling.py # temporal_window_sample, temporal_window_sample_batch (v0.2.8)
+│   ├── distributed.py       # rank-zero / world-size / barrier helpers
+│   ├── training.py          # train_epoch, evaluate, fit, set_seed, checkpointing, metrics
+│   ├── tracking.py          # CSVLogger, TensorBoardLogger, MLflowLogger, write_graph_stats
 │   ├── performance.py       # env_report, recommended_device, estimate_message_memory
-│   └── dashboard/
+│   └── dashboard/           # local-first training dashboard (off by default)
 │       ├── app.py           # DashboardServer, export_dashboard_html, CLI main()
 │       ├── __init__.py      # launch_dashboard, launch_dashboard_background
 │       └── static/          # dashboard.css, dashboard.js (packaged in wheel)
-├── tests/
-│   ├── conftest.py
-│   ├── test_imports.py
-│   ├── test_graph.py
-│   ├── test_layers.py
-│   ├── test_models.py
-│   ├── test_devices.py
-│   ├── test_gnn_families.py    # GAT, GraphSAGE, GIN, custom subclass
-│   ├── test_math.py            # edge-order invariance, permutation-equivariance, H=W=1, isolated nodes
-│   ├── test_gradients.py       # single-layer backward, 8-layer stacks, tiny overfit
-│   └── test_edge_features.py   # vector edge features for GAT, SAGE, GIN
-├── examples/
-│   ├── minimal_spatial_message_passing.py
-│   ├── minimal_graph_classifier.py
-│   ├── tensor_gat_minimal.py
-│   ├── tensor_graphsage_minimal.py
-│   ├── custom_message_passing.py
-│   ├── tiny_overfit_tensor_gat.py      # trainability check per GNN family
-│   ├── tiny_overfit_edge_features.py   # vector edge feature dependency check
-│   └── gradient_sanity_stack.py        # 8-layer deep stack gradient norms
+├── tests/                   # 1230+ tests; CPU-safe, deterministic
+├── examples/                # 30+ self-contained demos (see "Examples" section)
+├── benchmarks/              # benchmark_layers.py / benchmark_graph_builders.py / benchmark_sampling.py
+├── docs/                    # API reference, limitations, roadmap, performance, …
+├── .github/workflows/       # tests.yml (Ubuntu full + macOS/Windows smoke), publish.yml
 ├── pyproject.toml
-├── requirements.txt
-├── environment.yml
+├── CHANGELOG.md
 └── LICENSE
 ```
 

@@ -9,6 +9,84 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.8] — 2026-05-07 (release prep)
+
+### Added
+
+- **Random-walk sampling** — `random_walk_sample(graph, seed_nodes,
+  walk_length, num_walks_per_seed=1, direction="out", restart_prob=0.0,
+  seed=None, relabel_nodes=True)` in `tgraphx.sampling`.
+  Per-call `torch.Generator` (no global RNG side effects).
+
+- **Hetero sampling** — new module `tgraphx.hetero_sampling`:
+  - `hetero_induced_subgraph(hetero_graph, node_ids_dict, relabel_nodes=True)`
+  - `hetero_neighbor_sample(hetero_graph, seed_nodes_dict, fanouts,
+    seed=None, direction="in", relabel_nodes=True)` — multi-hop
+    per-relation fanout neighbour sampling.
+
+- **Temporal window sampling** — new module `tgraphx.temporal_sampling`:
+  - `temporal_window_sample(seq, t_start, t_end)` for
+    `TemporalGraphSequence`.
+  - `temporal_window_sample_batch(batch, t_start, t_end)` for
+    `TemporalGraphBatch` (variable-length sequences are clipped per
+    sequence; sequences shorter than `t_start` raise).
+
+- **Tests**:
+  - `tests/test_random_walk_sample.py` — 16 tests.
+  - `tests/test_hetero_sampling.py` — 20 tests.
+  - `tests/test_temporal_sampling.py` — 13 tests.
+
+### Changed
+
+- **README rewritten for honesty** — every red flag was either
+  implemented + tested or kept as a true scope boundary:
+  - "Optional and experimental features (v0.2.4)" header now
+    versionless.
+  - "Full hetero/temporal GNN layers: containers, not GNN
+    implementations" replaced with the truth: `HeteroConv`,
+    `HeteroGraphClassifier`, `HeteroNodeClassifier`,
+    `TemporalGraphClassifier`, `TemporalGraphRegressor` exist + are
+    tested.
+  - "Neighbor sampling, distributed training, multi-GPU: out of scope"
+    split into accurate parts: sampling stable, distributed *helpers*
+    stable, full multi-GPU framework intentionally out of scope.
+  - Scalability table: `TensorGATLayer` chunked forward → ✅ Stable
+    (was "⏳ Planned v0.2.4" despite being implemented since v0.2.4).
+  - Attention table: per-channel attention → 🧪 Experimental (was
+    "❌ Not supported").  Per-pixel/voxel kept as a true memory-driven
+    scope boundary.
+  - Hardware/Backend tables: Windows/macOS now correctly labelled
+    "Smoke CI" (was "No CI").
+  - Limitations text: `heterogeneous, temporal, graph transformers,
+    learned graph` no longer listed as out of scope (they ship).
+  - Project structure / tests / examples sections refreshed.
+
+- **`docs/limitations.md`**: removed "Neighbor sampling
+  (GraphSAINT/ClusterGCN): Not implemented" — replaced with positive
+  note pointing at `tgraphx.sampling`.  Added rows for the new v0.2.8
+  sampling helpers.
+
+- **`docs/roadmap.md`**: v0.2.8 entry added with Hetero/temporal/random
+  walk sampling marked complete.
+
+### Honest scope boundaries (kept, with reasons)
+
+- **Per-pixel / per-voxel GAT attention** — naive memory cost
+  O(E·K·H·W) is prohibitive; deferred until a memory-safe variant
+  (factorised / windowed / low-rank) is designed.
+- **Universal arbitrary-rank node features across every layer** — only
+  vector, 2-D, and 3-D shapes are supported.  Adding a generic
+  rank-agnostic layer is a v0.3 design discussion.
+- **Full TGN / TGAT recurrent memory module** — temporal workflows are
+  stateless snapshot-loop only.
+- **Full automatic multi-GPU training framework** — TGraphX provides
+  rank-zero/world-size helpers; DDP setup remains the user's
+  responsibility.
+- **Graph builder mathematical O(N²) cost** for kNN/radius/IoU/fully
+  connected — chunked variants exist; large graphs warn.
+
+---
+
 ## [0.2.7] — 2026-05-08 (release prep)
 
 ### Added

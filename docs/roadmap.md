@@ -117,19 +117,60 @@ Deferred to v0.2.7+:
 
 ---
 
-## v0.2.7 — Graph Transformer maturity
+## v0.2.7 — Graph Transformer maturity ✅ (release prep)
 
-- Stable vector-feature `GraphTransformerLayer` graduating from experimental.
-- Tensor-aware Graph Transformer feasibility (spatial / volumetric tokens).
-- Positional / structural encodings (Laplacian, RWPE, degree).
-- Edge-bias attention.
-- Memory-safe attention options (chunked / sparse / linear approximations).
+- ✅ `GraphTransformerLayer` (vector-only) hardened: ``positional_encoding``
+  (degree / Laplacian), ``pe_dim``, ``edge_bias`` constructor args; new
+  ``positional`` and ``edge_bias_dense`` forward kwargs (default-None,
+  backward-compatible).
+- ✅ `tgraphx.layers.transformer_encodings` — pure-PyTorch helpers:
+  `degree_encoding`, `laplacian_eigvec_encoding`, `build_adjacency_bias`.
+- ✅ Factory integration: `make_layer("graph_transformer", ...)`.
+- ✅ Stability docs: `docs/experimental_policy.md`,
+  `docs/deprecation_policy.md`, `docs/migration_v0_2_to_v0_3.md`.
+
+Deferred to post-v0.3:
+- ⏳ Tensor-aware Graph Transformer (token granularity is an open
+  design question).
+- ⏳ Memory-safe attention approximations (sparse / linear / chunked).
 
 ---
 
-## v0.2.8 — Ecosystem expansion
+## v0.2.8 — Sampling completion + README honesty ✅ (release prep)
 
-- Robust PyG/DGL converter coverage (batches, hetero, masks).
+- ✅ `random_walk_sample` (homogeneous): direction `out` / `in`,
+  configurable `num_walks_per_seed` and `restart_prob`, deterministic
+  with `seed`, no global RNG side effects.
+- ✅ Hetero sampling: `hetero_induced_subgraph` and
+  `hetero_neighbor_sample` (per-relation fanout, multi-hop, BFS-style;
+  preserves edge weights, edge features, node labels, graph label).
+- ✅ Temporal window sampling: `temporal_window_sample` and
+  `temporal_window_sample_batch` (variable-length aware).
+- ✅ Top-level re-exports + new tests
+  (`tests/test_random_walk_sample.py`, `tests/test_hetero_sampling.py`,
+  `tests/test_temporal_sampling.py` — 49 new tests).
+- ✅ Example: `examples/sampling_demo_v028.py` (CPU-safe).
+- ✅ README/limitations/roadmap rewritten to reflect reality:
+  - GAT chunked forward and `attention_mode="channel"` correctly
+    labelled stable / experimental rather than "Planned v0.2.4".
+  - Hetero / temporal classifiers, `HeteroConv`, sampling, distributed
+    helpers correctly listed as shipped (instead of "out of scope").
+  - Windows / macOS smoke CI properly credited (was "No CI").
+  - Stale "v0.2.4" / "v0.2.5+ planned" wording removed.
+
+Deferred:
+- ⏳ Per-pixel / per-voxel GAT attention (only with a memory-safe
+  variant — naive memory cost prohibitive).
+- ⏳ Generic rank-agnostic message-passing layer (v0.3 design).
+- ⏳ Recurrent temporal memory module (TGN / TGAT).
+- ⏳ Full automatic multi-GPU training framework.
+
+---
+
+## v0.2.9 — Ecosystem expansion (planned)
+
+- Robust PyG/DGL converter coverage (batches, hetero edge attributes,
+  per-relation masks).
 - Optional plugin architecture for external integrations.
 - Optional curated public-dataset loaders (no required network calls).
 - Optional GraphRAG-adjacent local utilities (purely local; no remote APIs).

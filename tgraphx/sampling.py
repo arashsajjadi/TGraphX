@@ -69,6 +69,7 @@ __all__ = [
     "sample_nodes",
     "sample_edges",
     "neighbor_sample",
+    "random_walk_sample",
 ]
 
 
@@ -478,5 +479,128 @@ def neighbor_sample(
             "seed_nodes": seed_nodes.detach().cpu(),
             "fanouts": list(fanouts),
             "direction": direction,
+        },
+    )
+
+
+def random_walk_sample(
+    graph: Graph,
+    seed_nodes: torch.Tensor,
+    walk_length: int,
+    num_walks_per_seed: int = 1,
+    direction: str = "out",
+    restart_prob: float = 0.0,
+    seed: Optional[int] = None,
+    relabel_nodes: bool = True,
+) -> Graph:
+    """Random-walk sampling rooted at ``seed_nodes``.
+
+    From each seed, perform ``num_walks_per_seed`` random walks of length
+    ``walk_length``.  At every step the walker transitions uniformly at
+    random to one out- or in-neighbour of the current node.  With
+    probability ``restart_prob`` the walker resets to its original seed
+    (DeepWalk / node2vec-style restart).  The induced subgraph over all
+    visited nodes is returned.
+
+    Args:
+        graph: Source graph (must contain edges).
+        seed_nodes: 1-D LongTensor of seed node ids (one walk root per id).
+        walk_length: Number of transition steps per walk (>= 0).
+            ``walk_length=0`` keeps only the seeds.
+        num_walks_per_seed: Number of independent walks rooted at each
+            seed (>= 1).
+        direction: ``"out"`` (default) follows outgoing edges,
+            ``"in"`` follows incoming edges.
+        restart_prob: Probability of returning to the original seed at
+            each step (in ``[0, 1)``).
+        seed: Optional RNG seed; uses a per-call ``torch.Generator``.
+        relabel_nodes: See :func:`induced_subgraph`.
+
+    Returns:
+        :class:`~tgraphx.Graph` containing the induced subgraph over the
+        union of visited nodes.  ``metadata["sampling"]`` records walk
+        configuration and the seed list.
+
+    Notes:
+        * Nodes with no outgoing (resp. incoming) neighbours absorb the
+          walk for that step — the walker stays in place.  This is a
+          standard random-walk convention.
+        * Visited node ordering in the returned subgraph follows the
+          ``induced_subgraph`` convention (sorted by global id).
+    """
+    if direction not in ("out", "in"):
+        raise ValueError(f"direction must be 'out' or 'in'; got {direction!r}")
+    if walk_length < 0:
+        raise ValueError(f"walk_length must be >= 0; got {walk_length}")
+    if num_walks_per_seed < 1:
+        raise ValueError(f"num_walks_per_seed must be >= 1; got {num_walks_per_seed}")
+    if not (0.0 <= restart_prob < 1.0):
+        raise ValueError(
+            f"restart_prob must be in [0, 1); got {restart_prob}"
+        )
+    if graph.edge_index is None:
+        raise ValueError("random_walk_sample requires graph.edge_index")
+
+    device = graph.node_features.device
+    seed_nodes = _to_long_1d("seed_nodes", seed_nodes, device)
+    if seed_nodes.numel() == 0:
+        raise ValueError("seed_nodes must contain at least one id")
+    if (seed_nodes < 0).any() or (seed_nodes >= graph.num_nodes).any():
+        raise ValueError(f"seed_nodes out of range [0, {graph.num_nodes})")
+
+    gen = torch.Generator()
+    if seed is not None:
+        gen.manual_seed(int(seed))
+
+    ei = graph.edge_index
+    if direction == "out":
+        # Out-neighbours: for each src in row 0, list its dst (row 1).
+        from_row, to_row = 0, 1
+    else:
+        from_row, to_row = 1, 0
+
+    # Build per-node neighbour lists once (CPU is fine; sampling is sequential).
+    from_cpu = ei[from_row].detach().cpu()
+    to_cpu = ei[to_row].detach().cpu()
+    nbrs: list[list[int]] = [[] for _ in range(graph.num_nodes)]
+    for u, v in zip(from_cpu.tolist(), to_cpu.tolist()):
+        nbrs[u].append(v)
+
+    visited = torch.zeros(graph.num_nodes, dtype=torch.bool, device=device)
+    visited[seed_nodes] = True
+
+    total_walks = int(seed_nodes.numel()) * int(num_walks_per_seed)
+    if walk_length > 0 and total_walks > 0:
+        # Walk one (seed, walk_idx) at a time.  The walks themselves are
+        # short (typical walk_length <= a few hundred); per-walk Python
+        # is acceptable and keeps the implementation tractable.
+        for seed_id in seed_nodes.tolist():
+            for _ in range(num_walks_per_seed):
+                cur = seed_id
+                for _step in range(walk_length):
+                    if (
+                        restart_prob > 0.0
+                        and torch.rand((), generator=gen).item() < restart_prob
+                    ):
+                        cur = seed_id
+                        continue
+                    candidates = nbrs[cur]
+                    if not candidates:
+                        # Absorb: walker stays put.
+                        continue
+                    pick = torch.randint(
+                        len(candidates), (), generator=gen,
+                    ).item()
+                    cur = candidates[pick]
+                    visited[cur] = True
+
+    return _build_subgraph_from_node_mask(
+        graph, visited, relabel_nodes, "random_walk_sample",
+        extra_metadata={
+            "seed_nodes": seed_nodes.detach().cpu(),
+            "walk_length": int(walk_length),
+            "num_walks_per_seed": int(num_walks_per_seed),
+            "direction": direction,
+            "restart_prob": float(restart_prob),
         },
     )

@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -87,7 +87,7 @@ from .core.hetero_batch import HeteroGraphBatch
 from .core.temporal import TemporalGraphSequence
 from .core.temporal_batch import TemporalGraphBatch
 
-# ── Sampling utilities (v0.2.6) ──────────────────────────────────────────────
+# ── Sampling utilities (v0.2.6, extended in v0.2.8) ──────────────────────────
 from .sampling import (
     induced_subgraph,
     edge_subgraph,
@@ -95,8 +95,14 @@ from .sampling import (
     sample_nodes,
     sample_edges,
     neighbor_sample,
+    random_walk_sample,
 )
 from .sampling_loaders import SubgraphDataLoader, NeighborSamplerLoader
+from .hetero_sampling import hetero_induced_subgraph, hetero_neighbor_sample
+from .temporal_sampling import (
+    temporal_window_sample,
+    temporal_window_sample_batch,
+)
 
 __all__ = [
     "__version__",
@@ -176,6 +182,11 @@ __all__ = [
     "sample_nodes",
     "sample_edges",
     "neighbor_sample",
+    "random_walk_sample",
     "SubgraphDataLoader",
     "NeighborSamplerLoader",
+    "hetero_induced_subgraph",
+    "hetero_neighbor_sample",
+    "temporal_window_sample",
+    "temporal_window_sample_batch",
 ]

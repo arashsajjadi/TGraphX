@@ -30,10 +30,17 @@ See [Performance](performance.md) for performance-specific constraints.
 | `evaluate` function | **Implemented** — see [training_utilities.md](training_utilities.md) |
 | `fit` function | **Implemented** — thin `train_epoch` + `evaluate` wrapper; see [training_utilities.md](training_utilities.md) |
 | `TensorBoardLogger` | **Implemented** — optional; requires `pip install tensorboard` or `pip install "tgraphx[tracking]"`; see [training_utilities.md](training_utilities.md) |
-| `MLflowLogger` | ✅ Implemented (v0.2.4) — optional; lazy `mlflow` import; `pip install "tgraphx[mlflow]"` |
-| PyG / DGL data converters | ✅ Implemented (v0.2.4) — `tgraphx.interop`; lazy imports; data-only, not API replacement |
-| Learned graph helpers (soft adjacency, EdgeScorer) | ✅ Implemented (v0.2.4) — `tgraphx.learned_graph` |
-| Neighbor sampling (GraphSAINT / ClusterGCN) | Not implemented |
+| `MLflowLogger` | ✅ Implemented — optional; lazy `mlflow` import; `pip install "tgraphx[mlflow]"` |
+| PyG / DGL data converters (homogeneous + hetero) | ✅ Implemented — `tgraphx.interop`; lazy imports; data-only, not API replacement |
+| Learned graph helpers (soft adjacency, EdgeScorer) | ✅ Implemented — `tgraphx.learned_graph` |
+| Subgraph / k-hop / neighbour sampling + loaders | ✅ Implemented — `tgraphx.sampling`, `SubgraphDataLoader`, `NeighborSamplerLoader` |
+| Random-walk sampling | ✅ Implemented (v0.2.8) — `tgraphx.random_walk_sample` |
+| Hetero sampling (induced + per-relation neighbour) | ✅ Implemented (v0.2.8) — `tgraphx.hetero_induced_subgraph`, `tgraphx.hetero_neighbor_sample` |
+| Temporal window sampling (sequence + batch) | ✅ Implemented (v0.2.8) — `tgraphx.temporal_window_sample`, `tgraphx.temporal_window_sample_batch` |
+| Distributed (DDP) helpers (rank-zero, world-size, barrier) | ✅ Implemented — `tgraphx.distributed`; never auto-initialises |
+| GraphSAINT / ClusterGCN-style minibatch samplers | Not implemented — out of scope; the building-block samplers above can be composed by users |
+| Full automatic multi-GPU training framework | Not implemented — DDP setup is the user's responsibility |
+| Recurrent temporal memory module (TGN / TGAT) | Not implemented — temporal workflows use the stateless snapshot-loop pattern only |
 
 ## AMP / precision
 

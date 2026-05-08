@@ -500,6 +500,120 @@ class TestV024FeatureClaims:
         assert torch.isfinite(out).all()
 
 
+# ── 9b. v0.2.8 honesty: no stale "Planned v0.2.4" left in README ─────────────
+
+
+class TestReadmeHonesty:
+    def test_readme_does_not_mark_implemented_features_planned(self):
+        """README must not call shipped features 'Planned v0.2.4'."""
+        readme = _readme()
+        # GAT chunked forward is shipped — must not be 'Planned' anywhere.
+        for line in readme.splitlines():
+            if "TensorGATLayer" in line and "chunked" in line:
+                if re.search(r"Planned\s+v?0\.2\.4", line, re.IGNORECASE):
+                    pytest.fail(
+                        f"README still calls TensorGATLayer chunked forward "
+                        f"'Planned v0.2.4' even though it ships:\n  {line}"
+                    )
+
+    def test_readme_per_channel_attention_not_marked_unsupported(self):
+        """attention_mode='channel' is implemented — README must not call it
+        'Not supported'."""
+        readme = _readme()
+        for line in readme.splitlines():
+            if "Per-channel attention" in line and "❌ Not supported" in line:
+                pytest.fail(
+                    f"README marks per-channel attention as ❌ Not supported, "
+                    f"but `attention_mode='channel'` is implemented:\n  {line}"
+                )
+
+    def test_readme_does_not_say_sampling_out_of_scope(self):
+        readme = _readme()
+        for line in readme.splitlines():
+            if (
+                "out of scope" in line.lower()
+                and "sampling" in line.lower()
+                and "neighbor" in line.lower()
+            ):
+                pytest.fail(
+                    f"README still says neighbour sampling is out of scope, "
+                    f"but tgraphx.sampling ships:\n  {line}"
+                )
+
+    def test_readme_does_not_say_hetero_temporal_only_containers(self):
+        readme = _readme()
+        for line in readme.splitlines():
+            low = line.lower()
+            if (
+                "hetero" in low
+                and "temporal" in low
+                and "containers" in low
+                and "not gnn implementations" in low
+            ):
+                pytest.fail(
+                    f"README still calls hetero/temporal 'containers, not GNN "
+                    f"implementations', but HeteroConv / classifiers ship:\n"
+                    f"  {line}"
+                )
+
+
+# ── 9c. v0.2.8 sampling helpers actually work ────────────────────────────────
+
+
+class TestV028SamplingClaims:
+    def test_random_walk_sample_works(self):
+        from tgraphx import Graph, random_walk_sample
+        x = torch.randn(6, 4)
+        ei = torch.tensor([[0, 1, 2, 3, 4], [1, 2, 3, 4, 5]], dtype=torch.long)
+        sub = random_walk_sample(Graph(x, ei), torch.tensor([0]), 4, seed=0)
+        assert sub.num_nodes >= 1
+        assert sub.metadata["sampling"]["kind"] == "random_walk_sample"
+
+    def test_hetero_sampling_works(self):
+        from tgraphx import (
+            HeteroGraph,
+            hetero_induced_subgraph,
+            hetero_neighbor_sample,
+        )
+        g = HeteroGraph(
+            node_stores={
+                "p": torch.randn(4, 4), "a": torch.randn(3, 2),
+            },
+            edge_stores={
+                ("a", "writes", "p"): torch.tensor(
+                    [[0, 1, 2], [0, 1, 2]], dtype=torch.long,
+                ),
+            },
+        )
+        sub = hetero_induced_subgraph(
+            g, {"p": torch.tensor([0, 1]), "a": torch.tensor([0, 1])},
+        )
+        assert sub.num_nodes("p") == 2
+        assert sub.num_nodes("a") == 2
+
+        sampled = hetero_neighbor_sample(
+            g,
+            seed_nodes_dict={"p": torch.tensor([0])},
+            fanouts=[{("a", "writes", "p"): 1}],
+            seed=0, direction="in",
+        )
+        assert "sampling" in sampled.metadata
+
+    def test_temporal_window_sample_works(self):
+        from tgraphx import (
+            Graph, TemporalGraphSequence, TemporalGraphBatch,
+            temporal_window_sample, temporal_window_sample_batch,
+        )
+        snaps = [Graph(torch.randn(4, 3), None) for _ in range(5)]
+        seq = TemporalGraphSequence(graphs=snaps)
+        sub = temporal_window_sample(seq, 1, 4)
+        assert sub.num_snapshots == 3
+
+        batch = TemporalGraphBatch([seq, seq])
+        sub_batch = temporal_window_sample_batch(batch, 1, 4)
+        assert sub_batch.num_sequences == 2
+
+
 # ── 10. Lazy-import contracts for new optional integrations ──────────────────
 
 class TestLazyImports:

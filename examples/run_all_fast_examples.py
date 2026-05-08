@@ -59,6 +59,8 @@ FAST_EXAMPLES = [
     ("tiny_overfit_tensor_gat.py",          "Tiny overfit (GAT)",                    None),
     ("tiny_overfit_edge_features.py",       "Tiny overfit (edge features)",          None),
     ("gradient_sanity_stack.py",            "Gradient sanity (8-layer stack)",       None),
+    # Sampling (v0.2.8)
+    ("sampling_demo_v028.py",               "Random walk + hetero + temporal sampling", None),
 ]
 
 
