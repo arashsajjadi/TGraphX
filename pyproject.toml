@@ -52,6 +52,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
+    "matplotlib>=3.7",
     "build>=0.10",
     "twine>=4.0",
 ]
