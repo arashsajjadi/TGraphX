@@ -33,6 +33,7 @@ feature maps, `[C, D, H, W]` volumetric maps, or plain vectors `[D]`.
 | Negative sampling | [negative_sampling.md](negative_sampling.md) |
 | Graph algorithms | [graph_algorithms.md](graph_algorithms.md) |
 | Temporal utilities | [temporal.md](temporal.md) |
+| Graph mining and pattern recognition | [graph_mining.md](graph_mining.md) |
 | Performance | [performance.md](performance.md) |
 | Interoperability (PyG/DGL/OGB) | [comparison.md](comparison.md) |
 | API stability | [api_stability.md](api_stability.md) |

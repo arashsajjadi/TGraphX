@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased] — v0.3.2 foundations
+## [Unreleased] — v0.4.0 candidate: neural mining + plotting + benchmarks
 
 ### Added — Code
 
@@ -49,6 +49,162 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `tgraphx.core.temporal{,_batch}`, and snapshot-loop classifiers are
   unchanged; consolidation under `tgraphx.temporal` continues in
   v0.3.4.
+
+### Added — Neural graph mining (`tgraphx.mining.neural`) — Experimental
+
+New trainable neural mining models, fully differentiable and tested:
+
+- `PrototypeMembershipScorer` — GNN encoder + Siamese similarity scorer
+  for class-graph membership.  Accepts vector and spatial node features
+  (via `flatten_spatial=True`).  Passes tiny-overfit test (loss 0.69 →
+  0.0001 on 2-class synthetic task).
+
+- `GraphAutoencoderAnomalyDetector` — MSE reconstruction auto-encoder.
+  `node_anomaly_scores` and `graph_anomaly_score` with `@no_grad`.
+  Passes injected-anomaly validation (known anomalous nodes receive
+  higher reconstruction error after training on normal data).
+
+- `GraphPatternClassifier` — GNN + mean-pool + MLP classifier for
+  structural pattern families.  Achieves 100% test accuracy on the
+  synthetic path/star/cycle/complete pattern dataset (well-separated
+  embeddings + correct stratified split).
+
+- `create_synthetic_pattern_dataset(num_graphs_per_class, num_nodes,
+  in_dim, seed, noise_std)` — deterministic 4-class dataset of path /
+  star / cycle / complete graphs with class-specific node features.
+
+- Training helpers: `train_prototype_membership_step`,
+  `train_anomaly_autoencoder_step`,
+  `train_graph_pattern_classifier_step`.
+
+Tests: `tests/test_neural_mining.py` (33 tests) covering forward shape,
+backward works, gradients finite, gradients non-zero, optimizer updates
+params, tiny overfit, injected-anomaly detection, train/eval mode,
+CUDA optional smoke, edge cases.
+
+### Added — Plotting infrastructure (`tgraphx.plotting`) — Beta
+
+New Matplotlib-only visualization package.  No seaborn, no NetworkX.
+Headless-safe (Agg backend).  Colorblind-friendly Okabe-Ito palette.
+
+**Layouts** (`tgraphx.plotting.layouts`):
+- `circular_layout`, `grid_layout`, `random_layout` — O(N).
+- `spring_layout` — Fruchterman-Reingold, pure Python/NumPy, O(N²·iters).
+
+**Graph plots** (`tgraphx.plotting.graph`):
+- `plot_graph` — scatter/line graph plot with configurable layout,
+  node values, size guard.
+- `plot_degree_distribution` — histogram of node degrees.
+- `plot_adjacency_matrix` — binary heatmap.
+- `plot_connected_components` — nodes coloured by component.
+
+**Mining plots** (`tgraphx.plotting.mining`):
+- `plot_motif_summary`, `plot_graph_mining_summary`
+- `plot_link_prediction_score_distribution`
+- `plot_graph_similarity_heatmap` (with matrix size cap)
+- `plot_anomaly_scores`, `plot_prototype_membership_scores`
+- `plot_confusion_matrix` (annotated, normalized)
+- `plot_training_curves`, `plot_community_assignments`
+
+**Utilities**: `save_figure(fig, path, formats=("png","svg","pdf"))`.
+
+Tests: `tests/test_plotting.py` (31 tests) covering layout math,
+figure creation, size guards, save to PNG/SVG, headless, empty inputs.
+
+### Added — Mining benchmarks (`benchmarks/mining/`) — Beta
+
+Five new benchmark scripts with uniform `--small --json` CLI:
+- `benchmark_motifs.py`
+- `benchmark_prototype_membership.py`
+- `benchmark_anomaly_detection.py`
+- `benchmark_graph_similarity.py`
+- `benchmark_link_prediction.py`
+
+Each reports: task, version, num_nodes, num_edges, device, seed, timing, correctness.
+
+### Added — Graph mining subsystem (`tgraphx.mining`)
+
+First serious graph mining package for TGraphX.  Tensor-aware, pure
+PyTorch, no mandatory heavy dependency, no hidden downloads.
+
+**Level 1 — Beta:**
+
+- `tgraphx.mining.structural` — `graph_density`, `degree_statistics`,
+  `graph_summary`, `structural_features`, `add_structural_features`.
+  `add_structural_features` is tensor-aware: spatial/volumetric node
+  features are stored in metadata rather than silently flattened.
+
+- `tgraphx.mining.link_prediction` — classical link prediction scores:
+  `common_neighbors_score`, `jaccard_score`, `adamic_adar_score`,
+  `resource_allocation_score`, `preferential_attachment_score`.  All
+  return ``FloatTensor[P]`` for P candidate pairs; zero denominators
+  return 0.
+
+- `tgraphx.mining.motifs` — `triangle_count` (graph and node level),
+  `wedge_count`, `local_clustering_coefficient`, `motif_counts`,
+  `motif_features`.  O(N·d²) with a density guard for large graphs.
+
+- `tgraphx.mining.kernels` — `weisfeiler_lehman_labels`,
+  `wl_feature_histogram`, `wl_graph_features`, `wl_kernel_matrix`
+  (normalised, symmetric), `degree_histogram_features`.
+
+- `tgraphx.mining.similarity` — `degree_histogram_distance`,
+  `wl_feature_similarity`, `graph_feature_cosine_similarity`,
+  `pairwise_graph_similarity`.
+
+- `tgraphx.mining.communities` — `label_propagation_communities`
+  (synchronous, deterministic with seed, compact output labels),
+  `modularity`, `community_summary`.
+
+- `tgraphx.mining.random_walk` — `random_walks` (dead-ends stay in
+  place; biased Node2Vec p/q supported on CPU),
+  `generate_random_walks`.
+
+**Level 2 — Experimental:**
+
+- `tgraphx.mining.anomaly` — `DegreeAnomalyScorer` (robust MAD
+  z-score), `EgoDensityAnomalyScorer`, `graph_level_anomaly_scores`.
+
+- `tgraphx.mining.prototype` — **TGraphX-native class-graph membership
+  paradigm**.  `ClassGraphBuilder` (cosine kNN support graphs per
+  class, density cap, bridge edges for connectivity),
+  `CandidateGraphBuilder` (adds a query node to a class graph),
+  `GraphMembershipDataset`, `MembershipEvaluator` (accuracy, balanced
+  accuracy, macro F1, confusion matrix, top confusion pairs),
+  `cosine_graph_membership_baseline`.  Fully tensor-aware: spatial and
+  volumetric node features are preserved unchanged.
+
+- `tgraphx.mining.patterns` — `path_pattern_count`, `star_pattern_count`,
+  `contains_triangle`, `small_pattern_counts`.
+
+- `tgraphx.mining.frequent` — `frequent_node_labels`,
+  `frequent_degree_bins`, `support_count`.
+
+- `tgraphx.mining.temporal` — `temporal_degree`, `sliding_window_edges`,
+  `temporal_chronological_split` (no future leakage), `burst_score`.
+
+- `tgraphx.mining.hetero` — `typed_degree_features`,
+  `relation_frequency_features`.
+
+**Reports (Beta):**
+
+- `tgraphx.mining.reports` — `write_graph_mining_summary`,
+  `write_motif_summary`, `write_link_prediction_summary`,
+  `write_anomaly_summary`, `write_prototype_membership_report`.
+  All writers use atomic writes (temp-then-rename).
+
+**Tests:** `tests/test_mining_structural.py` (20 tests),
+`tests/test_mining_core.py` (69 tests).  Mathematical invariants
+verified: K3 triangle = 1, K4 triangle = 4, WL identical-graph
+similarity = 1.0, clustering coefficient of K3 nodes = 1.0,
+common neighbours hand-computed, temporal split no future leakage.
+
+**Examples (5):** `graph_mining_structural_demo.py`,
+`graph_mining_link_prediction_demo.py`, `graph_mining_wl_kernel_demo.py`,
+`graph_mining_anomaly_demo.py`, `prototype_graph_membership_demo.py`.
+All added to `run_all_fast_examples.py`.
+
+**Docs:** `docs/graph_mining.md`.
 
 ### Added — Top-level re-exports
 

@@ -79,6 +79,17 @@ FAST_EXAMPLES = [
     ("negative_sampling_demo.py",           "Negative sampling primitives demo",          None),
     ("graph_algorithms_demo.py",            "Graph algorithms (components, BFS, degree)",  None),
     ("time_encoding_demo.py",               "Temporal time encoding demo",                None),
+    # v0.3.2 — neural mining + plotting
+    ("neural_prototype_membership_demo.py",  "Neural prototype membership scorer",         None),
+    ("neural_graph_anomaly_demo.py",         "Neural graph autoencoder anomaly detection", None),
+    ("neural_graph_pattern_classifier_demo.py", "Neural graph pattern classifier",         None),
+    ("plot_graph_mining_demo.py",            "Graph mining visualization (save to files)", None),
+    # v0.3.2 — classical graph mining
+    ("graph_mining_structural_demo.py",     "Graph mining: density, degrees, motifs",     None),
+    ("graph_mining_link_prediction_demo.py","Graph mining: classical link prediction scores", None),
+    ("graph_mining_wl_kernel_demo.py",      "Graph mining: WL features and kernel",       None),
+    ("graph_mining_anomaly_demo.py",        "Graph mining: anomaly detection",            None),
+    ("prototype_graph_membership_demo.py",  "Prototype graph membership classification",  None),
 ]
 
 
