@@ -26,6 +26,65 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.3] — Unreleased draft
+
+### Added
+
+- **`TensorGraphSAGELayer` chunked forward** — pass `chunk_size=K` to
+  `forward()` to process edges in chunks of size `K`, reducing the peak
+  per-edge message buffer from O(E × spatial) to O(K × spatial).
+  Supported for both `aggr="mean"` and `aggr="max"`.  Output matches
+  unchunked within float32 precision; gradients flow correctly.
+
+- **`TensorGINLayer` chunked forward** — same interface as SAGE chunking.
+  The sum aggregation is exact (associativity); learnable epsilon and custom
+  MLP paths both supported.
+
+- **`build_knn_graph(chunk_size=K)`** — processes `K` rows of the pairwise
+  distance matrix at a time, reducing peak memory from O(N²) to O(K×N).
+  Output matches the full (unchunked) path exactly.  O(N²) time unchanged.
+
+- **`build_radius_graph(chunk_size=K)`** — same benefit as kNN chunking.
+
+- **`build_iou_graph(chunk_size=K)`** — processes `K` boxes at a time;
+  O(K×N) peak memory.
+
+- **`build_random_graph(algorithm="sample")`** — O(num_edges) memory sampling
+  for directed graphs without self-loops.  Deterministic with `seed`.
+  Default `algorithm="exact"` is unchanged (backward-compatible).
+
+- **Dashboard byte-seek tail-read** — `DashboardServer` now tracks a byte
+  offset for `metrics.csv`.  When the file only grows (same inode, larger
+  size), only the new bytes are read and parsed; existing rows stay in the
+  in-memory cache.  Full reparse triggered on inode change (log rotation) or
+  file shrinkage (truncation).
+
+- **Dashboard `?since_row` double-read fix** — the incremental path
+  previously re-read the full file from disk even on a cache hit.  It now
+  uses the in-memory full-row cache, eliminating the redundant disk read.
+
+- **`tests/test_chunking.py`** — 46 new tests covering SAGE (mean/max), GIN,
+  3-D volumetric variants, edge weights, vector/spatial edge features,
+  isolated nodes, gradient flow, bfloat16 smoke, and graph builder chunking.
+
+### Changed
+
+- `benchmarks/benchmark_layers.py` — `--chunk-size` now also applies to
+  SAGE and GIN layers (previously only ConvMessagePassing).
+
+- O(N²) warning messages for `build_knn_graph` and `build_radius_graph`
+  updated to mention `chunk_size` as a memory-reduction option.
+
+### Not implemented (deferred)
+
+- **`TensorGATLayer` chunked forward** — deferred to v0.2.4.  Correct
+  implementation requires a two-pass algorithm (Pass 1: accumulate
+  per-destination max/logsumexp statistics over chunked score batches;
+  Pass 2: recompute normalised weights and aggregate values).  Single-pass
+  normalisation inside chunks is mathematically incorrect and not shipped.
+
+---
+
 ## [0.2.2] — Unreleased draft
 
 ### Fixed

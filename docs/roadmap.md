@@ -37,15 +37,22 @@ Focus: documentation accuracy, contradiction fixes, runtime warnings.
 
 ---
 
-## v0.2.3 — Chunking and scalability
+## v0.2.3 — Chunking and scalability ✅ (current prep)
 
-- `TensorGraphSAGELayer` chunked forward (mean/max aggregation splits cleanly).
-- `TensorGINLayer` chunked forward.
-- Investigate `TensorGATLayer` two-pass chunked forward (first pass: collect
-  all scores for destination-wise softmax; second pass: aggregate values).
-- Dashboard incremental metrics: true byte-seek tail-read for large
-  `metrics.csv` files (currently: mtime/size cache + full re-parse on miss).
-- Graph builder scalability: document O(N²) alternatives (approximate-NN).
+- ✅ `TensorGraphSAGELayer` chunked forward (`aggr="mean"` and `"max"`).
+  Pass `chunk_size=K` to `forward()` for O(K×spatial) peak edge-buffer memory.
+- ✅ `TensorGINLayer` chunked forward (`aggr="sum"`).
+- ✅ Dashboard byte-seek tail-read for `metrics.csv`: appending runs read only
+  new bytes; full reparse on inode change or file shrinkage.
+- ✅ Dashboard: fixed double-read bug in the `?since_row` incremental path.
+- ✅ `build_knn_graph` / `build_radius_graph` / `build_iou_graph`: added
+  `chunk_size` parameter to reduce peak memory from O(N²) to O(K×N).
+- ✅ `build_random_graph`: added `algorithm="sample"` for O(num_edges) memory
+  sampling when `num_edges ≪ N²` (directed, no self-loops).
+- ⏳ `TensorGATLayer` two-pass chunked forward: deferred to v0.2.4.
+  GAT softmax is destination-wise over all incoming edges; a correct
+  two-pass algorithm (Pass 1: accumulate per-destination max/logsumexp;
+  Pass 2: normalised value aggregation) is needed.
 
 ---
 

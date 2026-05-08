@@ -139,20 +139,42 @@ loss.backward()
 python examples/mixed_precision_inference.py
 ```
 
-## Chunked edge processing (ConvMessagePassing)
+## Chunked edge processing
+
+Reduce peak edge-buffer memory by processing edges in chunks.
+All chunked paths are disabled by default (`chunk_size=None`).
+
+| Layer | Supported aggr | Status | Notes |
+|-------|:--------------:|:------:|-------|
+| `ConvMessagePassing` | sum, mean | ✅ Stable | max falls back with warning |
+| `TensorGraphSAGELayer` | mean, max | ✅ Stable v0.2.3 | |
+| `TensorGINLayer` | sum | ✅ Stable v0.2.3 | |
+| `TensorGATLayer` | — | ⏳ Deferred v0.2.4 | Softmax requires two-pass algorithm |
 
 ```python
-from tgraphx.layers.conv_message import ConvMessagePassing
+from tgraphx.layers import ConvMessagePassing, TensorGraphSAGELayer, TensorGINLayer
 
-layer = ConvMessagePassing(in_shape=(32, 8, 8), out_shape=(32, 8, 8), aggr="sum")
-# Mathematically identical to unchunked; lower peak message buffer
-out = layer(x, edge_index, chunk_size=256)
+# ConvMessagePassing
+conv = ConvMessagePassing(in_shape=(32, 8, 8), out_shape=(32, 8, 8), aggr="sum")
+out = conv(x, edge_index, chunk_size=256)  # same result; lower peak memory
+
+# TensorGraphSAGELayer
+sage = TensorGraphSAGELayer(32, 32, aggr="mean")
+out = sage(x, edge_index, chunk_size=256)
+
+# TensorGINLayer
+gin = TensorGINLayer(32, 32)
+out = gin(x, edge_index, chunk_size=256)
 ```
 
-- Supported: `aggr="sum"` and `aggr="mean"`.
-- `aggr="max"` falls back to unchunked with a warning.
-- **GAT, SAGE, GIN chunking is deferred.** GAT requires all edge scores
-  for destination-wise softmax; two-pass chunking provides no memory benefit.
+All chunked outputs match unchunked within float32 precision (exact for
+mean/sum; exact for max).  Gradients flow correctly through all chunked paths.
+
+> ⚠️ **GAT chunked forward deferred.** `TensorGATLayer` requires destination-wise
+> softmax over **all** incoming edges before any attention weight can be
+> finalised.  A correct two-pass implementation (Pass 1: collect per-destination
+> max/logsumexp; Pass 2: recompute normalised weights and aggregate values) is
+> planned for v0.2.4.  The single-pass unchunked path is unchanged.
 
 ## Dashboard performance overhead
 

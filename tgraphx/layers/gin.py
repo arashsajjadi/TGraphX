@@ -121,7 +121,24 @@ class TensorGINLayer(nn.Module):
         edge_index: torch.Tensor,
         edge_features: torch.Tensor | None = None,
         edge_weight: torch.Tensor | None = None,
+        chunk_size: int | None = None,
     ) -> torch.Tensor:
+        """Message-passing forward with optional edge chunking.
+
+        Args:
+            x: Node features ``[N, C, *spatial]``.
+            edge_index: ``[2, E]`` LongTensor.
+            edge_features: Optional spatial or vector edge features.
+            edge_weight: Optional ``[E]`` per-edge scalar weights.
+            chunk_size: If set, process edges in chunks of this size to reduce
+                peak message-buffer memory.  ``None`` (default) uses the
+                standard single-pass path.  The sum aggregation is exact up
+                to floating-point associativity — output matches unchunked
+                within float32 rounding.
+
+        Returns:
+            Updated node features ``[N, out_channels, *spatial]``.
+        """
         rank = self.spatial_rank
         x_dim = expected_x_dim(rank)
         if x.dim() != x_dim:
@@ -152,12 +169,13 @@ class TensorGINLayer(nn.Module):
         N = x.size(0)
         src = edge_index[0]
         dst = edge_index[1]
+        E = src.size(0)
 
         if self.use_edge_features and edge_features is not None:
-            if edge_features.size(0) != edge_index.size(1):
+            if edge_features.size(0) != E:
                 raise ValueError(
                     f"edge_features has {edge_features.size(0)} rows but "
-                    f"edge_index has {edge_index.size(1)} edges."
+                    f"edge_index has {E} edges."
                 )
             if self.edge_features_kind == "spatial":
                 expected_dim = 2 + rank
@@ -173,7 +191,6 @@ class TensorGINLayer(nn.Module):
                         f"edge_features channel count {edge_features.size(1)} "
                         f"does not match edge_dim={self.edge_dim}."
                     )
-                edge_term = self.edge_proj(edge_features)  # [E, in_channels, *spatial]
             else:  # "vector"
                 if edge_features.dim() != 2:
                     raise ValueError(
@@ -186,7 +203,57 @@ class TensorGINLayer(nn.Module):
                         f"edge_features last-dim {edge_features.size(1)} does "
                         f"not match edge_dim={self.edge_dim}."
                     )
-                edge_vec = self.edge_proj(edge_features)  # [E, in_channels]
+
+        if chunk_size is not None and E > chunk_size:
+            agg = self._chunked_forward(
+                x, src, dst, N, E, rank, edge_features, edge_weight, chunk_size
+            )
+        else:
+            agg = self._full_forward(x, src, dst, N, E, rank, edge_features, edge_weight)
+
+        combined = (1.0 + self.eps) * x + agg
+        return self.mlp(combined)
+
+    # ------------------------------------------------------------------ #
+    # Internal helpers                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _compute_chunk_messages(
+        self,
+        x: torch.Tensor,
+        src_c: torch.Tensor,
+        ef_c: torch.Tensor | None,
+        n_c: int,
+        rank: int,
+    ) -> torch.Tensor:
+        """Compute per-edge messages for one chunk."""
+        if self.use_edge_features and ef_c is not None:
+            if self.edge_features_kind == "spatial":
+                edge_term = self.edge_proj(ef_c)
+            else:  # "vector"
+                edge_vec = self.edge_proj(ef_c)
+                view = (n_c, self.in_channels) + trailing_ones(rank)
+                edge_term = edge_vec.view(view)
+            return F.relu(x.index_select(0, src_c) + edge_term)
+        return x.index_select(0, src_c)
+
+    def _full_forward(
+        self,
+        x: torch.Tensor,
+        src: torch.Tensor,
+        dst: torch.Tensor,
+        N: int,
+        E: int,
+        rank: int,
+        edge_features: torch.Tensor | None,
+        edge_weight: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """Standard single-pass sum aggregation (original unchunked path)."""
+        if self.use_edge_features and edge_features is not None:
+            if self.edge_features_kind == "spatial":
+                edge_term = self.edge_proj(edge_features)
+            else:  # "vector"
+                edge_vec = self.edge_proj(edge_features)
                 view = (edge_vec.size(0), self.in_channels) + trailing_ones(rank)
                 edge_term = edge_vec.view(view)
             messages = F.relu(x.index_select(0, src) + edge_term)
@@ -194,14 +261,56 @@ class TensorGINLayer(nn.Module):
             messages = x.index_select(0, src)
 
         if edge_weight is not None:
-            weight_b = broadcast_edge_weight(
-                edge_weight, messages, num_edges=edge_index.size(1)
-            )
+            weight_b = broadcast_edge_weight(edge_weight, messages, num_edges=E)
             messages = messages * weight_b
 
-        agg = scatter_sum(messages, dst, N)  # [N, in_channels, *spatial]
-        combined = (1.0 + self.eps) * x + agg
-        return self.mlp(combined)
+        return scatter_sum(messages, dst, N)
+
+    def _chunked_forward(
+        self,
+        x: torch.Tensor,
+        src: torch.Tensor,
+        dst: torch.Tensor,
+        N: int,
+        E: int,
+        rank: int,
+        edge_features: torch.Tensor | None,
+        edge_weight: torch.Tensor | None,
+        chunk_size: int,
+    ) -> torch.Tensor:
+        """Chunked sum aggregation — reduces peak message-buffer memory.
+
+        Sum is associative so chunked output matches unchunked up to
+        floating-point rounding order differences (well within float32
+        epsilon for typical models).
+        """
+        agg: torch.Tensor | None = None
+
+        for start in range(0, E, chunk_size):
+            end = min(start + chunk_size, E)
+            n_c = end - start
+            src_c = src[start:end]
+            dst_c = dst[start:end]
+            ef_c = edge_features[start:end] if edge_features is not None else None
+
+            msg_c = self._compute_chunk_messages(x, src_c, ef_c, n_c, rank)
+
+            if edge_weight is not None:
+                ew_c = edge_weight[start:end].to(dtype=msg_c.dtype)
+                ew_b = ew_c.view(n_c, *(1,) * (msg_c.dim() - 1))
+                msg_c = msg_c * ew_b
+
+            if agg is None:
+                agg = msg_c.new_zeros(N, *msg_c.shape[1:])
+
+            agg.index_add_(0, dst_c, msg_c)
+
+        if agg is None:
+            # E == 0 caught by caller; unreachable here.
+            return scatter_sum(
+                x.new_zeros(0, self.in_channels, *x.shape[2:]), dst[:0], N
+            )
+        return agg
 
     def extra_repr(self) -> str:
         return (

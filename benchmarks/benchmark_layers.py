@@ -117,8 +117,10 @@ def parse_args(argv=None):
     p.add_argument("--log-level", type=int, default=0, choices=[0, 1, 2],
                    help="0=minimal, 1=verbose, 2=debug (default: 0)")
     p.add_argument("--chunk-size", type=int, default=None,
-                   help="Edge chunk size for ConvMessagePassing (sum/mean only). "
-                        "None = no chunking (default). Ignored for other layers.")
+                   help="Edge chunk size for memory-saving forward pass. "
+                        "Supported for ConvMessagePassing (sum/mean), "
+                        "TensorGraphSAGELayer (mean/max), and TensorGINLayer (sum). "
+                        "None = no chunking (default).")
     p.add_argument("--output",    default=None,
                    help="Optional path to write JSON results (default: stdout only)")
     return p.parse_args(argv)
@@ -231,9 +233,11 @@ def run_benchmark(args):
 
     chunk_size = getattr(args, "chunk_size", None)
 
+    _chunked_layers = ("conv", "sage", "gin")
+
     def _fwd():
         with (amp_ctx if amp_ctx else _null_ctx()):
-            if chunk_size is not None and args.layer == "conv":
+            if chunk_size is not None and args.layer in _chunked_layers:
                 return layer(x, ei, edge_features=edge_features,
                              edge_weight=edge_weight, chunk_size=chunk_size)
             return layer(x, ei, edge_features=edge_features, edge_weight=edge_weight)

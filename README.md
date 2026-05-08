@@ -84,9 +84,10 @@ drop-in clones of PyTorch Geometric's vector-feature implementations.
 - **Heterogeneous and temporal graphs.**
 - **MLflowLogger.** Not implemented.  Use the `mlflow` client directly.
   `pip install mlflow`.
-- **GAT / SAGE / GIN chunked forward.** Deferred (GAT's destination-wise
-  softmax requires all edge scores; SAGE/GIN chunking deferred for scope).
-  `ConvMessagePassing` supports `chunk_size` for `sum` / `mean` aggregation.
+- **GAT chunked forward.** Deferred to v0.2.4. GAT's destination-wise
+  softmax requires all incoming edge scores simultaneously; a correct two-pass
+  implementation is needed. `ConvMessagePassing`, `TensorGraphSAGELayer`, and
+  `TensorGINLayer` all support `chunk_size` in their `forward()` call.
 - **Hardware-monitoring extras.** CPU/RAM/GPU metrics in the dashboard
   require optional packages: `pip install tgraphx[monitoring]`.
 - **torch.compile / AMP.** `torch.compile` is available in PyTorch ≥ 2.0
@@ -1188,15 +1189,17 @@ batch.to(device)
 | Feature | Status | Notes |
 |---------|:------:|-------|
 | `ConvMessagePassing` chunked forward | ✅ Stable | `aggr="sum"` / `"mean"`; max falls back with warning |
-| `TensorGraphSAGELayer` chunked forward | ⏳ Planned v0.2.3 | Deferred |
-| `TensorGINLayer` chunked forward | ⏳ Planned v0.2.3 | Deferred |
-| `TensorGATLayer` chunked forward | ⏳ Planned v0.2.3+ | Destination-wise softmax makes chunking complex |
+| `TensorGraphSAGELayer` chunked forward | ✅ Stable | v0.2.3; mean and max; pass `chunk_size=K` to `forward()` |
+| `TensorGINLayer` chunked forward | ✅ Stable | v0.2.3; sum aggregation; pass `chunk_size=K` to `forward()` |
+| `TensorGATLayer` chunked forward | ⏳ Planned v0.2.4 | Requires two-pass algorithm for destination-wise softmax |
 | `build_grid_graph` / `build_grid_graph_3d` | ✅ Stable | O(E) — scales well |
 | `build_random_graph` | ✅ Stable | O(E) — scales well |
-| `build_knn_graph` / `build_radius_graph` | ⚠️ Best-effort | O(N²) via `torch.cdist`; N > 10 000 emits a warning |
-| `build_fully_connected_graph` / `build_iou_graph` | ⚠️ Best-effort | O(N²) edges; N > 5 000 emits a warning |
-| Dashboard metrics API | ✅ Stable | Incremental `?since_row=N`; `--max-metric-rows` cap |
-| Large `metrics.csv` tail-read | ⏳ Planned v0.2.3 | Current: mtime cache + full re-parse on miss |
+| `build_knn_graph` / `build_radius_graph` | ⚠️ Best-effort | O(N²) time; `chunk_size=K` reduces peak memory to O(K×N) |
+| `build_fully_connected_graph` | ⚠️ Best-effort | O(N²) edges; N > 5 000 emits warning |
+| `build_iou_graph` | ⚠️ Best-effort | O(N²) IoU; `chunk_size=K` reduces peak memory to O(K×N) |
+| `build_random_graph` | ✅ Stable | `algorithm="sample"` uses O(num_edges) memory for large N |
+| Dashboard metrics API | ✅ Stable | Incremental `?since_row=N`; `--max-metric-rows` cap; byte-seek tail-read (v0.2.3) |
+| Large `metrics.csv` tail-read | ✅ Stable | v0.2.3: byte-seek on append; full reparse on rotation/truncation |
 
 > ⚠️ **Scalability warning:** `build_knn_graph`, `build_radius_graph`, `build_fully_connected_graph`,
 > and `build_iou_graph` use pairwise `torch.cdist` or enumerate all pairs.  Memory and time grow as

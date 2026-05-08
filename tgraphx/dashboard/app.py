@@ -704,34 +704,126 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         try:
             st = os.stat(path)
+            st_inode = getattr(st, "st_ino", None)
             cache_key = (st.st_mtime, st.st_size, self.server.max_metric_rows)
             cached = self.server._metrics_cache
+
             if cached is not None and cached[0] == cache_key:
+                # Cache hit: both the bounded data and full parsed rows are fresh.
                 cached_data = cached[1]
+                full_rows_cache = cached[2]  # {"headers": ..., "rows": [...all...]}
+                content = None  # no disk read needed
             else:
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                cached_data = _parse_metrics_bounded(content, self.server.max_metric_rows)
-                self.server._metrics_cache = (cache_key, cached_data)
+                # Cache miss: determine if we can do a byte-seek (file only grew).
+                tail_state = self.server._metrics_tail_state
+                content = None
+                full_rows_cache = None
+
+                if (
+                    tail_state is not None
+                    and tail_state.get("inode") == st_inode
+                    and st.st_size > tail_state.get("size", 0)
+                ):
+                    # File grew since last parse: read only new bytes.
+                    try:
+                        with open(path, "rb") as fbin:
+                            fbin.seek(tail_state["byte_pos"])
+                            new_bytes = fbin.read()
+                        new_text = tail_state.get("partial_buf", "") + new_bytes.decode("utf-8", errors="replace")
+                        lines = new_text.split("\n")
+                        # Last element may be a partial line (no trailing newline yet).
+                        partial = lines[-1]
+                        complete_lines = lines[:-1]
+                        new_rows_parsed = []
+                        for line in complete_lines:
+                            line = line.rstrip("\r")
+                            if not line:
+                                continue
+                            parsed: list = []
+                            for val in next(csv.reader([line])):
+                                try:
+                                    parsed.append(float(val))
+                                except ValueError:
+                                    parsed.append(val)
+                            if parsed:
+                                new_rows_parsed.append(parsed)
+                        existing = tail_state["all_rows"]
+                        all_rows_combined = existing + new_rows_parsed
+                        headers = tail_state["headers"]
+                        new_byte_pos = st.st_size - len(partial.encode("utf-8"))
+                        self.server._metrics_tail_state = {
+                            "inode": st_inode,
+                            "size": st.st_size,
+                            "byte_pos": new_byte_pos,
+                            "partial_buf": partial,
+                            "headers": headers,
+                            "all_rows": all_rows_combined,
+                        }
+                        full_rows_cache = {"headers": headers, "rows": all_rows_combined}
+                        total = len(all_rows_combined)
+                        if total > self.server.max_metric_rows:
+                            cached_data = {
+                                "headers": headers,
+                                "rows": all_rows_combined[-self.server.max_metric_rows:],
+                                "total_row_count": total,
+                                "truncated": True,
+                                "max_rows": self.server.max_metric_rows,
+                            }
+                        else:
+                            cached_data = {
+                                "headers": headers,
+                                "rows": all_rows_combined,
+                                "total_row_count": total,
+                                "truncated": False,
+                                "max_rows": self.server.max_metric_rows,
+                            }
+                        self.server._metrics_cache = (cache_key, cached_data, full_rows_cache)
+                    except (OSError, UnicodeDecodeError):
+                        content = None  # fall through to full reparse
+
+                if full_rows_cache is None:
+                    # Full reparse (inode changed, file shrank, or first read).
+                    with open(path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    full_rows_cache = _parse_metrics(content)
+                    cached_data = _parse_metrics_bounded(content, self.server.max_metric_rows)
+                    self.server._metrics_cache = (cache_key, cached_data, full_rows_cache)
+                    # Initialise tail state for next append.
+                    self.server._metrics_tail_state = {
+                        "inode": st_inode,
+                        "size": st.st_size,
+                        "byte_pos": st.st_size,
+                        "partial_buf": "",
+                        "headers": full_rows_cache["headers"],
+                        "all_rows": list(full_rows_cache["rows"]),
+                    }
 
             if since_row_raw is not None:
-                # Incremental mode: re-parse with since_row semantics.
-                # We re-read content from cache if mtime matches; otherwise
-                # from disk (cache miss already read it above).
                 try:
                     since_row = int(since_row_raw)
                 except (ValueError, TypeError):
                     self._send_json({"error": "since_row must be an integer."}, 400)
                     return
-                # Re-read content to perform incremental parse.
-                # The mtime cache only stores the bounded payload; incremental
-                # parsing needs the raw parsed data. We parse again (fast —
-                # the file is already read in this request cycle).
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                self._send_json(
-                    _parse_metrics_incremental(content, since_row, self.server.max_metric_rows)
-                )
+                # Use the cached full rows — no second disk read.
+                all_rows = full_rows_cache["rows"]
+                total = len(all_rows)
+                latest = total - 1
+                reset_required = total > 0 and since_row > latest
+                if reset_required or total == 0:
+                    new_rows_out: list = []
+                else:
+                    new_rows_out = all_rows[max(0, since_row + 1):]
+                if len(new_rows_out) > self.server.max_metric_rows:
+                    new_rows_out = new_rows_out[-self.server.max_metric_rows:]
+                self._send_json({
+                    "headers": full_rows_cache["headers"],
+                    "rows": new_rows_out,
+                    "latest_row_index": latest,
+                    "total_row_count": total,
+                    "reset_required": reset_required,
+                    "truncated": total > self.server.max_metric_rows,
+                    "max_rows": self.server.max_metric_rows,
+                })
             else:
                 self._send_json(cached_data)
         except OSError:
@@ -820,8 +912,12 @@ class DashboardServer(ThreadingHTTPServer):
         # Clamp refresh interval to a sane window so users can't accidentally
         # hammer the server or starve the UI.
         self.refresh_interval_s = max(0.5, min(60.0, float(refresh_interval_s)))
-        # (mtime, size, max_rows) → parsed metrics cache; replaced atomically
+        # (mtime, size, max_rows) → (bounded_data, full_rows) cache; replaced atomically.
+        # Tuple is 3-element: (key, bounded_payload, full_parsed_rows).
         self._metrics_cache = None
+        # Byte-offset tail-read state for append-only metrics files.
+        # Keys: inode, size, byte_pos, partial_buf, headers, all_rows.
+        self._metrics_tail_state = None
         super().__init__((host, port), DashboardHandler)
 
 

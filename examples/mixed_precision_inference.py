@@ -32,15 +32,16 @@ def _run(model: nn.Module, x: torch.Tensor, ei: torch.Tensor,
         with torch.no_grad(), ctx:
             out = model(x, ei, batch=batch)
         act_dtype = out.dtype
+        finite = torch.isfinite(out).all().item()
         print(f"  [{label}]  output {tuple(out.shape)}  dtype={act_dtype}  "
+              f"finite={'yes' if finite else 'WARN: non-finite'}  "
               f"size={_sizeof_mb(out):.3f} MB")
     except RuntimeError as e:
         if "scalar type" in str(e).lower() or "dtype" in str(e).lower():
-            # Known limitation: some GNN ops (e.g. index_add_) require
-            # matching dtypes even under autocast.  This is a PyTorch op
-            # constraint, not a TGraphX bug.
-            print(f"  [{label}]  skipped — dtype mismatch under autocast "
-                  f"(known PyTorch limitation for index_add_-based ops).")
+            # Rare dtype mismatch — should not occur after v0.2.2 dtype fixes
+            # (broadcast_edge_weight casts weight; GAT casts attn to activation dtype).
+            # If seen, it indicates a new op combination not yet handled.
+            print(f"  [{label}]  skipped — unexpected dtype mismatch: {e}")
         else:
             raise
 

@@ -12,8 +12,9 @@ See [Performance](performance.md) for performance-specific constraints.
 | Graph Transformers (global attention + positional encodings) | Not implemented | — |
 | Heterogeneous / temporal graphs | Not implemented | — |
 | Per-channel / per-pixel attention in GAT | Not implemented (scalar only) | — |
-| GAT chunked forward | Deferred | Softmax requires all edge scores |
-| SAGE / GIN chunked forward | Deferred | See [performance.md](performance.md) |
+| GAT chunked forward | ⏳ Deferred v0.2.4 | Softmax requires all edge scores; two-pass required |
+| SAGE chunked forward (`aggr="mean"` / `"max"`) | ✅ Implemented v0.2.3 | Pass `chunk_size=K` to `forward()` |
+| GIN chunked forward (`aggr="sum"`) | ✅ Implemented v0.2.3 | Pass `chunk_size=K` to `forward()` |
 | 3-D support in `AttentionMessagePassing` | Not supported | Use `TensorGATLayer(spatial_rank=3)` |
 
 ## Training framework
@@ -70,7 +71,8 @@ for trusted legacy files.
 
 | Limitation | Status |
 |---|---|
-| Incremental / tail CSV reads for huge runs | Deferred; full file read on cache miss |
+| Byte-seek tail-read for growing metrics.csv | ✅ Implemented v0.2.3 — appends-only: reads only new bytes; full reparse on file rotation |
+| Incremental client payload (`?since_row`) | ✅ Stable — browser receives only new rows; double-read bug fixed v0.2.3 |
 | TensorBoard log reading | Not implemented |
 | MLflow run reading | Not implemented |
 | Remote / cloud logdir support | Not implemented |

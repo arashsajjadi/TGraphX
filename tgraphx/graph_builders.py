@@ -284,12 +284,16 @@ def build_knn_graph(
     k: int,
     directed: bool = False,
     self_loops: bool = True,
+    chunk_size: Optional[int] = None,
 ) -> torch.LongTensor:
     """Build a k-nearest-neighbour graph from node coordinates.
 
     .. warning::
-        Pairwise distances are computed with ``torch.cdist``: **O(N²)**
-        time and memory.
+        Computation is **O(N²)** in time regardless of ``chunk_size``.
+        Without ``chunk_size`` the full ``N×N`` distance matrix is
+        materialised (**O(N²) memory**).  Setting ``chunk_size=K``
+        processes ``K`` rows at a time (**O(K×N) peak memory**), which
+        can make large-N runs feasible.
 
     Self-loops are never counted as neighbours; they are appended
     separately when ``self_loops=True``.
@@ -300,6 +304,10 @@ def build_knn_graph(
         directed: If ``False`` (default), include both ``(u→v)`` and
             ``(v→u)`` for every kNN pair (with deduplication).
         self_loops: If ``True`` (default), add one ``i→i`` per node.
+        chunk_size: Row-chunk size for distance computation.  ``None``
+            (default) materialises the full ``[N, N]`` distance matrix.
+            Values > 0 cap peak memory to ``O(chunk_size × N)`` while
+            total computation remains O(N²).
 
     Returns:
         ``edge_index`` ``[2, E]``, dtype ``torch.long``.
@@ -316,22 +324,44 @@ def build_knn_graph(
             f"k={k} must be less than num_nodes={N} "
             f"(self is excluded from kNN)"
         )
-    if N > _KNN_RADIUS_WARN_THRESHOLD:
+    if N > _KNN_RADIUS_WARN_THRESHOLD and chunk_size is None:
         warnings.warn(
             f"build_knn_graph: num_nodes={N} > {_KNN_RADIUS_WARN_THRESHOLD}. "
             f"torch.cdist allocates an O(N²) distance matrix ({N}×{N} floats). "
-            f"For large graphs use an approximate-NN library instead.",
+            f"Pass chunk_size=K to reduce peak memory to O(K×N), or use an "
+            f"approximate-NN library for very large N.",
             stacklevel=2,
         )
 
-    dist = torch.cdist(coords.float(), coords.float())  # [N, N], O(N^2)
-    # Exclude self by pushing diagonal to inf before topk
-    inf_mask = torch.diag(torch.full((N,), float("inf"), device=coords.device))
-    dist = dist + inf_mask
+    coords_f = coords.float()
 
-    _, nn_idx = torch.topk(dist, k, largest=False, dim=1)  # [N, k]
-    src = torch.arange(N, device=coords.device, dtype=torch.long).repeat_interleave(k)
-    dst = nn_idx.reshape(-1).long()
+    if chunk_size is None:
+        dist = torch.cdist(coords_f, coords_f)  # [N, N], O(N²)
+        inf_mask = torch.diag(torch.full((N,), float("inf"), device=coords.device))
+        dist = dist + inf_mask
+        _, nn_idx = torch.topk(dist, k, largest=False, dim=1)  # [N, k]
+        src = torch.arange(N, device=coords.device, dtype=torch.long).repeat_interleave(k)
+        dst = nn_idx.reshape(-1).long()
+    else:
+        # Chunked path: O(chunk_size × N) peak memory per iteration.
+        all_src: list[torch.Tensor] = []
+        all_dst: list[torch.Tensor] = []
+        for start in range(0, N, chunk_size):
+            end = min(start + chunk_size, N)
+            n_c = end - start
+            chunk_f = coords_f[start:end]
+            dist_chunk = torch.cdist(chunk_f, coords_f)  # [n_c, N]
+            # Vectorised: set self-distances to inf (row i → col start+i).
+            local_rows = torch.arange(n_c, device=coords.device)
+            global_cols = torch.arange(start, end, device=coords.device)
+            dist_chunk[local_rows, global_cols] = float("inf")
+            _, nn_c = torch.topk(dist_chunk, k, largest=False, dim=1)  # [n_c, k]
+            src_c = torch.arange(start, end, device=coords.device, dtype=torch.long).repeat_interleave(k)
+            dst_c = nn_c.reshape(-1).long()
+            all_src.append(src_c)
+            all_dst.append(dst_c)
+        src = torch.cat(all_src)
+        dst = torch.cat(all_dst)
 
     if not directed:
         src, dst = _dedup(
@@ -357,17 +387,24 @@ def build_radius_graph(
     radius: float,
     directed: bool = False,
     self_loops: bool = True,
+    chunk_size: Optional[int] = None,
 ) -> torch.LongTensor:
     """Build a radius graph: connect all pairs within Euclidean ``radius``.
 
     .. warning::
-        Uses ``torch.cdist``: **O(N²)** time and memory.
+        Computation is **O(N²)** in time regardless of ``chunk_size``.
+        Without ``chunk_size`` the full ``N×N`` distance matrix is
+        materialised (**O(N²) memory**).  Setting ``chunk_size=K``
+        processes ``K`` rows at a time (**O(K×N) peak memory**).
 
     Args:
         coords: ``[N, D]`` coordinate tensor.
         radius: Distance threshold (inclusive).
         directed: If ``False`` (default), include both directions per pair.
         self_loops: If ``True`` (default), add one self-loop per node.
+        chunk_size: Row-chunk size.  ``None`` materialises the full
+            ``[N, N]`` distance matrix.  Values > 0 cap peak memory to
+            ``O(chunk_size × N)``.
 
     Returns:
         ``edge_index`` ``[2, E]``, dtype ``torch.long``.
@@ -380,25 +417,62 @@ def build_radius_graph(
         raise ValueError(f"radius must be > 0; got {radius}")
 
     N = coords.size(0)
-    if N > _KNN_RADIUS_WARN_THRESHOLD:
+    if N > _KNN_RADIUS_WARN_THRESHOLD and chunk_size is None:
         warnings.warn(
             f"build_radius_graph: num_nodes={N} > {_KNN_RADIUS_WARN_THRESHOLD}. "
             f"torch.cdist allocates an O(N²) distance matrix ({N}×{N} floats). "
-            f"For large graphs use an approximate-NN library instead.",
+            f"Pass chunk_size=K to reduce peak memory to O(K×N), or use an "
+            f"approximate-NN library for very large N.",
             stacklevel=2,
         )
-    dist = torch.cdist(coords.float(), coords.float())  # [N, N]
 
-    eye = torch.eye(N, dtype=torch.bool, device=coords.device)
-    mask = (dist <= radius) & ~eye  # exclude self from neighbour search
+    coords_f = coords.float()
 
-    if directed:
-        # Keep only upper triangle (canonical direction)
-        upper = torch.triu(torch.ones(N, N, dtype=torch.bool, device=coords.device), diagonal=1)
-        mask = mask & upper
+    if chunk_size is None:
+        dist = torch.cdist(coords_f, coords_f)  # [N, N]
+        eye = torch.eye(N, dtype=torch.bool, device=coords.device)
+        mask = (dist <= radius) & ~eye
 
-    src, dst = torch.where(mask)
-    src, dst = src.long(), dst.long()
+        if directed:
+            upper = torch.triu(torch.ones(N, N, dtype=torch.bool, device=coords.device), diagonal=1)
+            mask = mask & upper
+
+        src, dst = torch.where(mask)
+        src, dst = src.long(), dst.long()
+    else:
+        # Chunked path: fully vectorised, O(chunk_size × N) peak memory.
+        all_src: list[torch.Tensor] = []
+        all_dst: list[torch.Tensor] = []
+        col_idx = torch.arange(N, device=coords.device, dtype=torch.long)  # [N]
+        for start in range(0, N, chunk_size):
+            end = min(start + chunk_size, N)
+            n_c = end - start
+            chunk_f = coords_f[start:end]
+            dist_chunk = torch.cdist(chunk_f, coords_f)  # [n_c, N]
+
+            # Self-exclusion mask: row i must not connect to col start+i.
+            self_mask = torch.zeros(n_c, N, dtype=torch.bool, device=coords.device)
+            local_rows = torch.arange(n_c, device=coords.device)
+            self_mask[local_rows, torch.arange(start, end, device=coords.device)] = True
+
+            conn = (dist_chunk <= radius) & ~self_mask  # [n_c, N]
+
+            if directed:
+                # Keep only (i, j) where j > global_i (upper triangle).
+                global_rows = torch.arange(start, end, device=coords.device, dtype=torch.long).unsqueeze(1)
+                conn = conn & (col_idx.unsqueeze(0) > global_rows)
+
+            chunk_row, chunk_col = torch.where(conn)
+            if chunk_row.numel() > 0:
+                all_src.append((chunk_row + start).long())
+                all_dst.append(chunk_col.long())
+
+        if all_src:
+            src = torch.cat(all_src)
+            dst = torch.cat(all_dst)
+        else:
+            src = torch.empty(0, dtype=torch.long, device=coords.device)
+            dst = torch.empty(0, dtype=torch.long, device=coords.device)
 
     if self_loops:
         loop = torch.arange(N, device=coords.device, dtype=torch.long)
@@ -417,11 +491,18 @@ def build_iou_graph(
     threshold: float,
     directed: bool = False,
     self_loops: bool = True,
+    chunk_size: Optional[int] = None,
 ) -> torch.LongTensor:
     """Build a graph where nodes (bounding boxes) are connected if IoU ≥ threshold.
 
     ``IoU(i, i) = 1.0`` so every self-loop is present whenever
     ``threshold <= 1.0`` and ``self_loops=True``.
+
+    .. warning::
+        Computation is **O(N²)** in time.  Without ``chunk_size`` the full
+        ``N×N`` IoU matrix is materialised (**O(N²) memory**).  Setting
+        ``chunk_size=K`` processes ``K`` boxes at a time (**O(K×N) peak
+        memory**).
 
     Args:
         boxes: ``[N, 4]`` in ``(x1, y1, x2, y2)`` format.
@@ -430,6 +511,9 @@ def build_iou_graph(
             ``(j,i)`` for every connected pair.
         self_loops: If ``True`` (default), include ``(i, i)`` when
             ``IoU(i,i) >= threshold``.
+        chunk_size: Row-chunk size.  ``None`` materialises the full
+            ``[N, N]`` IoU matrix.  Values > 0 cap peak memory to
+            ``O(chunk_size × N)``.
 
     Returns:
         ``edge_index`` ``[2, E]``, dtype ``torch.long``.
@@ -442,47 +526,144 @@ def build_iou_graph(
         raise ValueError(f"threshold must be in [0, 1]; got {threshold}")
 
     N = boxes.size(0)
-    if N > _FC_IOU_WARN_THRESHOLD:
+    if N > _FC_IOU_WARN_THRESHOLD and chunk_size is None:
         warnings.warn(
             f"build_iou_graph: num_nodes={N} > {_FC_IOU_WARN_THRESHOLD}. "
             f"IoU computation allocates an O(N²) matrix ({N}×{N} elements). "
-            f"Memory use grows quadratically — consider a sparser approach for large N.",
+            f"Pass chunk_size=K to reduce peak memory to O(K×N).",
             stacklevel=2,
         )
     b = boxes.float()
-
     areas = (b[:, 2] - b[:, 0]).clamp(min=0) * (b[:, 3] - b[:, 1]).clamp(min=0)
 
-    x1 = torch.max(b[:, 0].unsqueeze(1), b[:, 0].unsqueeze(0))  # [N, N]
-    y1 = torch.max(b[:, 1].unsqueeze(1), b[:, 1].unsqueeze(0))
-    x2 = torch.min(b[:, 2].unsqueeze(1), b[:, 2].unsqueeze(0))
-    y2 = torch.min(b[:, 3].unsqueeze(1), b[:, 3].unsqueeze(0))
+    def _iou_row_chunk(b_chunk: torch.Tensor, areas_chunk: torch.Tensor) -> torch.Tensor:
+        """Return IoU matrix of shape [len(b_chunk), N] against all N boxes."""
+        x1 = torch.max(b_chunk[:, 0].unsqueeze(1), b[:, 0].unsqueeze(0))
+        y1 = torch.max(b_chunk[:, 1].unsqueeze(1), b[:, 1].unsqueeze(0))
+        x2 = torch.min(b_chunk[:, 2].unsqueeze(1), b[:, 2].unsqueeze(0))
+        y2 = torch.min(b_chunk[:, 3].unsqueeze(1), b[:, 3].unsqueeze(0))
+        inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)
+        union = areas_chunk.unsqueeze(1) + areas.unsqueeze(0) - inter
+        return inter / union.clamp(min=1e-8)
 
-    inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)
-    union = areas.unsqueeze(1) + areas.unsqueeze(0) - inter
-    iou = inter / union.clamp(min=1e-8)
+    if chunk_size is None:
+        iou = _iou_row_chunk(b, areas)  # [N, N]
+        conn = iou >= threshold
 
-    conn = iou >= threshold  # [N, N] symmetric
+        if not self_loops:
+            conn.fill_diagonal_(False)
 
-    if not self_loops:
-        conn.fill_diagonal_(False)
+        if directed:
+            diag_offset = 0 if self_loops else 1
+            upper = torch.triu(
+                torch.ones(N, N, dtype=torch.bool, device=boxes.device),
+                diagonal=diag_offset,
+            )
+            conn = conn & upper
 
-    if directed:
-        # Upper triangle: canonical direction for directed graphs
-        diag_offset = 0 if self_loops else 1
-        upper = torch.triu(
-            torch.ones(N, N, dtype=torch.bool, device=boxes.device),
-            diagonal=diag_offset,
-        )
-        conn = conn & upper
+        src, dst = torch.where(conn)
+        return torch.stack([src.long(), dst.long()], dim=0)
+    else:
+        # Chunked path: O(chunk_size × N) peak memory.
+        all_src: list[torch.Tensor] = []
+        all_dst: list[torch.Tensor] = []
+        col_idx = torch.arange(N, device=boxes.device, dtype=torch.long)
 
-    src, dst = torch.where(conn)
-    return torch.stack([src.long(), dst.long()], dim=0)
+        for start in range(0, N, chunk_size):
+            end = min(start + chunk_size, N)
+            n_c = end - start
+            b_c = b[start:end]
+            areas_c = areas[start:end]
+            iou_c = _iou_row_chunk(b_c, areas_c)  # [n_c, N]
+            conn_c = iou_c >= threshold  # [n_c, N]
+
+            if not self_loops:
+                local_rows = torch.arange(n_c, device=boxes.device)
+                conn_c[local_rows, torch.arange(start, end, device=boxes.device)] = False
+
+            if directed:
+                global_rows = torch.arange(start, end, device=boxes.device, dtype=torch.long).unsqueeze(1)
+                diag_offset = 0 if self_loops else 1
+                conn_c = conn_c & (col_idx.unsqueeze(0) >= global_rows + diag_offset)
+
+            chunk_row, chunk_col = torch.where(conn_c)
+            if chunk_row.numel() > 0:
+                all_src.append((chunk_row + start).long())
+                all_dst.append(chunk_col.long())
+
+        if all_src:
+            return torch.stack([torch.cat(all_src), torch.cat(all_dst)], dim=0)
+        return torch.zeros(2, 0, dtype=torch.long, device=boxes.device)
 
 
 # --------------------------------------------------------------------------- #
 # Random graph                                                                  #
 # --------------------------------------------------------------------------- #
+
+def _build_random_graph_sample(
+    N: int,
+    num_edges: int,
+    directed: bool,
+    self_loops: bool,
+    seed: Optional[int],
+    device,
+) -> torch.LongTensor:
+    """O(num_edges) memory random graph sampling for large N.
+
+    Only supports ``directed=True, self_loops=False`` (the common case).
+    Uses a flat-index → (src, dst) mapping:
+        flat_idx in [0, N*(N-1))
+        src = flat_idx // (N-1)
+        raw = flat_idx % (N-1)
+        dst = raw if raw < src else raw + 1   # skip self
+    Samples without replacement via rejection sampling (O(num_edges) expected).
+    """
+    if not directed or self_loops:
+        raise ValueError(
+            "algorithm='sample' currently supports only "
+            "directed=True and self_loops=False. "
+            "For other configurations use algorithm='exact'."
+        )
+    n_cand = N * (N - 1)
+    if num_edges < 0:
+        raise ValueError(f"num_edges must be >= 0; got {num_edges}")
+    if num_edges > n_cand:
+        raise ValueError(
+            f"Cannot sample {num_edges} directed edges from {n_cand} candidates "
+            f"(num_nodes={N}, directed=True, self_loops=False)."
+        )
+    if num_edges == 0:
+        ei = torch.zeros(2, 0, dtype=torch.long)
+        if device is not None:
+            ei = ei.to(device)
+        return ei
+
+    gen = torch.Generator()
+    if seed is not None:
+        gen.manual_seed(seed)
+
+    # Rejection sampling: over-sample and deduplicate until we have enough.
+    collected: set[int] = set()
+    oversample = max(int(num_edges * 1.5) + 16, num_edges + 16)
+    while len(collected) < num_edges:
+        batch = torch.randint(0, n_cand, (oversample,), generator=gen).tolist()
+        for idx in batch:
+            collected.add(idx)
+            if len(collected) == num_edges:
+                break
+        oversample = min(oversample * 2, n_cand)
+
+    flat = sorted(collected)  # deterministic order
+    flat_t = torch.tensor(flat, dtype=torch.long)
+    src = flat_t // (N - 1)
+    raw = flat_t % (N - 1)
+    dst = torch.where(raw < src, raw, raw + 1)
+
+    if device is not None:
+        src = src.to(device)
+        dst = dst.to(device)
+    return torch.stack([src, dst], dim=0)
+
 
 def build_random_graph(
     num_nodes: int,
@@ -491,6 +672,7 @@ def build_random_graph(
     self_loops: bool = False,
     seed: Optional[int] = None,
     device=None,
+    algorithm: str = "exact",
 ) -> torch.LongTensor:
     """Build a random graph by sampling edges without replacement.
 
@@ -511,6 +693,16 @@ def build_random_graph(
             the candidate pool.
         seed: Optional RNG seed for reproducibility.
         device: Target device.
+        algorithm: Sampling algorithm.
+
+            * ``"exact"`` (default) — builds the full O(N²) candidate pool
+              and samples via ``torch.randperm``.  Deterministic and exact;
+              use for small/medium N.
+            * ``"sample"`` — uses O(``num_edges``) memory by sampling flat
+              edge indices directly without materialising the full candidate
+              pool.  Suitable for large N where ``num_edges ≪ N²``.
+              Requires ``directed=True, self_loops=False`` (the most common
+              case); raises ``ValueError`` for unsupported combinations.
 
     Returns:
         ``edge_index`` ``[2, E]``, dtype ``torch.long``.
@@ -519,9 +711,15 @@ def build_random_graph(
         raise ValueError(f"num_nodes must be >= 1; got {num_nodes}")
     if num_edges < 0:
         raise ValueError(f"num_edges must be >= 0; got {num_edges}")
+    if algorithm not in ("exact", "sample"):
+        raise ValueError(f"algorithm must be 'exact' or 'sample'; got {algorithm!r}")
 
     N = num_nodes
 
+    if algorithm == "sample":
+        return _build_random_graph_sample(N, num_edges, directed, self_loops, seed, device)
+
+    # ── "exact" path: O(N²) candidate pool ──────────────────────────────────
     # Build candidate pool on CPU (randperm is CPU-only for large N)
     idx = torch.arange(N)
     src_cand = idx.repeat_interleave(N)

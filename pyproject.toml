@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tgraphx"
 # Keep this in sync with tgraphx/__init__.py::__version__
-version = "0.2.2"
+version = "0.2.3"
 description = "Tensor-aware graph neural networks preserving spatial node feature layouts"
 readme = "README.md"
 requires-python = ">=3.9"
