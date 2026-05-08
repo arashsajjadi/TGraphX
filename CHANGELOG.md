@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased] — v0.4.0 candidate: neural mining + plotting + benchmarks
+## [0.4.0] - 2026-05-08 — v0.4.0 candidate: neural mining + plotting + benchmarks
 
 ### Added — Code
 
@@ -1417,7 +1417,7 @@ back to the old style.
 
 ---
 
-[Unreleased]: https://github.com/arashsajjadi/TGraphX/compare/v0.2.0...HEAD
+[0.4.0] - 2026-05-08: https://github.com/arashsajjadi/TGraphX/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.2.0
 [0.1.2]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.1.2
 [0.1.1]: https://github.com/arashsajjadi/TGraphX/releases/tag/v0.1.1
