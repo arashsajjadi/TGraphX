@@ -221,6 +221,65 @@ from .api import (
     run_link_prediction_baseline,
 )
 
+# ── Graph paths and algorithms (Beta) ────────────────────────────────────────
+from .paths import (
+    bfs_order,
+    dfs_order,
+    multi_source_bfs,
+    reachable_nodes,
+    dijkstra_shortest_path,
+    batched_shortest_path_length,
+    all_pairs_shortest_path_length,
+    reconstruct_path,
+    minimum_spanning_tree,
+    maximum_spanning_tree,
+    cut_size,
+    normalized_cut,
+    conductance,
+    volume,
+    boundary_edges,
+    write_path_summary,
+)
+
+# ── Graph learning utilities (Experimental) ───────────────────────────────────
+from .graph_learning import (
+    contrastive_loss,
+    supervised_contrastive_loss,
+    triplet_loss,
+    bpr_loss,
+    reconstruction_loss,
+    drop_edges,
+    drop_nodes,
+    mask_node_features,
+    add_random_edges,
+    subgraph_sampling,
+    DGIObjective,
+    GraphCLObjective,
+    create_negative_pairs,
+    create_positive_pairs_from_batch,
+)
+
+# ── Structural encodings (Beta) ───────────────────────────────────────────────
+from .structural_encodings import (
+    degree_encoding,
+    random_walk_structural_encoding,
+    shortest_path_anchor_encoding,
+    centrality_encoding,
+    community_encoding,
+    StructuralEncodingModule,
+    attach_structural_encodings,
+)
+
+# ── Graph sequence models (Experimental) ─────────────────────────────────────
+from .sequence_models import (
+    GraphSequenceEncoder,
+    GraphSequenceClassifier,
+    GraphRNNEdgeGenerator,
+    bfs_sequence_encode,
+    random_walk_sequence_encode,
+    pad_sequences,
+)
+
 # ── Neural mining (Experimental) ─────────────────────────────────────────────
 from .neural import (
     PrototypeMembershipScorer,

@@ -5,6 +5,76 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — v0.4.3 candidate
+
+### Added — Graph path algorithms (`tgraphx/mining/paths.py`) — Beta
+
+Traversal, shortest paths, spanning trees, and cut metrics in pure Python/PyTorch:
+
+- **Traversal**: `bfs_order`, `dfs_order`, `multi_source_bfs`, `reachable_nodes`
+- **Shortest paths**: `dijkstra_shortest_path` (Dijkstra with non-negative weights),
+  `batched_shortest_path_length` (multiple sources), `all_pairs_shortest_path_length`
+  (size-guarded at 1 000 nodes), `reconstruct_path` (predecessor dict → node list)
+- **Spanning trees**: `minimum_spanning_tree`, `maximum_spanning_tree`
+  (Kruskal with deterministic tie-breaking; returns forest for disconnected graphs)
+- **Cut metrics**: `cut_size`, `normalized_cut`, `conductance`, `volume`,
+  `boundary_edges`, `write_path_summary` (dashboard JSON artifact writer)
+
+Tests: `tests/test_mining_paths_algorithms.py` (33 tests) — hand-computed path
+lengths, negative weight error, MST correctness, cut size, conductance, path reconstruction.
+
+### Added — Graph learning utilities (`tgraphx/mining/graph_learning.py`) — Experimental
+
+Self-supervised learning foundations: contrastive losses, augmentations, and objectives:
+
+- **Losses**: `contrastive_loss` (NT-Xent), `supervised_contrastive_loss` (Khosla et al.),
+  `triplet_loss`, `bpr_loss` (Bayesian Personalised Ranking), `reconstruction_loss`
+- **Augmentations**: `drop_edges`, `drop_nodes`, `mask_node_features`,
+  `add_random_edges`, `subgraph_sampling` — all deterministic with ``seed``
+- **Self-supervised objectives**: `DGIObjective` (Deep Graph Infomax-style),
+  `GraphCLObjective` (GraphCL NT-Xent)
+- **Utilities**: `create_negative_pairs`, `create_positive_pairs_from_batch`
+
+Tests: `tests/test_mining_graph_learning.py` (36 tests) — forward/backward, determinism,
+no-false-negatives, augmentation shape correctness, DGI loss finite.
+
+### Added — Structural/positional encodings (`tgraphx/mining/structural_encodings.py`) — Beta
+
+Node-level structural encodings for use in GNNs and graph transformers:
+
+- `degree_encoding` — out/in-degree, normalised
+- `random_walk_structural_encoding` — random-walk landing probabilities (RRWP, guarded at 2 000 nodes)
+- `shortest_path_anchor_encoding` — distances to random anchor nodes
+- `centrality_encoding` — degree, PageRank, eigenvector, Katz centralities
+- `community_encoding` — one-hot community assignment
+- `StructuralEncodingModule` — learnable linear projection of any encoding
+- `attach_structural_encodings` — concatenates to vector node features;
+  for spatial/volumetric features raises a clear error with ``mode="side"`` guidance
+
+### Added — Graph sequence models (`tgraphx/mining/sequence_models.py`) — Experimental
+
+RNN/LSTM/GRU foundations for graph-as-sequence tasks:
+
+- `bfs_sequence_encode` / `random_walk_sequence_encode` — encode graph as traversal sequences
+- `pad_sequences` — batch variable-length sequences
+- `GraphSequenceEncoder` — LSTM encoder with ``"last"``/``"mean"``/``"max"`` pooling
+- `GraphSequenceClassifier` — LSTM encoder + classification head; passes tiny-overfit test
+- `GraphRNNEdgeGenerator` — GraphRNN-inspired (You et al., 2018) edge-sequence graph generator
+  for tiny graphs; autoregressive generation; backward-compatible training step
+
+Tests: forward/backward, determinism, tiny-overfit, shape checks, symmetric adjacency generation.
+
+### Added — Examples
+
+- `examples/graph_paths_algorithms_demo.py` — BFS/DFS, weighted Dijkstra, MST, cuts
+- `examples/graph_learning_demo.py` — NT-Xent, SupCon, BPR, DGI, augmentations, sequence model
+
+Both added to `run_all_fast_examples.py`.
+
+**Total: 1936 tests pass (+69 new), 12 skipped, 0 warnings.**
+
+---
+
 ## [Unreleased] — v0.4.2 candidate
 
 ### Added — Traditional graph mining expansion (Beta)

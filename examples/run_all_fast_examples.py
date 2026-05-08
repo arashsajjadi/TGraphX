@@ -90,6 +90,9 @@ FAST_EXAMPLES = [
     ("graph_mining_wl_kernel_demo.py",      "Graph mining: WL features and kernel",       None),
     ("graph_mining_anomaly_demo.py",        "Graph mining: anomaly detection",            None),
     ("prototype_graph_membership_demo.py",  "Prototype graph membership classification",  None),
+    # v0.4.3 — paths, graph learning, sequence models
+    ("graph_paths_algorithms_demo.py",      "BFS/DFS, Dijkstra, MST, cuts",              None),
+    ("graph_learning_demo.py",              "Self-supervised learning, contrastive, DGI", None),
 ]
 
 
