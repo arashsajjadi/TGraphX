@@ -1,204 +1,168 @@
 # TGraphX Roadmap
 
-This document tracks planned work by release.  Items listed here are **not
-yet implemented**.  "Planned" means the feature is on the roadmap; it is not
-a committed delivery date.
+This document tracks **planned** future work toward TGraphX v0.4.0.  Items
+listed here are not yet committed deliveries — they are the direction of
+travel.
 
-See [Limitations](limitations.md) for the full list of known constraints and
-[CHANGELOG.md](../CHANGELOG.md) for completed work.
-
----
-
-## v0.2.1 (current prep)
-
-Focus: documentation accuracy, contradiction fixes, runtime warnings.
-
-- ✅ Fix `TensorGATLayer` edge-feature table contradiction (spatial edges
-  are accepted via mean-pooling; the ✗ entry was wrong).
-- ✅ Fix `ConvMessagePassing` docs: `aggr="max"` is supported (stale
-  "NotImplementedError" claim removed).
-- ✅ Fix hardware table: Windows/macOS "Fully supported" → "Best-effort (no CI)".
-- ✅ Add `Support status` section with backend/feature/scalability/attention tables.
-- ✅ Add runtime O(N²) `warnings.warn` to `build_knn_graph`, `build_radius_graph`,
-  `build_fully_connected_graph`, `build_iou_graph`.
-- ✅ Add `tests/test_documentation_claims.py`.
-- ✅ Add this roadmap.
+For completed work see [`CHANGELOG.md`](../CHANGELOG.md); for known
+constraints see [`limitations.md`](limitations.md); for the architectural
+plan that drives this roadmap see [`architecture.md`](architecture.md).
 
 ---
 
-## v0.2.2 — AMP / dtype / backend robustness
+## Milestone summary
 
-- Investigate and document `TensorGATLayer` float16 autocast path (the
-  `index_add_` dtype-mismatch issue).
-- Add dtype-cast guard or clear runtime error for float16 GAT autocast.
-- Smoke-test `torch.compile` across all four spatial GNN families.
-- Document `torch.compile` known-good and known-broken op patterns.
-- Add CI matrix entry for PyTorch 2.x (currently pinned to latest).
-
----
-
-## v0.2.3 — Chunking and scalability ✅ (released)
-
-- ✅ `TensorGraphSAGELayer` chunked forward (`aggr="mean"` and `"max"`).
-- ✅ `TensorGINLayer` chunked forward (`aggr="sum"`).
-- ✅ Dashboard byte-seek tail-read for `metrics.csv`.
-- ✅ Dashboard `?since_row` incremental double-read fix.
-- ✅ `build_knn_graph` / `build_radius_graph` / `build_iou_graph`: `chunk_size`
-  parameter for O(K×N) peak memory.
-- ✅ `build_random_graph(algorithm="sample")` for O(num_edges) memory sampling.
+| Version | Theme | Status |
+|---------|-------|--------|
+| v0.1.x – v0.2.x | Core layers, datasets, transforms, metrics, dashboard | Released |
+| v0.3.0 | Experiment manager, explainability, vector model zoo, dashboard hardening | Released |
+| v0.3.1 | Audit hardening, doc fixes, CNNEncoder top-level export, Python 3.10+ | Released |
+| **v0.3.2** | **Public benchmark campaign + foundations** | **In progress** |
+| v0.3.3 | Mature samplers / loaders / link-prediction negative sampling | Planned |
+| v0.3.4 | Hetero / temporal stabilization + deeper OGB/TGB integration | Planned |
+| v0.3.5 | Optional acceleration + sparse backends + out-of-core foundation | Planned |
+| v0.3.6 | Larger model zoo + graph algorithms foundation + community files | Planned |
+| v0.4.0 | Stabilization release: stable API, real benchmarks, full docs nav | Planned |
 
 ---
 
-## v0.2.4 — GAT chunking, attention modes, ecosystem ✅ (release prep)
+## v0.3.2 — Public benchmark campaign and foundations (in progress)
 
-- ✅ `TensorGATLayer` two-pass chunked forward — log-sum-exp algorithm:
-  Pass 1 accumulates per-destination max statistics, Pass 2 normalises and
-  aggregates values.  Output matches unchunked within float32 tolerance.
-- ✅ `TensorGATLayer(attention_mode="channel")` — 🧪 experimental per-channel
-  attention with shape `[E, K, C_head]`.
-- ✅ `image_to_patches(padding="auto")` and `volume_to_patches(padding="auto")`.
-- ✅ `MLflowLogger` — optional, lazy `mlflow` import, `tgraphx[mlflow]` extra.
-- ✅ `tgraphx.interop` — optional PyG/DGL data converters (lazy imports).
-- ✅ `tgraphx.learned_graph` — soft adjacency, top-k edges, EdgeScorer,
-  `build_knn_graph_from_embeddings`.
-- ✅ `tgraphx.core.hetero_graph.HeteroGraph` — 🧪 experimental container.
-- ✅ `tgraphx.core.temporal.TemporalGraphSequence` — 🧪 experimental container.
-- ✅ `tgraphx.layers.graph_transformer.GraphTransformerLayer` — 🧪 experimental
-  vector-only global self-attention with FFN, residual, LayerNorm.
-- ✅ CI hardening: Windows pip line-continuation fix; Ubuntu dashboard live
-  smoke uses port-binding poll instead of fixed sleep.
+**Theme:** convert TGraphX from "unit-tested framework" to "validated on real
+public examples where feasible", with honest reporting.  Lay foundations for
+later milestones via small primitives.
 
----
+Planned:
 
-## v0.2.5 — Hetero / Temporal real functionality ✅ (release prep)
+- `benchmarks/public/` package — clean foundation for public-dataset
+  benchmark scripts with a uniform CLI (`--root`, `--download`,
+  `--max-samples`, `--max-nodes`, `--epochs`, `--device`, `--output-dir`,
+  `--seed`, `--json`, `--strict`).
+- Public benchmark scripts:
+  - `mnist_patch_benchmark.py` (FakeData by default; real MNIST opt-in via
+    `--download`),
+  - `pyg_cora_benchmark.py` (skips cleanly without PyG),
+  - additional scripts (FashionMNIST, EMNIST, OGB) to follow.
+- `docs/benchmark_protocol.md` — how to run public benchmarks, exactly
+  what JSON they emit, what they do *not* claim.
+- `docs/public_benchmark_reports.md` — table of small-data engineering
+  metrics from local runs (no SOTA, no superiority).
+- Foundation primitives (small, isolated, well-tested):
+  - `tgraphx.sampling.negative_sampling`,
+    `structured_negative_sampling`, `batched_negative_sampling`.
+  - `tgraphx.algorithms` package — `connected_components`,
+    `weakly_connected_components`, `is_connected`, `bfs_edges`,
+    `shortest_path_length`.
+  - `tgraphx.temporal.time_encoding` — sinusoidal and Time2Vec-style
+    learnable encodings.
 
-- ✅ `HeteroGraphBatch` — disjoint typed-node/typed-edge batching with
-  per-type batch vectors and clean error reporting for inconsistent stores.
-- ✅ `HeteroConv` — relation-dispatch wrapper with sum/mean/max
-  cross-relation aggregation.  Vector node features fully supported;
-  spatial features supported when relation modules accept them.
-- ✅ Hetero readouts — `hetero_mean_pool`, `hetero_sum_pool`,
-  `hetero_max_pool`, `hetero_concat_pool` with stable type ordering.
-- ✅ `HeteroGraphClassifier`, `HeteroNodeClassifier` — vector-feature
-  classifiers with per-type input projections.
-- ✅ `TemporalGraphBatch` — equal-length and variable-length sequence
-  batching with per-snapshot masks and padded timestamps.
-- ✅ `temporal_readout` — `last`/`mean`/`max` with mask support.
-- ✅ `TemporalGraphClassifier`, `TemporalGraphRegressor` — stateless
-  snapshot-loop wrappers that delegate to a base graph encoder.
-- ✅ Hetero PyG/DGL converters — `to_pyg_heterodata`, `from_pyg_heterodata`,
-  `to_dgl_heterograph`, `from_dgl_heterograph` (lazy imports).
-- ✅ 52 new tests + 4 new examples.
+What v0.3.2 is **not**:
 
-Deferred to v0.2.6+:
-- ⏳ Hetero tensor-aware spatial classifiers (canned).
-- ⏳ Temporal recurrent memory module (TGN/TGAT-style).
-- ⏳ Temporal sampling utilities.
+- Not a NetworkX replacement.  Algorithms are GNN-oriented utilities, not
+  full graph-analytics.
+- Not a leaderboard.  Public benchmark reports are local engineering
+  smoke runs, not benchmark wins.
+- Not full TGN/TGAT.  Temporal additions are time-encoding primitives,
+  not memory modules yet.
 
 ---
 
-## v0.2.6 — Sampling, minibatching, distributed feasibility ✅ (release prep)
+## v0.3.3 — Mature samplers, loaders, link prediction (planned)
 
-- ✅ `induced_subgraph`, `edge_subgraph`, `k_hop_subgraph`, `sample_nodes`,
-  `sample_edges`, `neighbor_sample` in `tgraphx.sampling`.
-- ✅ `SubgraphDataLoader`, `NeighborSamplerLoader` in
-  `tgraphx.sampling_loaders` — plain iterables, deterministic with seed,
-  no hidden multiprocessing.
-- ✅ `tgraphx.distributed` helpers (`get_rank`, `get_world_size`,
-  `is_rank_zero`, `rank_zero_print`, `@rank_zero_only`, `barrier`).
-  Never auto-initialises DDP.
-- ✅ `benchmarks/benchmark_sampling.py` (CI-safe `--small` mode).
-- ✅ Examples: `neighbor_sampling_demo.py`, `ddp_training_smoke.py`.
-
-Deferred to v0.2.7+:
-- ⏳ Hetero / temporal sampling (per-relation, per-snapshot semantics).
-- ⏳ Random-walk sampling.
-- ⏳ Multi-GPU full DDP example (currently single-process smoke only).
+- `NeighborSampler` / `NeighborLoader` — layer-wise fanouts, replace /
+  no-replace, deterministic generators, original-ID preservation.
+- `GraphSAINTNodeSampler` / `GraphSAINTEdgeSampler` /
+  `GraphSAINTRandomWalkSampler` (label experimental until normalization
+  is fully validated).
+- Cluster-GCN-style partitioning: random and BFS partitioners (METIS
+  optional, no mandatory dependency).
+- `NodeLoader`, `LinkLoader`, `GraphLoader` minibatch interfaces.
+- Hard-negative sampling using embedding scores.
+- `tgraphx.pipeline` — GraphBolt-inspired lightweight pipeline
+  (`ItemSet` → `sample_items` → `sample_neighbors` → `fetch_features`).
+  Pure Python, no mandatory dependency.
+- Sampling benchmarks under `benchmarks/sampling/`.
 
 ---
 
-## v0.2.7 — Graph Transformer maturity ✅ (release prep)
+## v0.3.4 — Hetero / temporal stabilization, deeper OGB/TGB integration (planned)
 
-- ✅ `GraphTransformerLayer` (vector-only) hardened: ``positional_encoding``
-  (degree / Laplacian), ``pe_dim``, ``edge_bias`` constructor args; new
-  ``positional`` and ``edge_bias_dense`` forward kwargs (default-None,
-  backward-compatible).
-- ✅ `tgraphx.layers.transformer_encodings` — pure-PyTorch helpers:
-  `degree_encoding`, `laplacian_eigvec_encoding`, `build_adjacency_bias`.
-- ✅ Factory integration: `make_layer("graph_transformer", ...)`.
-- ✅ Stability docs: `docs/experimental_policy.md`,
-  `docs/deprecation_policy.md`, `docs/migration_v0_2_to_v0_3.md`.
-
-Deferred to post-v0.3:
-- ⏳ Tensor-aware Graph Transformer (token granularity is an open
-  design question).
-- ⏳ Memory-safe attention approximations (sparse / linear / chunked).
+- `tgraphx.hetero` package consolidation — `HeteroGraph`, `HeteroBatch`,
+  relation-aware samplers, `RGCNConv`, `HGTConv`, `HANConv` (vector
+  features stable first).
+- `tgraphx.temporal` package consolidation — `TemporalGraphSequence`,
+  `TemporalGraphBatch`, time encodings, optional memory module
+  (TGN-inspired, experimental).
+- `tgraphx.integrations.ogb` — `OGBDatasetAdapter` polish, evaluator
+  wrapping, official split access.
+- `tgraphx.integrations.tgb` — optional TGB adapter (skips cleanly if
+  TGB is missing).
+- Hetero / temporal benchmarks under `benchmarks/hetero/` and
+  `benchmarks/temporal/`.
 
 ---
 
-## v0.2.8 — Sampling completion + README honesty ✅ (release prep)
+## v0.3.5 — Optional acceleration and storage foundation (planned)
 
-- ✅ `random_walk_sample` (homogeneous): direction `out` / `in`,
-  configurable `num_walks_per_seed` and `restart_prob`, deterministic
-  with `seed`, no global RNG side effects.
-- ✅ Hetero sampling: `hetero_induced_subgraph` and
-  `hetero_neighbor_sample` (per-relation fanout, multi-hop, BFS-style;
-  preserves edge weights, edge features, node labels, graph label).
-- ✅ Temporal window sampling: `temporal_window_sample` and
-  `temporal_window_sample_batch` (variable-length aware).
-- ✅ Top-level re-exports + new tests
-  (`tests/test_random_walk_sample.py`, `tests/test_hetero_sampling.py`,
-  `tests/test_temporal_sampling.py` — 49 new tests).
-- ✅ Example: `examples/sampling_demo_v028.py` (CPU-safe).
-- ✅ README/limitations/roadmap rewritten to reflect reality:
-  - GAT chunked forward and `attention_mode="channel"` correctly
-    labelled stable / experimental rather than "Planned v0.2.4".
-  - Hetero / temporal classifiers, `HeteroConv`, sampling, distributed
-    helpers correctly listed as shipped (instead of "out of scope").
-  - Windows / macOS smoke CI properly credited (was "No CI").
-  - Stale "v0.2.4" / "v0.2.5+ planned" wording removed.
-
-Deferred:
-- ⏳ Per-pixel / per-voxel GAT attention (only with a memory-safe
-  variant — naive memory cost prohibitive).
-- ⏳ Generic rank-agnostic message-passing layer (v0.3 design).
-- ⏳ Recurrent temporal memory module (TGN / TGAT).
-- ⏳ Full automatic multi-GPU training framework.
+- `tgraphx.backends` — backend registry (`pure_torch` default, optional
+  `torch_scatter` / `pyg_lib` adapters) with strict numerical parity
+  tests against the pure-PyTorch path.
+- Sparse utilities: `edge_index_to_csr/csc` and back, `coalesce_edges`,
+  `sort_edge_index`, `degree`, `segment_*` reductions, `sparse_softmax`,
+  `edge_softmax`.
+- `tgraphx.storage` — `InMemoryFeatureStore`, `MemmapFeatureStore`,
+  `GraphStore`, partition metadata.  Out-of-core utilities, **not**
+  billion-edge production training.
 
 ---
 
-## v0.2.9 — Ecosystem expansion (planned)
+## v0.3.6 — Model zoo expansion, algorithms, community (planned)
 
-- Robust PyG/DGL converter coverage (batches, hetero edge attributes,
-  per-relation masks).
-- Optional plugin architecture for external integrations.
-- Optional curated public-dataset loaders (no required network calls).
-- Optional GraphRAG-adjacent local utilities (purely local; no remote APIs).
+- Vector model zoo additions: `GraphSAGEConv` (vector), `SGC`,
+  `ChebConv`, `TAGConv`, `EdgeConv`, `GatedGraphConv`, `MLPBaseline`.
+- Architectures: `GCNNet`, `GATNet`, `GraphSAGENet`, `GINNet`,
+  `APPNPNet`, `HeteroRGCNNet`.
+- Tensor-aware nets: `ConvMessagePassingNet`, `TensorGATNet`,
+  `PatchGraphClassifier`, `VolumeGraphClassifier`.
+- Algorithms expansion: `pagerank` (small graph), `clustering_coefficient`,
+  `triangle_count`, structural feature helpers.
+- Community: `CONTRIBUTING.md` overhaul, `SECURITY.md`,
+  `CODE_OF_CONDUCT.md`, GitHub issue templates, contribution guide,
+  example gallery with difficulty labels.
 
 ---
 
-## v0.3.0 — Stabilization
+## v0.4.0 — Stabilization release (planned)
 
-- Promote mature experimental APIs to stable.
-- Backward-compatibility audit and deprecation policy.
-- Migration guide.
-- Final README/support-matrix cleanup.
-- Full release audit.
+- Freeze the v0.3.x stable APIs.
+- Move unfinished systems into a clearly labelled `tgraphx.experimental`
+  namespace.
+- Real benchmark report (small-graph, single-machine, honest).
+- Docs site / tutorial gallery.
+- Release-quality README, `api_stability.md`, `limitations.md`,
+  `migration_v0_3_to_v0_4.md`.
+- No half-implemented claims.
 
 ---
 
 ## Honest positioning
 
-- **"Planned"** items may be re-scoped, split, or moved to later versions.
-- **"Feasibility study"** means we will evaluate before committing.
-- Items in v0.3.x depend on v0.2.x work completing without major API
-  changes that would break the v0.3.x design.
+- "Planned" items may be re-scoped, split, or moved to later versions.
+- "Feasibility study" means evaluation precedes commitment.
+- TGraphX is **not** trying to replace PyTorch Geometric, DGL/GraphBolt,
+  cuGraph, NetworkX, or OGB/TGB.  It is a tensor-aware graph learning
+  library with a local-first dashboard, an explicit no-telemetry
+  philosophy, and an honest documentation discipline.
 - No SOTA or superiority claims are made for any planned feature.
+- No CUDA CI claim, no full MPS support claim, no full automatic
+  multi-GPU training claim.
 
 ---
 
 ## See also
 
+- [Architecture plan](architecture.md)
 - [Limitations](limitations.md)
+- [API stability policy](api_stability.md)
 - [Performance](performance.md)
 - [CHANGELOG.md](../CHANGELOG.md)

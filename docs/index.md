@@ -28,11 +28,17 @@ feature maps, `[C, D, H, W]` volumetric maps, or plain vectors `[D]`.
 | Public dataset validation | [public_dataset_validation.md](public_dataset_validation.md) |
 | Device validation | [device_validation.md](device_validation.md) |
 | Benchmarks | [benchmarks.md](benchmarks.md) |
+| Public benchmark protocol | [benchmark_protocol.md](benchmark_protocol.md) |
+| Public benchmark reports | [public_benchmark_reports.md](public_benchmark_reports.md) |
+| Negative sampling | [negative_sampling.md](negative_sampling.md) |
+| Graph algorithms | [graph_algorithms.md](graph_algorithms.md) |
+| Temporal utilities | [temporal.md](temporal.md) |
 | Performance | [performance.md](performance.md) |
 | Interoperability (PyG/DGL/OGB) | [comparison.md](comparison.md) |
 | API stability | [api_stability.md](api_stability.md) |
 | Limitations | [limitations.md](limitations.md) |
 | Roadmap | [roadmap.md](roadmap.md) |
+| Architecture (v0.3.x → v0.4.0) | [architecture.md](architecture.md) |
 | Migration guide | [migration_v0_2_to_v0_3.md](migration_v0_2_to_v0_3.md) |
 | Deprecation policy | [deprecation_policy.md](deprecation_policy.md) |
 | Experimental policy | [experimental_policy.md](experimental_policy.md) |

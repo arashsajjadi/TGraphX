@@ -5,7 +5,173 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [Unreleased] — v0.3.2 foundations
+
+### Added — Code
+
+- `tgraphx.sampling_negative` (Beta) — link-prediction primitives that do
+  not pull in a heavy dependency:
+  - `negative_sampling(edge_index, num_nodes, num_neg_samples=None,
+    method="sparse"|"dense", force_undirected=False, seed=None)`
+  - `structured_negative_sampling(edge_index, num_nodes,
+    contains_neg_self_loops=True, seed=None)`
+  - `batched_negative_sampling(edge_index, batch, num_neg_samples=None,
+    method="sparse"|"dense", force_undirected=False, seed=None)`
+
+  Invariants enforced by `tests/test_negative_sampling.py` (27 tests):
+  no false negatives, no self-loops, no duplicates within the output,
+  determinism with `seed`, no global RNG pollution, batched sampling
+  never crosses graph boundaries.
+
+- `tgraphx.algorithms` (Beta) — pure-PyTorch graph algorithms used by
+  GNN workflows.  Not a NetworkX replacement.
+  - `connectivity.py`: `connected_components`,
+    `weakly_connected_components`, `is_connected`,
+    `number_connected_components` — iterative `min`-label propagation,
+    O(diameter) iterations, runs on CPU and GPU.
+  - `traversal.py`: `bfs_layers`, `bfs_edges`, `shortest_path_length`
+    (unweighted single-source).
+
+  Tests: `tests/test_algorithms.py` (26 tests).
+
+- `tgraphx.temporal` package — initial home for the temporal subsystem.
+  Ships in v0.3.2:
+  - `sinusoidal_time_encoding(timestamps, dim, base=10_000.0)` (Beta) —
+    parameter-free Transformer-style positional encoding for timestamps.
+  - `LearnableTimeEncoding(dim, init_scale=0.01)` (Experimental) —
+    Time2Vec-style trainable encoder (Kazemi et al., 2019).
+
+  Tests: `tests/test_time_encoding.py` (19 tests) covering shape,
+  dtype, finiteness, determinism, no global RNG pollution, gradient
+  health.
+
+  The existing `tgraphx.temporal_sampling`,
+  `tgraphx.core.temporal{,_batch}`, and snapshot-loop classifiers are
+  unchanged; consolidation under `tgraphx.temporal` continues in
+  v0.3.4.
+
+### Added — Top-level re-exports
+
+- `tgraphx.negative_sampling`, `tgraphx.structured_negative_sampling`,
+  `tgraphx.batched_negative_sampling` are now available from the
+  top-level package.
+
+### Added — Public benchmarks
+
+- `benchmarks/public/` package with a uniform CLI
+  (`--root`, `--download`, `--max-samples`, `--max-nodes`, `--epochs`,
+  `--device`, `--output-dir`, `--seed`, `--json`, `--strict`):
+  - `_common.py` — argparse helpers, device resolution, soft-skip
+    handling, the four-file artefact writer.
+  - `mnist_patch_benchmark.py` — FakeData by default (no network),
+    real torchvision MNIST opt-in via `--download`.
+  - `pyg_cora_benchmark.py` — Planetoid Cora; skips cleanly when
+    `torch_geometric` is missing, instructs to pass `--download`.
+
+  Tests: `tests/test_public_benchmarks.py` (8 tests) verify `--help`,
+  optional-dependency skip, JSON schema of `benchmark_results.json`,
+  no-network default for MNIST, `--strict` behaviour.
+
+### Added — Documentation
+
+- `docs/architecture.md` — master architecture plan for the v0.3.2 →
+  v0.4.0 work, including the module map, optional-dependency policy,
+  stability levels, testing/documentation discipline, dashboard
+  artefact contract, and security/privacy invariants.
+- `docs/roadmap.md` — rewritten around the new v0.3.2 → v0.4.0
+  milestones (public benchmarks, samplers/loaders, hetero/temporal
+  stabilisation, optional acceleration, model zoo expansion,
+  stabilisation release).
+- `docs/benchmark_protocol.md` — the protocol every public benchmark
+  script in `benchmarks/public/` follows.
+- `docs/public_benchmark_reports.md` — local engineering metrics
+  recorded from public-dataset runs (no leaderboard claims).
+
+### Safe Extras (v0.3.2 audit pass)
+
+- `tgraphx.algorithms.structural` (Beta) — `degree(edge_index, num_nodes,
+  mode="out"|"in"|"both")` and `degree_features(edge_index, num_nodes,
+  log_scale)` for structural node features.  Tests: `tests/test_graph_utils.py`
+  (17 tests).
+
+- `tgraphx.sampling_negative.hard_negative_sampling` (Beta) — sample
+  negatives with high embedding similarity without allocating an O(N²)
+  matrix.  `candidate_pool_size` controls memory.  Deduplicates and
+  excludes positives before ranking by cosine / dot similarity.
+  Tests: `tests/test_hard_negative_sampling.py` (17 tests).
+
+- `benchmarks/public/fashionmnist_patch_benchmark.py` — FakeData
+  default (no network); real FashionMNIST opt-in via `--download`.  Same
+  uniform CLI as `mnist_patch_benchmark.py`.
+
+- Examples:
+  - `examples/negative_sampling_demo.py`
+  - `examples/graph_algorithms_demo.py`
+  - `examples/time_encoding_demo.py`
+  All three are added to `examples/run_all_fast_examples.py`.
+
+- Docs:
+  - `docs/negative_sampling.md` (full reference for all 4 sampling functions)
+  - `docs/graph_algorithms.md` (connectivity, traversal, structural utilities)
+  - `docs/temporal.md` (time encoding + planned v0.3.4 surface)
+
+### Bug fixes (v0.3.2 audit pass)
+
+- `tgraphx/sampling_negative.py`: `structured_negative_sampling` now
+  returns output tensors on the same device as the input `edge_index`.
+  Previously always returned CPU tensors for CUDA graphs.
+
+- `tgraphx/algorithms/traversal.py`: `_check` now validates
+  `edge_index` bounds when `num_nodes` is provided.  Previously a
+  node-id ≥ num_nodes caused a cryptic PyTorch index error instead of a
+  clear `ValueError`.
+
+- `tgraphx/temporal/time_encoding.py`:
+  - `sinusoidal_time_encoding`: removed redundant double-cast
+    (`to(float32) if not fp else to(float32)`).
+  - `sinusoidal_time_encoding`: `base ≤ 0` now raises a clear
+    `ValueError` instead of the cryptic `math domain error` from
+    `math.log`.
+
+### Additional tests (v0.3.2 audit pass)
+
+- `tests/test_negative_sampling.py`: +7 tests for complete-graph (0
+  possible negatives), single-node, two-node, all-but-one-edge, and
+  CUDA device preservation.
+
+- `tests/test_algorithms.py`: +7 tests for self-loop/duplicate edge
+  robustness, out-of-range node validation, large-sparse-ring smoke,
+  optional NetworkX parity.
+
+- `tests/test_time_encoding.py`: +6 tests for `base ≤ 0` validation,
+  `dim=2` edge case, large-timestamp finiteness, and CUDA device
+  preservation.
+
+### Stability classifications
+
+| Symbol | Level |
+|--------|-------|
+| `negative_sampling`, `structured_negative_sampling`, `batched_negative_sampling` | Beta |
+| `connected_components`, `weakly_connected_components`, `is_connected`, `number_connected_components` | Beta |
+| `bfs_layers`, `bfs_edges`, `shortest_path_length` | Beta |
+| `sinusoidal_time_encoding` | Beta |
+| `LearnableTimeEncoding` | Experimental |
+| `benchmarks/public/*` scripts | Beta (CLI may evolve) |
+
+### Honest scope
+
+- v0.3.2 does **not** add a memory module (TGN/TGAT-style); only the
+  time-encoding primitives.  Memory modules land in v0.3.4.
+- The graph algorithms package is not a NetworkX replacement; only
+  GNN-oriented utilities are included.
+- Public benchmarks are smoke / engineering metrics, not leaderboard
+  numbers.  No SOTA or superiority claim.
+
+---
+
+## [0.3.1] — 2026-05-08
+
+Final v0.3.0 audit hardening released as a patch.
 
 ### Added — Documentation
 

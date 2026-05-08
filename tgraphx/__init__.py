@@ -125,6 +125,13 @@ from .temporal_sampling import (
     temporal_window_sample,
     temporal_window_sample_batch,
 )
+# Negative sampling primitives for link-prediction (v0.3.2 beta).
+from .sampling_negative import (
+    negative_sampling,
+    structured_negative_sampling,
+    batched_negative_sampling,
+    hard_negative_sampling,
+)
 
 __all__ = [
     "__version__",
@@ -230,4 +237,12 @@ __all__ = [
     "hetero_neighbor_sample",
     "temporal_window_sample",
     "temporal_window_sample_batch",
+    # Negative sampling (v0.3.2 beta)
+    "negative_sampling",
+    "structured_negative_sampling",
+    "batched_negative_sampling",
+    "hard_negative_sampling",
+    # Graph algorithms (v0.3.2 beta)
+    # (imported from tgraphx.algorithms; not re-exported at top level
+    #  to avoid namespace pollution)
 ]

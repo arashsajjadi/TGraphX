@@ -78,6 +78,29 @@ changes in a minor v0.3.x release:
   `TemporalGraphClassifier`, `TemporalGraphRegressor`.
 - `GraphTransformerLayer` and `tgraphx.layers.transformer_encodings`.
 
+## Beta — added in v0.3.2 (in [Unreleased] until release)
+
+These APIs ship with full test coverage but their signatures may evolve
+before v0.4.0.  See [architecture.md](architecture.md) for the broader
+plan.
+
+- `tgraphx.negative_sampling`, `tgraphx.structured_negative_sampling`,
+  `tgraphx.batched_negative_sampling`, `tgraphx.hard_negative_sampling`
+  — link-prediction primitives (in `tgraphx.sampling_negative`).
+- `tgraphx.algorithms.connected_components`,
+  `weakly_connected_components`, `is_connected`,
+  `number_connected_components`, `bfs_layers`, `bfs_edges`,
+  `shortest_path_length`, `degree`, `degree_features`
+  — pure-PyTorch graph algorithms.
+- `tgraphx.temporal.sinusoidal_time_encoding` — deterministic time
+  encoding.
+
+## Experimental — added in v0.3.2 (in [Unreleased] until release)
+
+- `tgraphx.temporal.LearnableTimeEncoding` — Time2Vec-style trainable
+  time encoder.  Marked experimental until v0.3.4 evaluates it on a
+  real temporal benchmark.
+
 ## Legacy / deprecated
 
 - `AttentionMessagePassing` — kept for backward compatibility; prefer

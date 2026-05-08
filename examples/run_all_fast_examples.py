@@ -75,6 +75,10 @@ FAST_EXAMPLES = [
     ("explainability_saliency_demo.py",     "Saliency + IG + perturbation",              None),
     ("explainability_attention_demo.py",    "Attention → per-edge scores",               None),
     ("model_zoo_demo.py",                   "Vector model zoo (GCN / GATv2 / APPNP)",     None),
+    # v0.3.2 — negative sampling, algorithms, time encoding
+    ("negative_sampling_demo.py",           "Negative sampling primitives demo",          None),
+    ("graph_algorithms_demo.py",            "Graph algorithms (components, BFS, degree)",  None),
+    ("time_encoding_demo.py",               "Temporal time encoding demo",                None),
 ]
 
 
