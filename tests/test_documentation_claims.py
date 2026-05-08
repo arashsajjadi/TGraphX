@@ -599,6 +599,32 @@ class TestV028SamplingClaims:
         )
         assert "sampling" in sampled.metadata
 
+    def test_readme_has_no_scary_symbols(self):
+        """v0.3.0 contract: the main README must not look like a warning board."""
+        text = _read(README)
+        bad = ["⚠️", "❌", "⛔", "⏳", "🧪", "🚫"]
+        found = [b for b in bad if b in text]
+        assert not found, (
+            f"README contains scary status symbols: {found}.  "
+            f"Move detailed limitations to docs/limitations.md and rephrase "
+            f"calmly in README."
+        )
+
+    def test_readme_uses_calm_language(self):
+        """No 'Best-effort'/'Out of scope'/'Planned'/'Deferred' wall-of-warning prose."""
+        text = _read(README).lower()
+        # We allow these words in CHANGELOG-style references inside docs/, but
+        # not in the user-facing README body.
+        bad = [
+            "best-effort", "out of scope", "future release", "current release",
+            "planned v0.2", "⏳ planned",
+        ]
+        found = [b for b in bad if b in text]
+        assert not found, (
+            f"README contains warning-board language: {found}. "
+            f"Use calm, current-state wording; move details to docs/."
+        )
+
     def test_temporal_window_sample_works(self):
         from tgraphx import (
             Graph, TemporalGraphSequence, TemporalGraphBatch,

@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "0.2.9"
+__version__ = "0.3.0"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -31,6 +31,11 @@ from .layers.attention_message import AttentionMessagePassing
 from .layers.gat import TensorGATLayer
 from .layers.sage import TensorGraphSAGELayer
 from .layers.gin import TensorGINLayer
+# v0.3.0 model-zoo additions (vector node features).
+from .layers.vector_gcn import GCNConv
+from .layers.gatv2 import GATv2Conv
+from .layers.appnp import APPNP
+from .layers.pooling import global_mean_pool, global_sum_pool, global_max_pool
 
 # ── Graph builders and patch helpers ─────────────────────────────────────────
 from .graph_builders import (
@@ -76,7 +81,23 @@ from .training import (
 # CSVLogger: zero optional dependencies.
 # TensorBoardLogger/MLflowLogger: class objects imported here; their heavy
 # dependencies (tensorboard/mlflow) are loaded lazily only when instantiated.
-from .tracking import CSVLogger, TensorBoardLogger, MLflowLogger, write_graph_stats
+from .tracking import (
+    CSVLogger,
+    MLflowLogger,
+    TensorBoardLogger,
+    write_benchmark_results,
+    write_dataset_metadata,
+    write_experiment_config,
+    write_explanation_metadata,
+    write_graph_stats,
+    write_hardware_report,
+    write_hetero_graph_metadata,
+    write_metrics_summary,
+    write_run_metadata,
+    write_sampling_metadata,
+    write_temporal_metadata,
+    write_transform_metadata,
+)
 
 # ── Performance utilities ─────────────────────────────────────────────────────
 from .performance import env_report, recommended_device, estimate_message_memory
@@ -127,6 +148,13 @@ __all__ = [
     "TensorGATLayer",
     "TensorGraphSAGELayer",
     "TensorGINLayer",
+    # Vector model-zoo (v0.3.0)
+    "GCNConv",
+    "GATv2Conv",
+    "APPNP",
+    "global_mean_pool",
+    "global_sum_pool",
+    "global_max_pool",
     # Graph builders
     "build_grid_graph",
     "build_grid_graph_3d",
@@ -161,11 +189,22 @@ __all__ = [
     "train_epoch",
     "evaluate",
     "fit",
-    # Metric logging
+    # Metric logging + dashboard metadata writers
     "CSVLogger",
     "TensorBoardLogger",
     "MLflowLogger",
     "write_graph_stats",
+    "write_run_metadata",
+    "write_dataset_metadata",
+    "write_transform_metadata",
+    "write_metrics_summary",
+    "write_benchmark_results",
+    "write_explanation_metadata",
+    "write_experiment_config",
+    "write_hardware_report",
+    "write_sampling_metadata",
+    "write_hetero_graph_metadata",
+    "write_temporal_metadata",
     # Performance utilities
     "env_report",
     "recommended_device",

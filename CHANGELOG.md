@@ -9,6 +9,127 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.0] — 2026-05-07 (release prep)
+
+First broad stabilisation release.  Adds an experiment manager, an
+explainability foundation, a curated vector model zoo, dashboard
+metadata writers for every major framework feature, and a
+professionally rewritten README.
+
+### Added — Experiment manager (`tgraphx.experiments`)
+
+- `ExperimentConfig`, `DatasetConfig`, `ModelConfig`, `TrainingConfig`,
+  `CallbackConfig`, `TransformConfig` dataclasses.
+- `load_config(path_or_dict)` — YAML / JSON loader with safe parsing
+  (no `eval`, no `exec`); rejects unknown top-level keys.
+- `Runner` — config-driven training runner that writes
+  `run_metadata.json`, `experiment_config.json`,
+  `experiment_summary.json`, `metrics.csv`, and (when callbacks
+  request them) `checkpoints/{best,latest}.pt` under an explicit
+  `run_dir` only.
+- `GridRunner` — multi-seed × cartesian-grid sweeps with a top-level
+  `grid_summary.json`.
+- Built-in callbacks: `EarlyStopping`, `ModelCheckpoint`,
+  `CSVLoggerCallback`, `LearningRateLogger`.
+- Console scripts: `tgraphx-train`, `tgraphx-grid`, `tgraphx-report`.
+- `summarize_runs`, `write_markdown_report`, `write_summary_csv`.
+- Three example configs under `examples/configs/` plus
+  `examples/experiment_config_quickstart.py`.
+
+### Added — Explainability (`tgraphx.explain`)
+
+- `node_feature_saliency`, `integrated_gradients`,
+  `edge_gradient_attribution`, `edge_perturbation_attribution`,
+  `attention_to_edge_scores`, `patch_saliency_to_image_grid`,
+  `patch_saliency_to_volume_projection`,
+  `export_explanation_metadata`, `export_edge_scores_csv`,
+  `export_patch_heatmap_json`.
+- All methods CPU-safe, no autograd retention, no causal claims.
+- Examples: `explainability_saliency_demo.py`,
+  `explainability_attention_demo.py`.
+
+### Added — Vector model zoo
+
+- `tgraphx.layers.GCNConv` (Kipf & Welling, 2017).
+- `tgraphx.layers.GATv2Conv` (Brody et al., 2022).
+- `tgraphx.layers.APPNP` (Klicpera et al., 2019).
+- `tgraphx.layers.global_sum_pool / global_mean_pool / global_max_pool`.
+- `tgraphx.models.model_zoo.list_layers / make_zoo_layer`.
+- Example: `model_zoo_demo.py`.
+
+### Added — Dashboard metadata writers (`tgraphx.tracking`)
+
+Eleven explicit, atomic JSON writers covering every dashboard-readable
+file the v0.3.0 ecosystem can produce: `write_run_metadata`,
+`write_dataset_metadata`, `write_transform_metadata`,
+`write_metrics_summary`, `write_benchmark_results`,
+`write_explanation_metadata`, `write_experiment_config`,
+`write_hardware_report`, `write_sampling_metadata`,
+`write_hetero_graph_metadata`, `write_temporal_metadata`.  Existing
+artefacts (`metrics.csv`, `run_metadata.json`, `graph_metadata.json`,
+`graph_stats.json`) are unchanged; the dashboard offline export and
+live server stay fully backwards-compatible.
+
+### Added — Tests (+88 vs. v0.2.9)
+
+- `tests/test_experiments.py` — config validation, runner, early
+  stopping, model checkpoint, run-dir-only writes, grid expansion,
+  CLI invocation.
+- `tests/test_explainability.py` — shape / finiteness / no-autograd-
+  retention / export round-trip.
+- `tests/test_model_zoo.py` — forward / backward / isolated nodes /
+  registry / pooling.
+- `tests/test_dashboard_metadata.py` — every new metadata writer +
+  dashboard backwards compatibility + atomic-failure cleanup.
+- `tests/test_math_invariants_v030.py` — permutation equivariance,
+  edge-order invariance, GAT attention sums-to-one per destination
+  per head, chunked-vs-unchunked GAT parity.
+- `tests/test_tiny_overfit_v030.py` — synthetic-dataset trainability
+  + gradient-health checks for 4-layer GCN stacks.
+- `tests/test_documentation_claims.py` extended with two new tests
+  (`test_readme_has_no_scary_symbols`,
+  `test_readme_uses_calm_language`) that prevent regressions in the
+  README's tone.
+
+### Changed — README rewrite
+
+The README is fully rewritten in calm, current-state, professional
+prose:
+
+- **Zero scary symbols.**  All `⚠️`/`❌`/`⛔`/`⏳`/`🧪`/`🚫`
+  occurrences are removed.  Detailed limitations move to
+  `docs/limitations.md`.
+- New sections cover datasets/transforms/metrics/benchmarks, the
+  experiment manager, explainability, the vector model zoo, the
+  dashboard metadata writers, and an honest backend/platform table.
+- Optional integrations are presented as a small table of adapters
+  rather than a wall of warnings.
+- A concise **Boundaries** section keeps the true technical limits
+  visible without dramatising them.
+
+`tests/test_documentation_claims.py::TestReadmeHonesty` prevents drift
+back to the old style.
+
+### Honest scope (kept, calmly worded)
+
+- TGraphX is not a drop-in replacement for PyG or DGL.
+- TGraphX provides DDP-aware helpers and a single-process smoke
+  example, not an automatic multi-GPU training framework.
+- Per-pixel / per-voxel GAT attention is not shipped; per-channel
+  attention is shipped as `attention_mode="channel"`.
+- Recurrent temporal memory modules (TGN, TGAT) are not shipped;
+  temporal workflows use the stateless snapshot-loop pattern.
+- Synthetic datasets are sanity / tutorial datasets, not benchmarks;
+  benchmark scripts are reproducibility tools, not real-world
+  performance comparisons.
+- `kNN`, `radius`, `IoU`, and fully-connected graph builders are
+  mathematically `O(N²)`; chunked variants reduce peak memory.
+- Universal arbitrary-rank node-feature support across every layer is
+  a future direction; the supported layouts today are vector,
+  2-D spatial, and 3-D volumetric.
+
+---
+
 ## [0.2.9] — 2026-05-07 (release prep)
 
 ### Added — Dataset ecosystem

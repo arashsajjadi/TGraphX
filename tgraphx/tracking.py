@@ -472,4 +472,175 @@ def write_graph_stats(graph_obj: Any, path: str) -> None:
         _json.dump(stats, f, ensure_ascii=False, indent=2)
 
 
-__all__ = ["CSVLogger", "TensorBoardLogger", "write_graph_stats"]
+# ─────────────────────────────────────────────────────────────────────────────
+# Dashboard metadata writers (v0.3.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _atomic_write_json(path: str, payload: dict) -> str:
+    """Internal helper — atomic write of a JSON dict."""
+    import json as _json
+    import os as _os
+    import tempfile as _tempfile
+
+    parent = _os.path.dirname(_os.path.abspath(path)) or "."
+    _os.makedirs(parent, exist_ok=True)
+    fd, tmp = _tempfile.mkstemp(prefix=_os.path.basename(path) + ".",
+                                suffix=".tmp", dir=parent)
+    try:
+        with _os.fdopen(fd, "w", encoding="utf-8") as f:
+            _json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+        _os.replace(tmp, path)
+    except Exception:
+        try:
+            _os.remove(tmp)
+        except OSError:
+            pass
+        raise
+    return path
+
+
+def write_run_metadata(path: str, **fields: Any) -> str:
+    """Write ``run_metadata.json`` for the dashboard.
+
+    Common fields the dashboard renders: ``run_name``, ``status``
+    (``"running"``/``"completed"``/``"failed"``), ``total_epochs``,
+    ``device``, ``task``, ``tgraphx_version``, ``seed``,
+    ``started_at`` / ``finished_at`` (ISO-8601 UTC).
+    """
+    return _atomic_write_json(path, dict(fields))
+
+
+def write_dataset_metadata(path: str, **fields: Any) -> str:
+    """Write ``dataset_metadata.json`` for the dashboard.
+
+    Common fields: ``name``, ``task``, ``graph_type``, ``upstream_library``,
+    ``num_graphs``, ``num_nodes``, ``num_edges``, ``num_classes``,
+    ``citation``, ``license``.
+    """
+    return _atomic_write_json(path, dict(fields))
+
+
+def write_transform_metadata(path: str, transforms, **extra: Any) -> str:
+    """Write ``transform_metadata.json`` describing the transform pipeline."""
+    if hasattr(transforms, "transforms"):
+        names = [type(t).__name__ for t in transforms.transforms]
+    elif isinstance(transforms, (list, tuple)):
+        names = [type(t).__name__ if not isinstance(t, str) else t
+                 for t in transforms]
+    else:
+        names = [type(transforms).__name__]
+    payload = {"pipeline": names}
+    payload.update(extra)
+    return _atomic_write_json(path, payload)
+
+
+def write_metrics_summary(path: str, **fields: Any) -> str:
+    """Write ``metrics_summary.json`` (final/best metrics for the dashboard)."""
+    return _atomic_write_json(path, dict(fields))
+
+
+def write_benchmark_results(path: str, **fields: Any) -> str:
+    """Write a ``benchmark_*.json`` artefact for the dashboard.
+
+    Recommended fields: ``benchmark`` (name), ``device``, ``dtype``,
+    ``seed``, ``elapsed_s``, ``num_graphs``, ``num_nodes``,
+    ``num_edges``, ``tgraphx_version``.
+    """
+    return _atomic_write_json(path, dict(fields))
+
+
+def write_explanation_metadata(path: str, *, method: str, target: Any,
+                               **extra: Any) -> str:
+    """Write ``explanation_metadata.json`` describing an explanation artefact.
+
+    The dashboard's explanation panel reads this alongside
+    ``explanation_edges.csv`` and / or ``explanation_patch_heatmap.json``.
+    """
+    payload: dict = {"method": str(method), "target": target}
+    payload.update(extra)
+    return _atomic_write_json(path, payload)
+
+
+def write_experiment_config(path: str, config) -> str:
+    """Persist an :class:`tgraphx.experiments.ExperimentConfig` for the dashboard."""
+    if hasattr(config, "to_dict"):
+        payload = config.to_dict()
+    elif isinstance(config, dict):
+        payload = dict(config)
+    else:
+        raise TypeError(
+            f"write_experiment_config: expected ExperimentConfig or dict; "
+            f"got {type(config)}"
+        )
+    return _atomic_write_json(path, payload)
+
+
+def write_hardware_report(path: str, **fields: Any) -> str:
+    """Write ``hardware_report.json`` (env + device info) for the dashboard."""
+    return _atomic_write_json(path, dict(fields))
+
+
+def write_sampling_metadata(path: str, **fields: Any) -> str:
+    """Write ``sampling_metadata.json`` describing a sampler run."""
+    return _atomic_write_json(path, dict(fields))
+
+
+def write_hetero_graph_metadata(path: str, hetero_graph=None, **fields: Any) -> str:
+    """Write ``hetero_graph_metadata.json`` describing a hetero graph.
+
+    Pass either a :class:`tgraphx.HeteroGraph` (typed-store summary is
+    extracted automatically) or explicit fields.
+    """
+    payload: dict = {}
+    if hetero_graph is not None:
+        try:
+            payload["node_types"] = list(hetero_graph.node_types)
+            payload["num_nodes_dict"] = {k: int(v) for k, v in
+                                          hetero_graph.num_nodes_dict.items()}
+            payload["num_edges_dict"] = {
+                "::".join(k) if isinstance(k, tuple) else str(k): int(v)
+                for k, v in hetero_graph.num_edges_dict.items()
+            }
+        except AttributeError:
+            pass
+    payload.update(fields)
+    return _atomic_write_json(path, payload)
+
+
+def write_temporal_metadata(path: str, sequence=None, **fields: Any) -> str:
+    """Write ``temporal_metadata.json`` describing a temporal sequence/batch."""
+    payload: dict = {}
+    if sequence is not None:
+        if hasattr(sequence, "num_snapshots"):
+            payload["num_snapshots"] = int(sequence.num_snapshots)
+        if hasattr(sequence, "lengths"):
+            payload["lengths"] = list(sequence.lengths)
+        if hasattr(sequence, "is_variable_length"):
+            payload["is_variable_length"] = bool(sequence.is_variable_length)
+        if hasattr(sequence, "timestamps") and sequence.timestamps is not None:
+            try:
+                payload["timestamps"] = list(sequence.timestamps)
+            except TypeError:
+                pass
+    payload.update(fields)
+    return _atomic_write_json(path, payload)
+
+
+__all__ = [
+    "CSVLogger",
+    "TensorBoardLogger",
+    "MLflowLogger",
+    "write_graph_stats",
+    "write_run_metadata",
+    "write_dataset_metadata",
+    "write_transform_metadata",
+    "write_metrics_summary",
+    "write_benchmark_results",
+    "write_explanation_metadata",
+    "write_experiment_config",
+    "write_hardware_report",
+    "write_sampling_metadata",
+    "write_hetero_graph_metadata",
+    "write_temporal_metadata",
+]

@@ -1,0 +1,20 @@
+seed: 0
+run_name: lr_sweep
+dataset:
+  name: synthetic:patch_graph
+  kwargs: {num_graphs: 8, image_size: 16, patch_size: 4, seed: 0}
+model:
+  task: graph_classification
+  layer: conv
+  in_shape: [1, 4, 4]
+  hidden_shape: [8, 4, 4]
+  num_layers: 2
+  num_classes: 6
+training:
+  epochs: 4
+  lr: 0.001
+  optimizer: adam
+grid:
+  training.lr: [0.001, 0.005]
+  training.epochs: [3, 4]
+seeds: [0, 1]

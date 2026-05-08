@@ -1,0 +1,24 @@
+seed: 0
+run_name: node_classification
+dataset:
+  name: synthetic:node_classification
+  kwargs:
+    num_nodes: 100
+    num_classes: 4
+    feature_dim: 16
+    seed: 0
+model:
+  task: node_classification
+  layer: linear
+  in_shape: [16]
+  hidden_shape: [32]
+  num_layers: 2
+  num_classes: 4
+training:
+  epochs: 8
+  lr: 0.005
+  optimizer: adam
+  device: cpu
+  loss: cross_entropy
+callbacks:
+  - {name: csv_logger}

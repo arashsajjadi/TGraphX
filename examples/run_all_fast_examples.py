@@ -70,6 +70,11 @@ FAST_EXAMPLES = [
     ("dgl_dataset_adapter_demo.py",         "DGL → TGraphX conversion (skips if missing)", None),
     ("ogb_dataset_adapter_demo.py",         "OGB evaluator wrapper (mock)",             None),
     ("mnist_patch_graph_demo.py",           "MNIST patch demo (FakeData by default)",   None),
+    # v0.3.0 — experiments + explainability + model zoo
+    ("experiment_config_quickstart.py",     "Run a YAML experiment config",              None),
+    ("explainability_saliency_demo.py",     "Saliency + IG + perturbation",              None),
+    ("explainability_attention_demo.py",    "Attention → per-edge scores",               None),
+    ("model_zoo_demo.py",                   "Vector model zoo (GCN / GATv2 / APPNP)",     None),
 ]
 
 
