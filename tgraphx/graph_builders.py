@@ -823,6 +823,8 @@ def image_to_patches(
     images: torch.Tensor,
     patch_size: Union[int, Tuple[int, int]],
     stride: Union[int, Tuple[int, int], None] = None,
+    padding: str = "none",
+    pad_value: float = 0.0,
 ) -> torch.Tensor:
     """Extract patches from a batch of 2-D images.
 
@@ -834,24 +836,53 @@ def image_to_patches(
         patch_size: Patch size as int or ``(ph, pw)``.
         stride: Stride as int or ``(sh, sw)``.  Defaults to
             ``patch_size`` (non-overlapping patches).
+        padding: Padding mode.
+
+            * ``"none"`` (default) — raises ``ValueError`` if the image
+              dimensions are not exactly divisible by ``patch_size`` and
+              ``stride``.  Identical to the v0.2.3 behaviour.
+            * ``"auto"`` — pads the image on the right and bottom so that
+              the dimensions are exactly covered.  The padded region is
+              filled with ``pad_value`` (default ``0.0``).  The number of
+              patches therefore equals ``ceil((H - ph) / sh) + 1`` ×
+              ``ceil((W - pw) / sw) + 1``.
+
+        pad_value: Constant fill value used when ``padding="auto"``.
 
     Returns:
         ``[B, P, C, ph, pw]`` where ``P = n_h * n_w``.
 
     Raises:
-        ValueError: If ``images`` is not 4-D, or if dimensions are not
-            exactly covered by patch_size and stride.
+        ValueError: If ``images`` is not 4-D; if ``padding="none"`` and
+            dimensions are not exactly covered; if ``padding`` is unknown.
     """
     if images.dim() != 4:
         raise ValueError(
             f"images must be a 4-D tensor [B, C, H, W]; "
             f"got shape {tuple(images.shape)}"
         )
+    if padding not in ("none", "auto"):
+        raise ValueError(
+            f"padding must be 'none' or 'auto'; got {padding!r}"
+        )
     B, C, H, W = images.shape
     ph, pw = _normalize_2d(patch_size)
     sh, sw = _normalize_2d(stride) if stride is not None else (ph, pw)
 
-    n_h, n_w = patch_grid_shape(H, W, (ph, pw), (sh, sw))
+    if padding == "auto":
+        import math
+        n_h = math.ceil(max(H - ph, 0) / sh) + 1
+        n_w = math.ceil(max(W - pw, 0) / sw) + 1
+        H_needed = (n_h - 1) * sh + ph
+        W_needed = (n_w - 1) * sw + pw
+        pad_h = max(H_needed - H, 0)
+        pad_w = max(W_needed - W, 0)
+        if pad_h > 0 or pad_w > 0:
+            images = torch.nn.functional.pad(
+                images, (0, pad_w, 0, pad_h), mode="constant", value=pad_value
+            )
+    else:
+        n_h, n_w = patch_grid_shape(H, W, (ph, pw), (sh, sw))
 
     x = images.unfold(2, ph, sh).unfold(3, pw, sw)
     # [B, C, n_h, n_w, ph, pw]
@@ -919,6 +950,8 @@ def volume_to_patches(
     volumes: torch.Tensor,
     patch_size: Union[int, Tuple[int, int, int]],
     stride: Union[int, Tuple[int, int, int], None] = None,
+    padding: str = "none",
+    pad_value: float = 0.0,
 ) -> torch.Tensor:
     """Extract patches from a batch of 3-D volumes.
 
@@ -930,24 +963,48 @@ def volume_to_patches(
         patch_size: Patch size as int or ``(pd, ph, pw)``.
         stride: Stride as int or ``(sd, sh, sw)``.  Defaults to
             ``patch_size`` (non-overlapping).
+        padding: ``"none"`` (default, exact tiling required) or ``"auto"``
+            (pad to make dimensions exactly divisible).
+        pad_value: Constant fill value used when ``padding="auto"``.
 
     Returns:
         ``[B, P, C, pd, ph, pw]`` where ``P = n_d * n_h * n_w``.
 
     Raises:
-        ValueError: If ``volumes`` is not 5-D, or if dimensions are not
-            exactly covered.
+        ValueError: If ``volumes`` is not 5-D, or if ``padding="none"`` and
+            dimensions are not exactly covered.
     """
     if volumes.dim() != 5:
         raise ValueError(
             f"volumes must be a 5-D tensor [B, C, D, H, W]; "
             f"got shape {tuple(volumes.shape)}"
         )
+    if padding not in ("none", "auto"):
+        raise ValueError(
+            f"padding must be 'none' or 'auto'; got {padding!r}"
+        )
     B, C, D, H, W = volumes.shape
     pd, ph, pw = _normalize_3d(patch_size)
     sd, sh, sw = _normalize_3d(stride) if stride is not None else (pd, ph, pw)
 
-    n_d, n_h, n_w = volume_patch_grid_shape(D, H, W, (pd, ph, pw), (sd, sh, sw))
+    if padding == "auto":
+        import math
+        n_d = math.ceil(max(D - pd, 0) / sd) + 1
+        n_h = math.ceil(max(H - ph, 0) / sh) + 1
+        n_w = math.ceil(max(W - pw, 0) / sw) + 1
+        D_needed = (n_d - 1) * sd + pd
+        H_needed = (n_h - 1) * sh + ph
+        W_needed = (n_w - 1) * sw + pw
+        pad_d = max(D_needed - D, 0)
+        pad_h = max(H_needed - H, 0)
+        pad_w = max(W_needed - W, 0)
+        if pad_d > 0 or pad_h > 0 or pad_w > 0:
+            volumes = torch.nn.functional.pad(
+                volumes, (0, pad_w, 0, pad_h, 0, pad_d),
+                mode="constant", value=pad_value,
+            )
+    else:
+        n_d, n_h, n_w = volume_patch_grid_shape(D, H, W, (pd, ph, pw), (sd, sh, sw))
 
     x = volumes.unfold(2, pd, sd).unfold(3, ph, sh).unfold(4, pw, sw)
     # [B, C, n_d, n_h, n_w, pd, ph, pw]

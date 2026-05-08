@@ -39,9 +39,9 @@ jobs:
       # Install CPU-only PyTorch first so pip resolves torch>=1.13 without
       # pulling CUDA wheels on the CI runner.
       - name: Install CPU-only PyTorch
-        run: |
-          pip install torch torchvision \
-            --index-url https://download.pytorch.org/whl/cpu
+        # Single-line form is required for Windows PowerShell compatibility
+        # (POSIX `\` line-continuation does not work on PowerShell).
+        run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       # Install the package in editable mode with dev extras
       # (pytest, build, twine).  torch/torchvision are already satisfied.
@@ -246,12 +246,30 @@ jobs:
       - name: Dashboard live server smoke
         run: |
           python - <<'PY'
-          import csv, json, subprocess, sys, tempfile, time, urllib.request
+          import csv, json, socket, subprocess, sys, tempfile, time, urllib.request
           from pathlib import Path
 
           # Use a fixed high port to avoid port-detection complexity in CI.
-          # 18765 is chosen to be far from default 8765 and unlikely to conflict.
           PORT = 18765
+
+          def _wait_for_port(port: int, host: str = "127.0.0.1",
+                             timeout_s: float = 30.0) -> bool:
+              """Poll until the TCP port accepts connections, or timeout."""
+              deadline = time.monotonic() + timeout_s
+              while time.monotonic() < deadline:
+                  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                  s.settimeout(0.5)
+                  try:
+                      s.connect((host, port))
+                      s.close()
+                      return True
+                  except (ConnectionRefusedError, OSError):
+                      try:
+                          s.close()
+                      except Exception:
+                          pass
+                      time.sleep(0.2)
+              return False
 
           with tempfile.TemporaryDirectory() as d:
               run = Path(d) / "run"
@@ -269,9 +287,23 @@ jobs:
               srv = subprocess.Popen(
                   [sys.executable, "-m", "tgraphx.dashboard",
                    "--logdir", str(run), "--port", str(PORT), "--quiet"],
-                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
               )
-              time.sleep(1.5)  # allow server to bind
+
+              # Poll until the port is actually bound (max 30 s).
+              # This replaces the fragile fixed sleep that caused CI flakes.
+              if not _wait_for_port(PORT, timeout_s=30.0):
+                  # Capture server output for debugging, then fail explicitly.
+                  srv.terminate()
+                  try:
+                      out, err = srv.communicate(timeout=5)
+                  except subprocess.TimeoutExpired:
+                      srv.kill()
+                      out, err = srv.communicate()
+                  print("Dashboard server failed to bind to port", PORT)
+                  print("STDOUT:", (out or b"").decode("utf-8", errors="replace"))
+                  print("STDERR:", (err or b"").decode("utf-8", errors="replace"))
+                  sys.exit(1)
 
               base = f"http://127.0.0.1:{PORT}"
               checks = [
@@ -282,7 +314,7 @@ jobs:
               ok, fail = [], []
               for ep in checks:
                   try:
-                      with urllib.request.urlopen(base + ep, timeout=3) as r:
+                      with urllib.request.urlopen(base + ep, timeout=5) as r:
                           ok.append(f"{ep}({r.status})")
                   except Exception as e:
                       fail.append((ep, str(e)))
@@ -320,9 +352,9 @@ jobs:
           cache: "pip"
 
       - name: Install CPU-only PyTorch
-        run: |
-          pip install torch torchvision \
-            --index-url https://download.pytorch.org/whl/cpu
+        # Single-line form is required for Windows PowerShell compatibility
+        # (POSIX `\` line-continuation does not work on PowerShell).
+        run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install build tools
         run: pip install build
@@ -380,9 +412,9 @@ jobs:
           cache: "pip"
 
       - name: Install CPU-only PyTorch
-        run: |
-          pip install torch torchvision \
-            --index-url https://download.pytorch.org/whl/cpu
+        # Single-line form is required for Windows PowerShell compatibility
+        # (POSIX `\` line-continuation does not work on PowerShell).
+        run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install with tracking extras
         run: pip install -e ".[tracking]"
@@ -451,9 +483,9 @@ jobs:
           cache: "pip"
 
       - name: Install CPU-only PyTorch
-        run: |
-          pip install torch torchvision \
-            --index-url https://download.pytorch.org/whl/cpu
+        # Single-line form is required for Windows PowerShell compatibility
+        # (POSIX `\` line-continuation does not work on PowerShell).
+        run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install TGraphX with dev dependencies
         run: pip install -e ".[dev]"

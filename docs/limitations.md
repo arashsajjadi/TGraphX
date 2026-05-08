@@ -9,12 +9,17 @@ See [Performance](performance.md) for performance-specific constraints.
 |---|---|---|
 | Arbitrary-rank tensors | Not supported | Use vector `(D,)`, 2-D `(C,H,W)`, or 3-D `(C,D,H,W)` only |
 | Vector features in GAT/SAGE/GIN/Conv | Not supported | Use `"linear"` or `"legacy_attention"` for vectors |
-| Graph Transformers (global attention + positional encodings) | Not implemented | — |
-| Heterogeneous / temporal graphs | Not implemented | — |
-| Per-channel / per-pixel attention in GAT | Not implemented (scalar only) | — |
-| GAT chunked forward | ⏳ Deferred v0.2.4 | Softmax requires all edge scores; two-pass required |
-| SAGE chunked forward (`aggr="mean"` / `"max"`) | ✅ Implemented v0.2.3 | Pass `chunk_size=K` to `forward()` |
-| GIN chunked forward (`aggr="sum"`) | ✅ Implemented v0.2.3 | Pass `chunk_size=K` to `forward()` |
+| Graph Transformer (vector node features) | 🧪 Experimental | `tgraphx.layers.graph_transformer.GraphTransformerLayer`; tensor-aware variant ⏳ planned |
+| Hetero graphs: container + batch + relation-dispatch + classifiers | 🧪 Experimental v0.2.5 | `HeteroGraph`, `HeteroGraphBatch`, `HeteroConv`, `HeteroGraphClassifier`, `HeteroNodeClassifier`; vector node features only |
+| Hetero spatial/volumetric node features | Not yet | Possible by passing tensor-aware layers into `HeteroConv` per relation; not yet covered by canned classifiers |
+| Temporal graphs: container + batch + readouts + classifier | 🧪 Experimental v0.2.5 | `TemporalGraphSequence`, `TemporalGraphBatch`, `temporal_readout`, `TemporalGraphClassifier`/`Regressor` |
+| Temporal recurrent memory (TGN/TGAT) | Not implemented | Stateless snapshot-loop pattern only; planned for v0.2.6+ |
+| GAT scalar attention | ✅ Stable | Default `attention_mode="scalar"` |
+| GAT per-channel attention | 🧪 Experimental | `attention_mode="channel"` (v0.2.4) |
+| GAT per-pixel / per-voxel attention | Not implemented | Score tensors would be O(E×K×H×W); deferred until memory analysis |
+| GAT chunked forward | ✅ Stable | Two-pass log-sum-exp; pass `chunk_size=K` (v0.2.4) |
+| SAGE chunked forward (`aggr="mean"` / `"max"`) | ✅ Stable | Pass `chunk_size=K` to `forward()` (v0.2.3) |
+| GIN chunked forward (`aggr="sum"`) | ✅ Stable | Pass `chunk_size=K` to `forward()` (v0.2.3) |
 | 3-D support in `AttentionMessagePassing` | Not supported | Use `TensorGATLayer(spatial_rank=3)` |
 
 ## Training framework
@@ -25,7 +30,9 @@ See [Performance](performance.md) for performance-specific constraints.
 | `evaluate` function | **Implemented** — see [training_utilities.md](training_utilities.md) |
 | `fit` function | **Implemented** — thin `train_epoch` + `evaluate` wrapper; see [training_utilities.md](training_utilities.md) |
 | `TensorBoardLogger` | **Implemented** — optional; requires `pip install tensorboard` or `pip install "tgraphx[tracking]"`; see [training_utilities.md](training_utilities.md) |
-| `MLflowLogger` | Not implemented; use `mlflow` client directly (`pip install mlflow`) |
+| `MLflowLogger` | ✅ Implemented (v0.2.4) — optional; lazy `mlflow` import; `pip install "tgraphx[mlflow]"` |
+| PyG / DGL data converters | ✅ Implemented (v0.2.4) — `tgraphx.interop`; lazy imports; data-only, not API replacement |
+| Learned graph helpers (soft adjacency, EdgeScorer) | ✅ Implemented (v0.2.4) — `tgraphx.learned_graph` |
 | Neighbor sampling (GraphSAINT / ClusterGCN) | Not implemented |
 
 ## AMP / precision

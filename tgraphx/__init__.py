@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "0.2.3"
+__version__ = "0.2.7"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -74,13 +74,29 @@ from .training import (
 
 # ── Metric logging ────────────────────────────────────────────────────────────
 # CSVLogger: zero optional dependencies.
-# TensorBoardLogger: the *class object* is imported here; tensorboard itself is
-# loaded lazily inside TensorBoardLogger.__init__ only when instantiated.
-# Importing tgraphx therefore does NOT require tensorboard to be installed.
-from .tracking import CSVLogger, TensorBoardLogger, write_graph_stats
+# TensorBoardLogger/MLflowLogger: class objects imported here; their heavy
+# dependencies (tensorboard/mlflow) are loaded lazily only when instantiated.
+from .tracking import CSVLogger, TensorBoardLogger, MLflowLogger, write_graph_stats
 
 # ── Performance utilities ─────────────────────────────────────────────────────
 from .performance import env_report, recommended_device, estimate_message_memory
+
+# ── Experimental hetero / temporal containers and batches (v0.2.4 / v0.2.5) ──
+from .core.hetero_graph import HeteroGraph
+from .core.hetero_batch import HeteroGraphBatch
+from .core.temporal import TemporalGraphSequence
+from .core.temporal_batch import TemporalGraphBatch
+
+# ── Sampling utilities (v0.2.6) ──────────────────────────────────────────────
+from .sampling import (
+    induced_subgraph,
+    edge_subgraph,
+    k_hop_subgraph,
+    sample_nodes,
+    sample_edges,
+    neighbor_sample,
+)
+from .sampling_loaders import SubgraphDataLoader, NeighborSamplerLoader
 
 __all__ = [
     "__version__",
@@ -142,9 +158,24 @@ __all__ = [
     # Metric logging
     "CSVLogger",
     "TensorBoardLogger",
+    "MLflowLogger",
     "write_graph_stats",
     # Performance utilities
     "env_report",
     "recommended_device",
     "estimate_message_memory",
+    # Experimental hetero / temporal containers and batches
+    "HeteroGraph",
+    "HeteroGraphBatch",
+    "TemporalGraphSequence",
+    "TemporalGraphBatch",
+    # Sampling
+    "induced_subgraph",
+    "edge_subgraph",
+    "k_hop_subgraph",
+    "sample_nodes",
+    "sample_edges",
+    "neighbor_sample",
+    "SubgraphDataLoader",
+    "NeighborSamplerLoader",
 ]

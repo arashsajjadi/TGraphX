@@ -11,11 +11,11 @@ TensorBoardLogger   — optional TensorBoard logger backed by
                       ``pip install "tgraphx[tracking]"``.
                       TensorBoard is imported lazily — only when you
                       instantiate :class:`TensorBoardLogger`.
-
-What is NOT provided
---------------------
-MLflowLogger is not implemented.  If you need MLflow, use the
-``mlflow`` client directly: ``pip install mlflow``.
+MLflowLogger        — optional MLflow logger.
+                      Requires: ``pip install mlflow`` or
+                      ``pip install "tgraphx[mlflow]"``.
+                      mlflow is imported lazily — only when you
+                      instantiate :class:`MLflowLogger`.
 
 Silent / off-by-default contract
 ---------------------------------
@@ -258,6 +258,163 @@ class TensorBoardLogger:
 
     def __repr__(self) -> str:
         return f"TensorBoardLogger(logdir={self._logdir!r})"
+
+
+class MLflowLogger:
+    """Optional MLflow metric logger.
+
+    Wraps ``mlflow`` to provide an interface consistent with
+    :class:`CSVLogger` and :class:`TensorBoardLogger`.  mlflow is imported
+    lazily — only when this class is instantiated — so the base TGraphX
+    install does not require mlflow.
+
+    Requires: ``pip install mlflow`` or ``pip install "tgraphx[mlflow]"``.
+
+    Off-by-default contract
+    -----------------------
+    * Importing ``tgraphx`` or ``tgraphx.tracking`` does **not** import
+      mlflow.
+    * No MLflow run is started until you call :meth:`__enter__` (context
+      manager) or :meth:`start`.
+    * All writes happen only through explicit :meth:`log` calls.
+
+    Example::
+
+        from tgraphx.tracking import MLflowLogger
+
+        with MLflowLogger(run_name="my_run", experiment="gnn_exp") as mlf:
+            for epoch in range(10):
+                loss = train(...)
+                mlf.log(epoch=epoch, train_loss=loss)
+
+    Alternatively, use with ``fit()``::
+
+        history = fit(model, train_loader, logger=mlf, ...)
+    """
+
+    def __init__(
+        self,
+        run_name: Optional[str] = None,
+        experiment: Optional[str] = None,
+        tracking_uri: Optional[str] = None,
+        tags: Optional[dict] = None,
+    ) -> None:
+        """
+        Args:
+            run_name: Optional MLflow run name.
+            experiment: MLflow experiment name.  If ``None``, uses the
+                MLflow default experiment.
+            tracking_uri: MLflow tracking URI.  ``None`` uses the
+                environment-variable / default configured URI.
+            tags: Optional dict of string tags attached to the run.
+        """
+        try:
+            import mlflow as _mlflow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "MLflowLogger requires mlflow.  Install it with:\n"
+                "  pip install mlflow\n"
+                "or:\n"
+                "  pip install \"tgraphx[mlflow]\""
+            ) from exc
+        self._run_name = run_name
+        self._experiment = experiment
+        self._tracking_uri = tracking_uri
+        self._tags = tags or {}
+        self._run = None
+
+    # ------------------------------------------------------------------ #
+    # Lifecycle                                                            #
+    # ------------------------------------------------------------------ #
+
+    def start(self) -> "MLflowLogger":
+        """Start the MLflow run.  Called automatically by ``__enter__``."""
+        import mlflow
+        if self._tracking_uri is not None:
+            mlflow.set_tracking_uri(self._tracking_uri)
+        if self._experiment is not None:
+            mlflow.set_experiment(self._experiment)
+        self._run = mlflow.start_run(
+            run_name=self._run_name,
+            tags=self._tags if self._tags else None,
+        )
+        return self
+
+    def close(self) -> None:
+        """End the MLflow run.  Called automatically by ``__exit__``."""
+        import mlflow
+        if self._run is not None:
+            mlflow.end_run()
+            self._run = None
+
+    def __enter__(self) -> "MLflowLogger":
+        return self.start()
+
+    def __exit__(self, *_: Any) -> None:
+        self.close()
+
+    # ------------------------------------------------------------------ #
+    # Logging                                                              #
+    # ------------------------------------------------------------------ #
+
+    def log(self, **metrics: Any) -> None:
+        """Log a dict of scalar metrics.
+
+        Compatible with the :class:`CSVLogger` / :class:`TensorBoardLogger`
+        ``log(**kwargs)`` interface.  Non-numeric values are cast to
+        ``float`` where possible and skipped otherwise.
+
+        ``epoch`` and ``step`` keys are forwarded as the MLflow ``step``
+        (``epoch`` takes precedence if both are present).
+
+        Example::
+
+            mlf.log(epoch=3, train_loss=0.42, val_acc=0.87)
+        """
+        import mlflow
+        if self._run is None:
+            raise RuntimeError(
+                "MLflowLogger.log() called before start().  "
+                "Use as a context manager or call .start() first."
+            )
+        step = None
+        for k in ("epoch", "step"):
+            if k in metrics:
+                try:
+                    step = int(metrics[k])
+                except (TypeError, ValueError):
+                    pass
+                break
+
+        metric_dict: dict[str, float] = {}
+        for k, v in metrics.items():
+            if k in ("epoch", "step"):
+                continue
+            try:
+                metric_dict[k] = float(v)
+            except (TypeError, ValueError):
+                pass
+
+        if metric_dict:
+            mlflow.log_metrics(metric_dict, step=step)
+
+    def log_scalar(self, tag: str, value: float, step: int) -> None:
+        """Log a single scalar metric (compatible with TensorBoardLogger API)."""
+        import mlflow
+        if self._run is None:
+            raise RuntimeError(
+                "MLflowLogger.log_scalar() called before start()."
+            )
+        mlflow.log_metric(tag, float(value), step=step)
+
+    @property
+    def run_id(self) -> Optional[str]:
+        """Active MLflow run ID, or ``None`` if not started."""
+        return self._run.info.run_id if self._run is not None else None
+
+    def __repr__(self) -> str:
+        status = f"run_id={self.run_id!r}" if self._run else "not started"
+        return f"MLflowLogger(run_name={self._run_name!r}, {status})"
 
 
 def write_graph_stats(graph_obj: Any, path: str) -> None:

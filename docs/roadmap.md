@@ -37,58 +37,112 @@ Focus: documentation accuracy, contradiction fixes, runtime warnings.
 
 ---
 
-## v0.2.3 — Chunking and scalability ✅ (current prep)
+## v0.2.3 — Chunking and scalability ✅ (released)
 
 - ✅ `TensorGraphSAGELayer` chunked forward (`aggr="mean"` and `"max"`).
-  Pass `chunk_size=K` to `forward()` for O(K×spatial) peak edge-buffer memory.
 - ✅ `TensorGINLayer` chunked forward (`aggr="sum"`).
-- ✅ Dashboard byte-seek tail-read for `metrics.csv`: appending runs read only
-  new bytes; full reparse on inode change or file shrinkage.
-- ✅ Dashboard: fixed double-read bug in the `?since_row` incremental path.
-- ✅ `build_knn_graph` / `build_radius_graph` / `build_iou_graph`: added
-  `chunk_size` parameter to reduce peak memory from O(N²) to O(K×N).
-- ✅ `build_random_graph`: added `algorithm="sample"` for O(num_edges) memory
-  sampling when `num_edges ≪ N²` (directed, no self-loops).
-- ⏳ `TensorGATLayer` two-pass chunked forward: deferred to v0.2.4.
-  GAT softmax is destination-wise over all incoming edges; a correct
-  two-pass algorithm (Pass 1: accumulate per-destination max/logsumexp;
-  Pass 2: normalised value aggregation) is needed.
+- ✅ Dashboard byte-seek tail-read for `metrics.csv`.
+- ✅ Dashboard `?since_row` incremental double-read fix.
+- ✅ `build_knn_graph` / `build_radius_graph` / `build_iou_graph`: `chunk_size`
+  parameter for O(K×N) peak memory.
+- ✅ `build_random_graph(algorithm="sample")` for O(num_edges) memory sampling.
 
 ---
 
-## v0.2.4 — Richer attention and edge features
+## v0.2.4 — GAT chunking, attention modes, ecosystem ✅ (release prep)
 
-- Per-channel attention in `TensorGATLayer` (attention vector per head per
-  channel, not scalar).
-- Per-pixel / per-voxel attention feasibility study and optional flag.
-- Patch helper optional padding (pad-to-nearest-tile) with explicit warnings.
-- Edge-feature consistency audit: ensure ConvMP, GAT, SAGE, GIN handle
-  mismatched-rank edge tensors with clear errors everywhere.
-
----
-
-## v0.2.5 — Ecosystem integrations and extended feature set
-
-- Optional `MLflowLogger` (gated behind `pip install "tgraphx[mlflow]"`).
-- Optional PyG/DGL `edge_index` converters (read-only; no full API compat).
-- Heterogeneous graph containers (design doc; not full GNN implementation).
-- Temporal graph containers (design doc; not full GNN implementation).
-- Graph Transformer feasibility study:
-  - Global self-attention with learnable positional encodings.
-  - Decide on architecture and scope before committing to implementation.
+- ✅ `TensorGATLayer` two-pass chunked forward — log-sum-exp algorithm:
+  Pass 1 accumulates per-destination max statistics, Pass 2 normalises and
+  aggregates values.  Output matches unchunked within float32 tolerance.
+- ✅ `TensorGATLayer(attention_mode="channel")` — 🧪 experimental per-channel
+  attention with shape `[E, K, C_head]`.
+- ✅ `image_to_patches(padding="auto")` and `volume_to_patches(padding="auto")`.
+- ✅ `MLflowLogger` — optional, lazy `mlflow` import, `tgraphx[mlflow]` extra.
+- ✅ `tgraphx.interop` — optional PyG/DGL data converters (lazy imports).
+- ✅ `tgraphx.learned_graph` — soft adjacency, top-k edges, EdgeScorer,
+  `build_knn_graph_from_embeddings`.
+- ✅ `tgraphx.core.hetero_graph.HeteroGraph` — 🧪 experimental container.
+- ✅ `tgraphx.core.temporal.TemporalGraphSequence` — 🧪 experimental container.
+- ✅ `tgraphx.layers.graph_transformer.GraphTransformerLayer` — 🧪 experimental
+  vector-only global self-attention with FFN, residual, LayerNorm.
+- ✅ CI hardening: Windows pip line-continuation fix; Ubuntu dashboard live
+  smoke uses port-binding poll instead of fixed sleep.
 
 ---
 
-## v0.3.x — Stable expanded feature set
+## v0.2.5 — Hetero / Temporal real functionality ✅ (release prep)
 
-Items below are deferred until the v0.2.x series stabilises.
+- ✅ `HeteroGraphBatch` — disjoint typed-node/typed-edge batching with
+  per-type batch vectors and clean error reporting for inconsistent stores.
+- ✅ `HeteroConv` — relation-dispatch wrapper with sum/mean/max
+  cross-relation aggregation.  Vector node features fully supported;
+  spatial features supported when relation modules accept them.
+- ✅ Hetero readouts — `hetero_mean_pool`, `hetero_sum_pool`,
+  `hetero_max_pool`, `hetero_concat_pool` with stable type ordering.
+- ✅ `HeteroGraphClassifier`, `HeteroNodeClassifier` — vector-feature
+  classifiers with per-type input projections.
+- ✅ `TemporalGraphBatch` — equal-length and variable-length sequence
+  batching with per-snapshot masks and padded timestamps.
+- ✅ `temporal_readout` — `last`/`mean`/`max` with mask support.
+- ✅ `TemporalGraphClassifier`, `TemporalGraphRegressor` — stateless
+  snapshot-loop wrappers that delegate to a base graph encoder.
+- ✅ Hetero PyG/DGL converters — `to_pyg_heterodata`, `from_pyg_heterodata`,
+  `to_dgl_heterograph`, `from_dgl_heterograph` (lazy imports).
+- ✅ 52 new tests + 4 new examples.
 
-- Stable Graph Transformer layer (if v0.2.5 feasibility is positive).
-- Stable heterogeneous GNN layers (HeteroConv-style dispatch).
-- Stable temporal GNN layers (sequence-aware message passing).
-- Broader PyTorch version matrix in CI (1.13, 2.0, 2.x latest).
-- Neighbor sampling (GraphSAINT / ClusterGCN style mini-batch training).
-- Larger-scale benchmark suite (OGB or similar public datasets).
+Deferred to v0.2.6+:
+- ⏳ Hetero tensor-aware spatial classifiers (canned).
+- ⏳ Temporal recurrent memory module (TGN/TGAT-style).
+- ⏳ Temporal sampling utilities.
+
+---
+
+## v0.2.6 — Sampling, minibatching, distributed feasibility ✅ (release prep)
+
+- ✅ `induced_subgraph`, `edge_subgraph`, `k_hop_subgraph`, `sample_nodes`,
+  `sample_edges`, `neighbor_sample` in `tgraphx.sampling`.
+- ✅ `SubgraphDataLoader`, `NeighborSamplerLoader` in
+  `tgraphx.sampling_loaders` — plain iterables, deterministic with seed,
+  no hidden multiprocessing.
+- ✅ `tgraphx.distributed` helpers (`get_rank`, `get_world_size`,
+  `is_rank_zero`, `rank_zero_print`, `@rank_zero_only`, `barrier`).
+  Never auto-initialises DDP.
+- ✅ `benchmarks/benchmark_sampling.py` (CI-safe `--small` mode).
+- ✅ Examples: `neighbor_sampling_demo.py`, `ddp_training_smoke.py`.
+
+Deferred to v0.2.7+:
+- ⏳ Hetero / temporal sampling (per-relation, per-snapshot semantics).
+- ⏳ Random-walk sampling.
+- ⏳ Multi-GPU full DDP example (currently single-process smoke only).
+
+---
+
+## v0.2.7 — Graph Transformer maturity
+
+- Stable vector-feature `GraphTransformerLayer` graduating from experimental.
+- Tensor-aware Graph Transformer feasibility (spatial / volumetric tokens).
+- Positional / structural encodings (Laplacian, RWPE, degree).
+- Edge-bias attention.
+- Memory-safe attention options (chunked / sparse / linear approximations).
+
+---
+
+## v0.2.8 — Ecosystem expansion
+
+- Robust PyG/DGL converter coverage (batches, hetero, masks).
+- Optional plugin architecture for external integrations.
+- Optional curated public-dataset loaders (no required network calls).
+- Optional GraphRAG-adjacent local utilities (purely local; no remote APIs).
+
+---
+
+## v0.3.0 — Stabilization
+
+- Promote mature experimental APIs to stable.
+- Backward-compatibility audit and deprecation policy.
+- Migration guide.
+- Final README/support-matrix cleanup.
+- Full release audit.
 
 ---
 

@@ -53,10 +53,15 @@ from .base import LinearMessagePassing
 from .conv_message import ConvMessagePassing
 from .gat import TensorGATLayer
 from .gin import TensorGINLayer
+from .graph_transformer import GraphTransformerLayer
 from .sage import TensorGraphSAGELayer
 
-_SUPPORTED = ("conv", "gat", "sage", "gin", "linear", "legacy_attention")
+_SUPPORTED = (
+    "conv", "gat", "sage", "gin", "linear", "legacy_attention",
+    "graph_transformer",
+)
 _SPATIAL_ONLY = frozenset(("conv", "gat", "sage", "gin"))
+_VECTOR_ONLY = frozenset(("graph_transformer",))
 
 
 def make_layer(
@@ -150,6 +155,7 @@ def make_layer(
             use_edge_features=bool(kwargs.get("use_edge_features", False)),
             edge_dim=kwargs.get("edge_dim", None),
             spatial_rank=spatial_rank,
+            attention_mode=kwargs.get("attention_mode", "scalar"),
         )
 
     if name == "sage":
@@ -178,6 +184,28 @@ def make_layer(
             edge_dim=kwargs.get("edge_dim", None),
             edge_features_kind=kwargs.get("edge_features_kind", "spatial"),
             spatial_rank=spatial_rank,
+        )
+
+    if name == "graph_transformer":
+        if spatial_rank is not None:
+            raise ValueError(
+                f"'graph_transformer' currently supports only vector "
+                f"in_shape (D,); got spatial in_shape {in_shape}. "
+                f"Tensor-aware Graph Transformer is on the roadmap."
+            )
+        return GraphTransformerLayer(
+            in_dim=in_ch,
+            out_dim=out_ch,
+            num_heads=int(kwargs.get("heads", 4)),
+            ffn_dim=kwargs.get("ffn_dim", None),
+            dropout=float(kwargs.get("dropout", 0.0)),
+            attention_dropout=float(kwargs.get("attention_dropout", 0.0)),
+            residual=bool(kwargs.get("residual", True)),
+            layer_norm=bool(kwargs.get("layer_norm", True)),
+            bias=bool(kwargs.get("bias", True)),
+            edge_bias=bool(kwargs.get("edge_bias", False)),
+            positional_encoding=kwargs.get("positional_encoding", None),
+            pe_dim=int(kwargs.get("pe_dim", 0)),
         )
 
     if name == "linear":

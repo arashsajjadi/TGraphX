@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tgraphx"
 # Keep this in sync with tgraphx/__init__.py::__version__
-version = "0.2.3"
+version = "0.2.7"
 description = "Tensor-aware graph neural networks preserving spatial node feature layouts"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -62,10 +62,12 @@ monitoring = [
     "pynvml>=11.0",
 ]
 # TensorBoard integration (TensorBoardLogger uses torch.utils.tensorboard)
-# MLflow is intentionally excluded: MLflowLogger is not implemented in TGraphX.
-# Install mlflow separately if you use it: pip install mlflow
 tracking = [
     "tensorboard>=2.11",
+]
+# MLflow integration (MLflowLogger uses lazy mlflow import)
+mlflow = [
+    "mlflow>=2.0",
 ]
 
 [project.scripts]

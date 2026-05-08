@@ -409,3 +409,129 @@ class TestConvMaxAggregation:
         with pytest.warns(UserWarning, match="chunk_size"):
             out = layer(x, ei, chunk_size=2)
         assert out.shape == (N, 8, H, W)
+
+
+# ── 9. v0.2.4 feature claim audit ─────────────────────────────────────────────
+
+class TestV024FeatureClaims:
+    """If README/docs claim a v0.2.4 feature exists, the code must back it up."""
+
+    def test_gat_chunked_forward_actually_works(self):
+        from tgraphx.layers import TensorGATLayer
+        from tgraphx import build_grid_graph
+        torch.manual_seed(0)
+        x = torch.randn(9, 4, 4, 4)
+        ei = build_grid_graph(3, 3, directed=False, self_loops=True)
+        l = TensorGATLayer(4, 4, num_heads=2).eval()
+        with torch.no_grad():
+            full = l(x, ei)
+            chunked = l(x, ei, chunk_size=5)
+        assert torch.allclose(full, chunked, atol=1e-4)
+
+    def test_gat_channel_attention_mode_actually_works(self):
+        from tgraphx.layers import TensorGATLayer
+        from tgraphx import build_grid_graph
+        x = torch.randn(9, 4, 4, 4)
+        ei = build_grid_graph(3, 3, directed=False, self_loops=True)
+        l = TensorGATLayer(4, 4, num_heads=2, attention_mode="channel").eval()
+        with torch.no_grad():
+            out = l(x, ei)
+        assert out.shape == (9, 4, 4, 4)
+        assert torch.isfinite(out).all()
+
+    def test_patch_padding_auto_actually_works(self):
+        from tgraphx.graph_builders import image_to_patches
+        imgs = torch.randn(2, 3, 9, 9)  # not divisible by 4
+        patches = image_to_patches(imgs, patch_size=4, padding="auto")
+        assert patches.shape[1] == 9  # 3x3 grid
+
+    def test_mlflow_logger_class_importable(self):
+        from tgraphx import MLflowLogger
+        import inspect
+        assert inspect.isclass(MLflowLogger)
+
+    def test_pyg_dgl_converters_module_importable(self):
+        """tgraphx.interop must be importable without PyG/DGL installed."""
+        from tgraphx.interop import (
+            to_pyg_data, from_pyg_data, to_dgl_graph, from_dgl_graph,
+        )
+        assert all(callable(f) for f in (to_pyg_data, from_pyg_data,
+                                          to_dgl_graph, from_dgl_graph))
+
+    def test_learned_graph_helpers_actually_work(self):
+        from tgraphx.learned_graph import (
+            soft_adjacency_from_embeddings,
+            top_k_edges_from_scores,
+            build_knn_graph_from_embeddings,
+            EdgeScorer,
+        )
+        z = torch.randn(8, 16)
+        A = soft_adjacency_from_embeddings(z)
+        assert A.shape == (8, 8)
+        ei, _ = top_k_edges_from_scores(A, k=3)
+        assert ei.shape == (2, 24)
+
+    def test_hetero_graph_container_actually_works(self):
+        from tgraphx.core.hetero_graph import HeteroGraph
+        g = HeteroGraph(
+            node_stores={"a": torch.randn(3, 4)},
+            edge_stores={
+                ("a", "rel", "a"): torch.tensor(
+                    [[0, 1], [1, 2]], dtype=torch.long
+                )
+            },
+        )
+        assert g.num_nodes("a") == 3
+
+    def test_temporal_sequence_container_actually_works(self):
+        from tgraphx.core.temporal import TemporalGraphSequence
+        from tgraphx import Graph
+        seq = TemporalGraphSequence(
+            graphs=[Graph(torch.randn(3, 4), None) for _ in range(2)]
+        )
+        assert seq.num_snapshots == 2
+
+    def test_graph_transformer_layer_actually_works(self):
+        from tgraphx.layers.graph_transformer import GraphTransformerLayer
+        l = GraphTransformerLayer(16, 16, num_heads=4).eval()
+        x = torch.randn(8, 16)
+        out = l(x)
+        assert out.shape == (8, 16)
+        assert torch.isfinite(out).all()
+
+
+# ── 10. Lazy-import contracts for new optional integrations ──────────────────
+
+class TestLazyImports:
+    """Importing tgraphx must not pull in optional heavy deps."""
+
+    def test_no_eager_mlflow(self):
+        """mlflow must not be imported at tgraphx import time."""
+        import subprocess, sys
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import tgraphx, sys; "
+             "assert 'mlflow' not in sys.modules, 'mlflow imported eagerly'"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+
+    def test_no_eager_torch_geometric(self):
+        import subprocess, sys
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import tgraphx; import tgraphx.interop; import sys; "
+             "assert 'torch_geometric' not in sys.modules"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+
+    def test_no_eager_dgl(self):
+        import subprocess, sys
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import tgraphx; import tgraphx.interop; import sys; "
+             "assert 'dgl' not in sys.modules"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
