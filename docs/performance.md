@@ -67,16 +67,51 @@ import torch
 compiled = torch.compile(layer, mode="default")   # requires PyTorch ≥ 2.0
 ```
 
-- Smoke-tested: eager and compiled outputs agree within tolerance (≤ 1e-4).
-- **No universal speedup is guaranteed.** Compile overhead dominates for
-  small graphs (< 64 nodes); potential gains at larger scales.
-- Falls back gracefully when `torch.compile` is unavailable.
+**Correctness:** Eager and compiled outputs are smoke-tested to agree within
+tolerance (≤ 1e-4 float32; ≤ 2e-2 bfloat16) for Conv, GAT, SAGE, and GIN
+layers with and without edge weights / edge features.
+
+**No universal speedup claim.** Compile overhead dominates for small graphs
+(< 64 nodes).  Potential throughput gains exist at larger scales but are not
+guaranteed and depend on the specific layer, shape, and device.
+
+**Graceful degradation:** When `torch.compile` is unavailable (PyTorch < 2.0)
+or fails for a specific op/backend combination, the layer falls back to eager
+mode without error.
 
 ```bash
 python examples/torch_compile_benchmark.py
 ```
 
-## AMP / Mixed precision
+## AMP policy
+
+TGraphX v0.2.2 hardened dtype handling across all four spatial GNN layers.
+The policy below describes the supported and best-effort AMP modes.
+
+| Backend | Recommended AMP dtype | Status | Notes |
+|---------|:---------------------:|:------:|-------|
+| CPU | bfloat16 | ✅ Best-effort | PyTorch 1.13+; tested in CI |
+| CUDA | float16 or bfloat16 | ⚠️ Best-effort | bfloat16 requires Ampere+ GPU |
+| MPS | — | ❌ Not tested | MPS AMP support is PyTorch-version dependent |
+
+**v0.2.2 fixes:**
+- `broadcast_edge_weight` now casts `edge_weight` to the message dtype so
+  float32 edge weights work correctly under any autocast context.
+- `TensorGATLayer` now casts attention weights to the activation dtype before
+  `index_add_`; the `a_src`/`a_dst` float32 parameters no longer pollute the
+  aggregation dtype under autocast.
+- `edge_softmax` upcasts to float32 for the numerically sensitive max-shift +
+  exp + sum computation, then casts back to the original dtype.
+
+**Output dtype behaviour:** Under `torch.autocast`, Conv2d/Conv3d/Linear
+layers produce outputs in the autocast dtype (e.g. bfloat16). The final
+output of each GNN layer will be in the activation dtype. Summing or using
+the output in a loss function should `.float()` the result if full-precision
+gradients are needed.
+
+**Attention logits:** The `edge_softmax` computation always runs in float32
+internally (upcast from float16/bfloat16) for numerical stability. The
+returned attention weights are cast back to the input dtype.
 
 ```python
 # CUDA — float16
@@ -86,11 +121,19 @@ with torch.autocast("cuda", dtype=torch.float16):
 # CPU — bfloat16 (PyTorch ≥ 1.13)
 with torch.autocast("cpu", dtype=torch.bfloat16):
     out = layer(x, edge_index)
+
+# Backward: upcast loss to float32 for stable gradients
+with torch.autocast("cpu", dtype=torch.bfloat16):
+    out = layer(x, edge_index)
+loss = out.float().sum()   # upcast before backward
+loss.backward()
 ```
 
-**Known limitation:** `TensorGATLayer` uses `index_add_` which enforces
-matching dtypes even under autocast. float16 autocast may raise a dtype
-mismatch for GAT. Use bfloat16 or full precision as alternatives.
+> ⚠️ **CUDA float16 best-effort:** `scatter_reduce_` with `reduce="amax"` for
+> max aggregation (SAGE, base scatter) requires PyTorch ≥ 1.13 support for
+> float16 CUDA scatter ops.  The non-max paths (sum, mean, GAT softmax) are
+> robust.  If you see float16 errors on an older PyTorch version, switch to
+> bfloat16 or full precision.
 
 ```bash
 python examples/mixed_precision_inference.py

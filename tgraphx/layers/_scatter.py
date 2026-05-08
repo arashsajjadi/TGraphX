@@ -9,11 +9,25 @@ No external dependencies (e.g. ``torch_scatter``) are introduced.
 ``Tensor.scatter_reduce_`` with ``reduce='amax'`` is available in
 PyTorch >= 1.13 and is the only scatter primitive used here besides
 ``Tensor.index_add_`` and ``Tensor.scatter_add_``.
+
+AMP / dtype notes
+-----------------
+* ``broadcast_edge_weight`` casts ``weight`` to match ``like``'s dtype so
+  that caller-provided float32 edge weights are safe under float16/bfloat16
+  autocast.
+* ``edge_softmax`` upcasts to float32 when the input is float16 or bfloat16.
+  The max-shift + exp + sum computation is numerically sensitive; computing
+  it in float32 and casting back avoids overflow/underflow in attention
+  weights.  This is the standard approach used by most production GNN
+  libraries.
 """
 
 from __future__ import annotations
 
 import torch
+
+# dtypes that benefit from fp32 upcast in softmax
+_LOW_PRECISION_DTYPES = (torch.float16, torch.bfloat16)
 
 
 def _expand_index(target: torch.Tensor, like: torch.Tensor) -> torch.Tensor:
@@ -33,6 +47,11 @@ def broadcast_edge_weight(
 
     Used by every layer that supports ``edge_weight`` to apply a per-edge
     scalar to messages of shape ``[E, ...]``.
+
+    Under ``torch.autocast`` the message tensor ``like`` may be float16 or
+    bfloat16 while the caller-supplied ``weight`` remains float32.  This
+    function casts ``weight`` to ``like.dtype`` before returning so that
+    the caller's element-wise multiplication does not raise a dtype mismatch.
 
     Raises:
         TypeError if ``weight`` is not a Tensor.
@@ -58,6 +77,9 @@ def broadcast_edge_weight(
             f"edge_weight device ({weight.device}) must match "
             f"the device of the messages it scales ({like.device})"
         )
+    # Cast to message dtype so float32 edge_weight is safe under autocast.
+    if weight.dtype != like.dtype:
+        weight = weight.to(dtype=like.dtype)
     view = (num_edges,) + (1,) * (like.dim() - 1)
     return weight.view(view)
 
@@ -73,6 +95,12 @@ def edge_softmax(
     satisfy ``sum_{i : target[i] == j} out[i, ...] == 1`` modulo floating-point
     error.  Destinations with no incoming edges are simply not indexed.
 
+    When ``scores`` has dtype ``float16`` or ``bfloat16`` the computation is
+    performed in ``float32`` for numerical stability (the max-shift trick and
+    the exp/sum are sensitive to precision) and the result is cast back to the
+    original dtype before returning.  This matches the approach used by most
+    production GNN libraries and prevents inf/NaN under low-precision autocast.
+
     Args:
         scores: ``[E, *]`` raw attention logits per edge.  ``*`` is any
             (possibly empty) trailing shape; common values are ``[E]`` and
@@ -82,7 +110,7 @@ def edge_softmax(
             ``num_nodes >= int(target.max()) + 1`` when E > 0.
 
     Returns:
-        Tensor of the same shape as ``scores``.
+        Tensor of the same shape **and dtype** as ``scores``.
     """
     if scores.size(0) != target.size(0):
         raise ValueError(
@@ -92,7 +120,12 @@ def edge_softmax(
     if target.dtype != torch.long:
         raise TypeError(f"target must have dtype torch.long, got {target.dtype}")
     if scores.size(0) == 0:
-        return scores  # nothing to normalise
+        return scores  # nothing to normalise; dtype preserved
+
+    # Upcast to float32 for the softmax computation when input is low-precision.
+    orig_dtype = scores.dtype
+    if orig_dtype in _LOW_PRECISION_DTYPES:
+        scores = scores.to(torch.float32)
 
     trailing = scores.shape[1:]
     target_b = _expand_index(target, scores)
@@ -114,7 +147,10 @@ def edge_softmax(
     # Divide.  Any destination with no incoming edges has sum 0, but we never
     # index into those rows.  We still clamp the denominator for safety.
     denom = sum_per_dest.index_select(0, target).clamp_min(1e-16)
-    return exp_scores / denom
+    result = exp_scores / denom
+
+    # Cast back to the caller's dtype (no-op when orig_dtype is float32).
+    return result.to(orig_dtype)
 
 
 def scatter_sum(

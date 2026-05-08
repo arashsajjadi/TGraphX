@@ -26,6 +26,77 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.2] — Unreleased draft
+
+### Fixed
+
+- **`broadcast_edge_weight` dtype cast** — caller-supplied `edge_weight` is now
+  cast to the message tensor's dtype before broadcasting.  Previously, float32
+  edge weights caused a dtype mismatch under `torch.autocast` when messages were
+  float16 or bfloat16, manifesting as a multiplication error.
+
+- **`TensorGATLayer` `index_add_` dtype mismatch** — the learned attention
+  vectors `a_src` / `a_dst` are float32 `nn.Parameter` objects.  Under
+  `torch.autocast` their element-wise product with low-precision activations
+  (bf16 / fp16) is promoted to float32 by PyTorch's mixed-precision rules,
+  making `attn_dropped` float32 even when the value tensor `h_src` is bf16.
+  Added an explicit `.to(dtype=h_src.dtype)` cast for the attention weights
+  before the value multiplication so that `out_per_head.index_add_` always
+  sees matching dtypes.
+
+- **`edge_softmax` numerical stability under AMP** — the max-shift + exp +
+  scatter-sum computation is now performed in float32 when the input dtype is
+  float16 or bfloat16, and the result is cast back to the original dtype.
+  This prevents overflow/underflow in attention weights under low-precision
+  autocast and matches the approach used by major GNN libraries.
+
+### Added
+
+- `tests/test_amp_compile.py` — 59 new tests covering:
+  - CPU bfloat16 autocast for Conv, GAT, SAGE, GIN (forward + backward).
+  - CUDA float16 / bfloat16 autocast for all four layers.
+  - `edge_weight` dtype cast under autocast.
+  - Vector and spatial edge features under autocast.
+  - 3-D volumetric layers under autocast.
+  - `torch.compile` correctness smoke for all four layers ± edge
+    features ± edge weight.
+  - `torch.compile + bfloat16 autocast` combined test.
+  - `edge_softmax` dtype and numerical stability unit tests.
+  - `broadcast_edge_weight` dtype cast unit tests.
+  - No-side-effect import checks.
+
+- `benchmarks/benchmark_layers.py` now reports:
+  - `amp_dtype`: the AMP dtype actually used (`"float16"`, `"bfloat16"`, or
+    `"none"`).
+  - `finite_output`: whether the post-warmup output contains only finite values.
+  Both fields appear in the terminal report and in `--output` JSON.
+
+### Changed
+
+- `examples/mixed_precision_inference.py` — fineness check added to the
+  output line; the caught `RuntimeError` comment updated to reflect that dtype
+  mismatches should no longer occur after v0.2.2 fixes.
+
+### Documentation
+
+- `docs/performance.md` — new **AMP policy** section with supported modes per
+  backend, v0.2.2 fix summary, and recommended usage patterns.
+- `docs/limitations.md` — AMP table updated; fixed items now ✅.
+- `README.md` hardware/performance section — added AMP policy table and v0.2.2
+  summary note.
+
+### Not implemented (deferred)
+
+- Universal float16 CPU support — CPU float16 kernels for `scatter_reduce_`
+  with `reduce="amax"` are not consistently available across PyTorch versions;
+  bfloat16 is the recommended CPU low-precision dtype.
+- `GradScaler` integration in `train_epoch` — users needing stable float16
+  CUDA training should manage `torch.cuda.amp.GradScaler` in their own loop.
+- MPS AMP — MPS operator coverage varies by PyTorch version and is not
+  tested in CI; deferred to v0.2.3+.
+
+---
+
 ## [0.2.0] - 2026-05-07
 
 ### Security

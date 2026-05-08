@@ -29,12 +29,23 @@ See [Performance](performance.md) for performance-specific constraints.
 
 ## AMP / precision
 
-| Limitation | Status |
-|---|---|
-| GAT float16 autocast | `index_add_` requires matching dtypes; may fail under float16 |
-| Universal AMP support | Not claimed; device- and op-dependent |
+v0.2.2 hardened dtype handling.  The remaining constraints are:
 
-Use `bfloat16` or full precision for stable inference across all layers.
+| Item | Status | Notes |
+|---|---|---|
+| CPU bfloat16 autocast | ✅ Best-effort | All four spatial layers tested |
+| CUDA float16 autocast | ⚠️ Best-effort | Fixed in v0.2.2; requires PyTorch ≥ 1.13 scatter float16 support |
+| CUDA bfloat16 autocast | ⚠️ Best-effort | Requires Ampere+ GPU |
+| MPS AMP | ❌ Not tested | MPS operator coverage varies by PyTorch version |
+| Universal float16 CPU | ❌ Not supported | CPU float16 is not a recommended AMP dtype |
+| `edge_weight` under autocast | ✅ Fixed v0.2.2 | `broadcast_edge_weight` now casts to message dtype |
+| GAT `index_add_` dtype mismatch | ✅ Fixed v0.2.2 | Attention weights now cast to activation dtype |
+| Attention softmax precision | ✅ Fixed v0.2.2 | `edge_softmax` upcasts to fp32 for max-shift + exp computation |
+
+> **Recommended usage:** for stable training use bfloat16 on CUDA (Ampere+)
+> or bfloat16 on CPU; use a `GradScaler` only for float16 CUDA training.
+> Always call `.float()` on the loss before `.backward()` when inputs are
+> low-precision.
 
 ## Deterministic algorithms
 

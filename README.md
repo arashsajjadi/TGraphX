@@ -141,9 +141,22 @@ python benchmarks/benchmark_graph_builders.py            # full
 
 ```bash
 python examples/torch_compile_benchmark.py   # eager vs compiled, correctness check
-python examples/mixed_precision_inference.py  # autocast forward demo
+python examples/mixed_precision_inference.py  # autocast forward demo (finite-output check)
 python examples/memory_report.py             # env report + memory estimates
 ```
+
+**AMP policy (v0.2.2):**
+
+| Backend | Recommended dtype | Status | Notes |
+|---------|:-----------------:|:------:|-------|
+| CPU | bfloat16 | ⚠️ Best-effort | Tested in CI |
+| CUDA | float16 / bfloat16 | ⚠️ Best-effort | bfloat16 needs Ampere+ |
+| MPS | — | ❌ Not tested | PyTorch operator coverage varies |
+
+v0.2.2 fixes: `broadcast_edge_weight` casts edge weights to activation dtype;
+`TensorGATLayer` casts attention weights before `index_add_`; `edge_softmax`
+upcasts to fp32 for numerical stability and casts back. See
+[docs/performance.md](docs/performance.md#amp-policy) for full details.
 
 ### Optional chunked forward (ConvMessagePassing)
 

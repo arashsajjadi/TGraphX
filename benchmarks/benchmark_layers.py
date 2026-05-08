@@ -210,19 +210,24 @@ def run_benchmark(args):
 
     # ── AMP context ───────────────────────────────────────────────────────────
     amp_status = "disabled"
+    amp_dtype_str = "none"
     amp_ctx = None
     if args.amp:
         if device.type == "cuda":
             amp_ctx = torch.autocast("cuda", dtype=torch.float16)
-            amp_status = "enabled (cuda float16)"
+            amp_status = "enabled"
+            amp_dtype_str = "float16"
         elif device.type == "cpu":
             try:
                 amp_ctx = torch.autocast("cpu", dtype=torch.bfloat16)
-                amp_status = "enabled (cpu bfloat16)"
+                amp_status = "enabled"
+                amp_dtype_str = "bfloat16"
             except Exception:
                 amp_status = "skipped (bfloat16 not supported on this CPU)"
+                amp_dtype_str = "none"
         else:
             amp_status = f"skipped (unsupported device: {device.type})"
+            amp_dtype_str = "none"
 
     chunk_size = getattr(args, "chunk_size", None)
 
@@ -240,6 +245,7 @@ def run_benchmark(args):
             out = _fwd()
 
     out_shape_actual = tuple(out.shape)
+    finite_output = bool(torch.isfinite(out).all())
 
     # ── Time forward ──────────────────────────────────────────────────────────
     if device.type == "cuda":
@@ -290,7 +296,9 @@ def run_benchmark(args):
         "peak_cuda_mb":   round(peak_cuda_mb, 1) if peak_cuda_mb is not None else None,
         "msg_mem_est_mb": mem["total_mb"],
         "amp":            amp_status,
+        "amp_dtype":      amp_dtype_str,
         "compile":        compile_status,
+        "finite_output":  finite_output,
         "chunk_size":     chunk_size,
         "seed":           args.seed,
     }
@@ -329,8 +337,9 @@ def _print_report(r: dict, log_level: int = 0) -> None:
     row("Peak CUDA mem",
         f"{r['peak_cuda_mb']:.1f} MB" if r["peak_cuda_mb"] is not None else "N/A")
     row("Msg mem est.", f"~{r['msg_mem_est_mb']:.2f} MB")
-    row("AMP",         r["amp"])
+    row("AMP",         r["amp"] + (f" ({r['amp_dtype']})" if r["amp_dtype"] != "none" else ""))
     row("Compile",     r["compile"])
+    row("Finite output", "yes" if r.get("finite_output") else "no (check AMP/dtype)")
     print(sep)
 
 

@@ -302,8 +302,17 @@ class TensorGATLayer(nn.Module):
         # Weight values and aggregate by destination.  attn has shape [E, K]
         # and h_src has shape [E, K, C_head, *spatial]; broadcast attn over
         # the trailing channel + spatial dims.
+        #
+        # AMP / dtype note: a_src and a_dst are float32 parameters.  Under
+        # torch.autocast, their element-wise product with low-precision
+        # activations (bf16 / fp16) is promoted to float32 by PyTorch's
+        # mixed-precision rules.  This means attn_dropped can be float32 even
+        # when h_src is bf16.  We cast attn_dropped to h_src.dtype here so
+        # that ``weighted`` and ``out_per_head`` share the same dtype and
+        # index_add_ does not raise a scalar-type mismatch.
         trailing_ones = (1,) * (h_src.dim() - attn_dropped.dim())
-        weighted = attn_dropped.view(*attn_dropped.shape, *trailing_ones) * h_src
+        attn_cast = attn_dropped.to(dtype=h_src.dtype)
+        weighted = attn_cast.view(*attn_cast.shape, *trailing_ones) * h_src
         if weight_b is not None:
             weighted = weighted * weight_b
         out_per_head = h.new_zeros((N, self.num_heads, self.head_channels, *spatial))
