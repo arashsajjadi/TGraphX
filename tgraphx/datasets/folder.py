@@ -148,6 +148,7 @@ class ImageFolderPatchGraphDataset(InMemoryGraphDataset):
 
     def _populate(self) -> None:
         self._require_pil()
+        import numpy as _np
         from PIL import Image  # local import (lazy)
 
         graphs: List[Graph] = []
@@ -160,9 +161,9 @@ class ImageFolderPatchGraphDataset(InMemoryGraphDataset):
             for path in files:
                 with Image.open(path) as im:
                     im = im.convert("RGB")
-                    arr = torch.tensor(
-                        list(im.getdata()), dtype=torch.uint8,
-                    ).view(im.height, im.width, 3).permute(2, 0, 1).contiguous()
+                    arr = torch.from_numpy(
+                        _np.array(im, dtype=_np.uint8)
+                    ).permute(2, 0, 1).contiguous()
                 img = arr.to(dtype=torch.float)
                 if self.normalize:
                     img = img / 255.0

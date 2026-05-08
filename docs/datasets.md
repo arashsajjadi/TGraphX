@@ -1,6 +1,6 @@
 # Datasets
 
-TGraphX (v0.2.9) ships a unified dataset registry, native synthetic
+TGraphX ships a unified dataset registry, native synthetic
 datasets, folder-backed datasets, and **optional** adapters for
 torchvision, PyTorch Geometric, DGL, and OGB.
 

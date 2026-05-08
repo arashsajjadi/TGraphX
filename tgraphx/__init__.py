@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -57,6 +57,7 @@ from .layers.factory import make_layer
 from .models.factory import build_model, build_model_from_config
 
 # ── Model classes ─────────────────────────────────────────────────────────────
+from .models.cnn_encoder import CNNEncoder
 from .models.edge_predictor import EdgePredictor
 from .models.regressors import NodeRegressor, GraphRegressor
 from .models.graph_classifier import GraphClassifier
@@ -173,6 +174,7 @@ __all__ = [
     "build_model",
     "build_model_from_config",
     # Model classes
+    "CNNEncoder",
     "EdgePredictor",
     "NodeRegressor",
     "GraphRegressor",

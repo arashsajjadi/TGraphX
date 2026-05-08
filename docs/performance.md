@@ -149,7 +149,7 @@ All chunked paths are disabled by default (`chunk_size=None`).
 | `ConvMessagePassing` | sum, mean | ✅ Stable | max falls back with warning |
 | `TensorGraphSAGELayer` | mean, max | ✅ Stable v0.2.3 | |
 | `TensorGINLayer` | sum | ✅ Stable v0.2.3 | |
-| `TensorGATLayer` | — | ⏳ Deferred v0.2.4 | Softmax requires two-pass algorithm |
+| `TensorGATLayer` | — | ✅ Stable v0.2.4 | Two-pass log-sum-exp; pass `chunk_size=K` |
 
 ```python
 from tgraphx.layers import ConvMessagePassing, TensorGraphSAGELayer, TensorGINLayer

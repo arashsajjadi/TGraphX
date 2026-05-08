@@ -99,7 +99,10 @@ exactly covered by `patch_size` and `stride`. No automatic padding is applied.
 ## PyG / DGL compatibility
 
 TGraphX is not a drop-in replacement for PyG or DGL. The API and layer
-semantics differ; there are no conversion utilities.
+semantics differ. Data-format converters are available in
+`tgraphx.interop` (`to_pyg_data`, `from_pyg_data`, `to_dgl_graph`,
+`from_dgl_graph`, and their hetero counterparts); they convert graph
+objects between formats but do not make the two APIs interchangeable.
 
 ## Version
 

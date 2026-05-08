@@ -102,7 +102,7 @@ class TestTinyOverfit:
             )
             loss.backward()
             opt.step()
-            losses.append(float(loss))
+            losses.append(loss.detach().item())
         assert losses[-1] < losses[0]
 
     def test_graph_regression_loss_decreases(self):
@@ -126,7 +126,7 @@ class TestTinyOverfit:
             )
             loss.backward()
             opt.step()
-            losses.append(float(loss))
+            losses.append(loss.detach().item())
         assert losses[-1] < losses[0]
 
     def test_gcn_zoo_classifier_overfits(self):
@@ -151,7 +151,7 @@ class TestTinyOverfit:
             loss = torch.nn.functional.cross_entropy(logits, labels)
             loss.backward()
             opt.step()
-            losses.append(float(loss))
+            losses.append(loss.detach().item())
         assert losses[-1] < losses[0]
 
     def test_gatv2_classifier_finite_gradients(self):

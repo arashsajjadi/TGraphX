@@ -73,6 +73,42 @@ CUDA invocation on your own RTX system (or any CUDA-capable host) to
 generate `cuda_validation.json`; pull-request reviewers can attach
 the JSON when reporting CUDA test results.
 
+## Manual Apple Silicon validation (v0.2.9)
+
+**Validated 2026-05-08 — manual, not automated.**
+
+TGraphX 0.2.9 was installed from PyPI in a fresh temporary virtual
+environment on a real Apple Silicon machine and passed all of the
+checks below.  This is a point-in-time record; re-run the same check
+after v0.3.0 is published.
+
+Environment:
+- macOS 15.5 arm64
+- Python 3.11.5
+- torch 2.11.0
+- torchvision 0.26.0
+- tgraphx 0.2.9
+- MPS available: True
+
+Checks passed:
+- `pip install tgraphx==0.2.9` from PyPI in a fresh temporary venv
+- import / version smoke
+- vector forward/backward (`LinearMessagePassing`)
+- spatial `[N,C,H,W]` forward/backward (`ConvMessagePassing`)
+- dataset registry (34 datasets listed)
+- synthetic patch graph dataset smoke
+- transform smoke
+- metrics smoke
+- dashboard CLI smoke (`tgraphx-dashboard --help`)
+- MPS `LinearMessagePassing` forward/backward smoke
+
+Note: this is a smoke test, not full MPS CI.  MPS operator coverage
+varies across PyTorch versions.  "MPS available: True" confirms the
+runtime detects the device; it does not guarantee every operation
+supported on CUDA is equally supported on MPS.  See the backend table
+in the README and [docs/performance.md](performance.md) for the exact
+per-platform caveats.
+
 ## What this is not
 
 * Not a benchmark.  Elapsed times are reported for diagnostic

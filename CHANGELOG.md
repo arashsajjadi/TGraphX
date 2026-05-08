@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — Documentation
+
+- `docs/experiments.md` — full experiment-manager reference (config schema,
+  Runner, GridRunner, callbacks, CLI, run artifacts).
+- `docs/explainability.md` — explainability reference (saliency, integrated
+  gradients, edge attribution, patch heatmaps, exports, dashboard compatibility).
+
+### Added — Code
+
+- `CNNEncoder` promoted to top-level `tgraphx` namespace (was only at
+  `tgraphx.models`).  README stable core APIs table listed it alongside
+  other top-level classes; the import path now matches that presentation.
+
+### Fixed — Code
+
+- `tgraphx/datasets/folder.py`: replaced `Image.getdata()` (deprecated in Pillow,
+  removed in Pillow 14) with `numpy.array(im)` — equivalent result, no
+  deprecation warning, no new dependency (numpy is always present with PyTorch).
+- `tests/test_synthetic_datasets.py`: replaced `float(loss)` with
+  `loss.detach().item()` — eliminates the "Converting a tensor with
+  requires_grad=True to a scalar" UserWarning.
+
+### Fixed — Packaging / metadata
+
+- `pyproject.toml`: bumped `requires-python` from `>=3.9` to `>=3.10` and
+  removed the `Python :: 3.9` classifier.  Python 3.9 reached end-of-life in
+  October 2025 and CI only covers 3.10 / 3.11 / 3.12; the badge, README, and
+  installation docs already said "Python 3.10+".
+- `docs/installation.md`: updated requirement line from "Python ≥ 3.9" to
+  "Python ≥ 3.10" to match `pyproject.toml` and README.
+
+### Fixed — Documentation
+
+- `docs/limitations.md` PyG / DGL section: corrected stale claim "there are no
+  conversion utilities"; `tgraphx.interop` converters are noted.
+- `docs/device_validation.md`: added dated manual Apple Silicon validation record
+  for TGraphX 0.2.9 on macOS 15.5 arm64 (MPS available, smoke tests passed).
+- `docs/datasets.md`: removed stale "(v0.2.9)" version pin from the opening
+  sentence.
+- `docs/performance.md`: corrected chunked-forward table row for `TensorGATLayer`
+  — the two-pass log-sum-exp chunked forward shipped in v0.2.4 and is Stable;
+  the row incorrectly said "Deferred v0.2.4".
+- `docs/release_checklist.md`: added explicit pre-flight checks for stale dist/
+  wheel rebuild and for stale tag pointing to wrong commit.
+
 ---
 
 ## [0.3.0] — 2026-05-07 (release prep)

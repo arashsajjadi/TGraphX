@@ -79,7 +79,7 @@ class TestPatchGraph:
             loss = torch.nn.functional.cross_entropy(logits, batch.graph_labels.long())
             loss.backward()
             opt.step()
-            losses.append(float(loss))
+            losses.append(loss.detach().item())
         assert losses[-1] < losses[0]
         assert all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None)
 

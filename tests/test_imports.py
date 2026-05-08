@@ -113,6 +113,7 @@ def test_import_performance_from_top():
 
 def test_import_model_classes_from_top():
     from tgraphx import (  # noqa: F401
+        CNNEncoder,
         GraphClassifier,
         NodeClassifier,
         EdgePredictor,

@@ -6,7 +6,8 @@ Use this checklist before tagging a new TGraphX release.
 
 - [ ] `git status` — confirm changes are intentional and no data files are staged
 - [ ] `grep -n 'version = ' pyproject.toml` and `grep __version__ tgraphx/__init__.py` — both match intended version
-- [ ] `git tag --list | grep v<MAJOR>.<MINOR>` — confirm the new tag does not already exist
+- [ ] `git tag --list | grep v<MAJOR>.<MINOR>` — confirm the new tag does not already exist on a *different* commit; if a stale tag exists from a pre-release build, delete it first with `git tag -d vX.Y.Z` before re-tagging the final commit
+- [ ] After any code or docs change, always rebuild the wheel (`rm -rf dist build *.egg-info && python -m build`) before publishing — a stale wheel in `dist/` predates the change
 
 ## Local tests
 

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Python ≥ 3.9
+- Python ≥ 3.10
 - PyTorch ≥ 1.13
 - torchvision ≥ 0.14
 - PyYAML ≥ 5.4 (for YAML config loading)
