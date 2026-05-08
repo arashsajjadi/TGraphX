@@ -9,6 +9,150 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.9] — 2026-05-07 (release prep)
+
+### Added — Dataset ecosystem
+
+- **`tgraphx.datasets`** — unified dataset registry, base classes,
+  cache, safe download/extraction:
+  - `BaseGraphDataset`, `InMemoryGraphDataset`,
+    `DownloadableGraphDataset`, `ExternalDatasetAdapter`
+  - `DatasetMetadata` (JSON-serialisable provenance record).
+  - `register_dataset` / `get_dataset` / `list_datasets` /
+    `dataset_info` / `available_dataset_groups`.
+  - `cache_summary` / `clear_cache(dry_run=True)` / `resolve_dataset_root`.
+  - `download_url`, `verify_checksum`, `extract_archive`,
+    `maybe_download`, `safe_extract_zip`, `safe_extract_tar` —
+    atomic downloads, SHA-256 verification, path-traversal-blocked
+    extraction.
+
+- **Native synthetic datasets** (deterministic, CPU-safe, no network):
+  - `SyntheticPatchGraphDataset` (graph classification + regression).
+  - `SyntheticVolumeGraphDataset` (3-D graph classification).
+  - `SyntheticNodeClassificationDataset` (SBM with masks).
+  - `SyntheticEdgePredictionDataset` (similarity-based pairs).
+  - `SyntheticGraphRegressionDataset`.
+  - `SyntheticHeteroGraphDataset` (paper / author / venue).
+  - `SyntheticTemporalGraphDataset`.
+
+- **Folder-backed datasets**: `ImageFolderPatchGraphDataset`,
+  `VolumeFolderPatchGraphDataset` (`.npy` / `.npz` / `.pt`).
+
+- **Optional torchvision wrappers** — generic
+  `TorchvisionPatchGraphDataset` plus curated
+  `MNIST`, `FashionMNIST`, `KMNIST`, `CIFAR10`, `CIFAR100`,
+  `SVHN`, `STL10`, `FakeData` patch-graph subclasses.
+
+- **Optional PyG wrappers** — `PyGDatasetAdapter`,
+  `PyGPlanetoidDataset`, `PyGTUDatasetAdapter`.
+
+- **Optional DGL wrappers** — `DGLDatasetAdapter`,
+  `DGLCitationDatasetAdapter`.
+
+- **Optional OGB wrappers** — `OGBDatasetAdapter`,
+  `OGBNodePropertyDatasetAdapter`,
+  `OGBLinkPropertyDatasetAdapter`,
+  `OGBGraphPropertyDatasetAdapter`,
+  `OGBEvaluatorWrapper`.
+
+- **Converter utilities** — `ogb_item_to_graph`,
+  `torchvision_image_to_patch_graph`, plus re-exports of the
+  homogeneous + hetero PyG / DGL converters from
+  `tgraphx.interop`.
+
+### Added — Transforms (`tgraphx.transforms`)
+
+- Composition: `Compose`, `LambdaTransform`, `RandomApply`.
+- Structure: `AddSelfLoops`, `RemoveSelfLoops`, `ToUndirected`,
+  `CoalesceEdges`, `DropEdges`.
+- Features: `NormalizeFeatures`, `StandardizeFeatures`,
+  `NormalizeEdgeFeatures`, `AddDegreeFeatures`,
+  `AddConstantFeatures`, `FeatureNoise`, `NodeFeatureMask`.
+- Splits: `RandomNodeSplit`, `RandomLinkSplit`, `RandomGraphSplit`,
+  `FixedSplit`.
+- Positional: `AddDegreeEncoding`, `AddLaplacianEigenvectors`
+  (with O(N²) guard), `AddAdjacencyBias`.
+- Patch: `PatchifyImage`, `PatchifyVolume`, `BuildGridGraph`,
+  `BuildKNNGraph`, `BuildRadiusGraph`.
+
+### Added — Metrics (`tgraphx.metrics`)
+
+- Classification: `accuracy`, `top_k_accuracy`, `confusion_matrix`,
+  `precision_recall_f1`, `classification_report`.
+- Regression: `mae`, `mse`, `rmse`, `r2_score`, `regression_report`.
+- Ranking / link prediction: `hits_at_k`, `mean_reciprocal_rank`,
+  `ndcg_at_k`, `roc_auc`, `average_precision`,
+  `link_prediction_report`.
+- Reports: `graph_classification_report`,
+  `node_classification_report`, `edge_classification_report`,
+  `graph_regression_report`.
+- OGB: `OGBEvaluatorWrapper` (lazy import).
+
+### Added — Benchmarks (CI-safe `--small` mode + JSON output)
+
+- `benchmarks/benchmark_dataset_loading.py`
+- `benchmarks/benchmark_training_synthetic.py`
+- `benchmarks/benchmark_tensor_vs_flatten.py`
+- `benchmarks/benchmark_transforms.py`
+- `benchmarks/benchmark_metrics.py`
+- `benchmarks/make_benchmark_report.py` (Markdown report generator)
+
+### Added — Tests, examples, docs
+
+- New tests:
+  - `tests/test_datasets_base.py`
+  - `tests/test_dataset_registry.py`
+  - `tests/test_dataset_cache.py`
+  - `tests/test_dataset_download_mocked.py` (no network — monkey-patches
+    `urlopen`; covers checksum / path-traversal blocking).
+  - `tests/test_synthetic_datasets.py` (incl. tiny-overfit).
+  - `tests/test_folder_datasets.py` (PIL via `pytest.importorskip`).
+  - `tests/test_torchvision_wrappers.py` (uses `FakeData`, never
+    downloads).
+  - `tests/test_pyg_dgl_ogb_wrappers.py` (lazy-import-missing path
+    asserted; real conversion test skipped when upstream missing).
+  - `tests/test_transforms.py` (47 tests).
+  - `tests/test_metrics.py` (35 tests with hand-computed values).
+  - `tests/test_benchmark_smoke.py` (every benchmark `--small`).
+  - `tests/test_dataset_docs_claims.py` (license/no-bundled/no-hidden-
+    download wording, lazy-import contract).
+
+- New examples:
+  - `examples/datasets_quickstart.py`
+  - `examples/synthetic_datasets_demo.py`
+  - `examples/transforms_metrics_demo.py`
+  - `examples/image_folder_patch_dataset_demo.py`
+  - `examples/benchmark_quickstart.py`
+  - `examples/pyg_dataset_adapter_demo.py`
+  - `examples/dgl_dataset_adapter_demo.py`
+  - `examples/ogb_dataset_adapter_demo.py`
+  - `examples/mnist_patch_graph_demo.py` (FakeData by default; opt-in
+    `--download` for actual MNIST).
+
+- New docs:
+  - `docs/datasets.md`
+  - `docs/transforms.md`
+  - `docs/metrics.md`
+  - `docs/benchmarks.md`
+  - `docs/dataset_license_policy.md`
+
+### Added — Optional extras
+
+- `pyg`, `ogb`, `pillow` extras in `pyproject.toml` (DGL is
+  intentionally not packaged as an extra because its wheels are
+  platform-sensitive).
+
+### Honest scope (unchanged for v0.2.9)
+
+- TGraphX **does not redistribute** third-party datasets.  Adapters
+  call upstream loaders.
+- Downloads happen only when `download=True` is explicitly passed.
+- Synthetic datasets are tutorials/sanity, not benchmarks.
+- TGraphX makes **no SOTA / leaderboard claims**.
+- TGraphX is **not** a drop-in PyG / DGL replacement.
+
+---
+
 ## [0.2.8] — 2026-05-07 (release prep)
 
 ### Added

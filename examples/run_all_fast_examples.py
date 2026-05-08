@@ -61,6 +61,15 @@ FAST_EXAMPLES = [
     ("gradient_sanity_stack.py",            "Gradient sanity (8-layer stack)",       None),
     # Sampling (v0.2.8)
     ("sampling_demo_v028.py",               "Random walk + hetero + temporal sampling", None),
+    # Datasets / transforms / metrics (v0.2.9)
+    ("datasets_quickstart.py",              "Datasets quickstart (no download)",        None),
+    ("synthetic_datasets_demo.py",          "All synthetic datasets",                   None),
+    ("transforms_metrics_demo.py",          "Compose + metrics demo",                   None),
+    ("image_folder_patch_dataset_demo.py",  "ImageFolder → patch graph (PIL)",          None),
+    ("pyg_dataset_adapter_demo.py",         "PyG → TGraphX conversion (skips if missing)", None),
+    ("dgl_dataset_adapter_demo.py",         "DGL → TGraphX conversion (skips if missing)", None),
+    ("ogb_dataset_adapter_demo.py",         "OGB evaluator wrapper (mock)",             None),
+    ("mnist_patch_graph_demo.py",           "MNIST patch demo (FakeData by default)",   None),
 ]
 
 

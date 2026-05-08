@@ -74,6 +74,60 @@ drop-in clones of PyTorch Geometric's vector-feature implementations.
 | Dataset & loader | `GraphDataset`, `GraphDataLoader` | — | Wraps `torch.utils.data` |
 | Utilities | `load_config`, `get_device` | — | YAML/JSON config; CUDA→MPS→CPU |
 
+## Datasets, transforms, metrics, benchmarks (v0.2.9)
+
+TGraphX includes a unified dataset registry, native synthetic datasets,
+folder-backed datasets, and **optional** adapters for torchvision, PyG,
+DGL, and OGB.
+
+```python
+from tgraphx.datasets import list_datasets, dataset_info, get_dataset
+
+print(list_datasets())                                # registered names
+ds = get_dataset("synthetic:patch_graph", num_graphs=32, seed=0)
+g = ds[0]
+```
+
+* **TGraphX does not redistribute third-party datasets — no bundled
+  datasets ship in the wheel or sdist.**  External adapters delegate
+  download and parsing to the upstream library; downloads happen
+  **only when the user passes** `download=True`.
+* Cache layout: `<root>` (or `$TGRAPHX_DATA`, or
+  `~/.cache/tgraphx/datasets`).  Inspect with
+  `tgraphx.datasets.cache_summary()`; clear with `clear_cache(...)`.
+* Transforms (`tgraphx.transforms`) are deterministic-when-seeded,
+  non-mutating-by-default, and importing them does not pull in any
+  optional dependency.
+* Metrics (`tgraphx.metrics`) are pure-PyTorch.
+* Benchmarks (`benchmarks/benchmark_*.py`) accept `--small` and
+  `--output JSON`; their results are *engineering reproducibility
+  signals*, not real-world performance claims.
+* Synthetic datasets are sanity / tutorial / trainability datasets, not
+  benchmarks.
+
+Detailed write-ups in
+[docs/datasets.md](docs/datasets.md),
+[docs/transforms.md](docs/transforms.md),
+[docs/metrics.md](docs/metrics.md),
+[docs/benchmarks.md](docs/benchmarks.md), and the
+[license/citation policy](docs/dataset_license_policy.md).
+
+### Optional dataset extras
+
+| Adapter | Install |
+|---------|---------|
+| Native synthetic / folder | (no extra) |
+| torchvision-backed datasets | (already a TGraphX base dependency) |
+| PyG dataset adapter | `pip install "tgraphx[pyg]"` |
+| DGL dataset adapter | follow upstream install (DGL wheels are platform-sensitive; we don't pin them) |
+| OGB dataset adapter | `pip install "tgraphx[ogb]"` |
+| Image folder dataset (PIL) | `pip install "tgraphx[pillow]"` |
+
+Importing `tgraphx`, `tgraphx.datasets`, `tgraphx.transforms`, or
+`tgraphx.metrics` does **not** import torch_geometric / dgl / ogb.
+
+---
+
 ## Current scope and boundaries
 
 TGraphX is a focused library for tensor-aware patch-graph GNNs.  Here is
