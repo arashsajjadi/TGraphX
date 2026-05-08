@@ -5,6 +5,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — v0.4.1 candidate
+
+### Added — Reproducibility module (`tgraphx.reproducibility`) — Beta
+
+- `set_seed(seed, deterministic=False, benchmark=None, warn_only=True)`
+  — returns a state dict; supports `warn_only` via
+  `torch.use_deterministic_algorithms`.
+- `make_generator(seed, device="cpu")` — seeded `torch.Generator`
+  without global RNG side effects.
+- `seed_worker(worker_id)` — DataLoader worker init function for
+  reproducible multi-worker loading.
+- `reproducibility_report()` — JSON-serialisable snapshot of current
+  determinism state (cuDNN flags, `PYTHONHASHSEED`, etc.).
+- `deterministic_mode(seed, warn_only=True)` — context manager that
+  enables deterministic mode and restores previous state on exit.
+- Tests: `tests/test_reproducibility.py` (21 tests) covering same-seed
+  CPU output, cross-process WL determinism via subprocess, DataLoader
+  `seed_worker`, context manager state restoration.
+
+### Added/Fixed — WL kernel determinism
+
+- `tgraphx/mining/kernels.py`: `weisfeiler_lehman_labels` now uses
+  `repr(key).encode("ascii")` byte keys (via `_stable_compress`) for
+  the internal label dictionary.  This makes WL label assignment stable
+  across separate Python processes regardless of `PYTHONHASHSEED`.
+  Previously the dict used raw tuple keys whose hash was affected by
+  `PYTHONHASHSEED` for Python < 3.x (integers are unaffected, but
+  documentation was unclear).  Added cross-process subprocess tests.
+
+### Added — Neural mining benchmark (`benchmarks/mining/benchmark_neural_mining.py`) — Beta
+
+- Benchmarks `PrototypeMembershipScorer`, `GraphPatternClassifier`, and
+  `GraphAutoencoderAnomalyDetector` on synthetic tasks.
+- Reports training time, initial/final loss, loss-decreased flag, and
+  gradient health summary per task.
+- Supports `--small`, `--json`, `--seed`, `--device`, `--epochs`,
+  `--num-graphs` CLI flags.
+- Fixed: `benchmark_graph_similarity.py` — `torch.allclose()` returns
+  a Python `bool` (not a Tensor) in recent PyTorch; removed spurious
+  `.item()` call.
+
+### Added — Batched `PrototypeMembershipScorer.score_batch_fast` — Beta
+
+- `score_batch_fast(candidates)` performs a **single GNN pass** over a
+  disjoint batched graph of all candidates, then extracts per-graph
+  embeddings.  Gradient-compatible.  Numerically equivalent to
+  `score_batch` for the same model weights and inputs.
+- Tests: `tests/test_neural_mining_batched.py` (13 tests) covering
+  shape, gradient flow, no cross-graph leakage, CUDA optional smoke.
+
+### Added — Documentation
+
+- `docs/reproducibility.md` — set_seed, make_generator, seed_worker,
+  deterministic_mode, WL determinism policy, hardware caveats.
+- `docs/neural_graph_mining.md` — PrototypeMembershipScorer,
+  GraphAutoencoderAnomalyDetector, GraphPatternClassifier, training
+  helpers, backprop behavior, limitations.
+- `docs/plotting.md` — Matplotlib dependency, layouts, graph plots,
+  mining plots, save_figure, Colab usage, performance notes.
+- `docs/index.md` — links to the three new docs pages.
+- `docs/api_stability.md` — v0.4.0/v0.4.1 Beta/Experimental sections.
+
+---
+
 ## [0.4.0] - 2026-05-08 — v0.4.0 candidate: neural mining + plotting + benchmarks
 
 ### Added — Code

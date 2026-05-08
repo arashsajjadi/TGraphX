@@ -43,7 +43,7 @@ def run(args):
         "wl_kernel_time_s": round(t_wl, 6),
         "degree_similarity_time_s": round(t_deg, 6),
         "wl_kernel_shape": list(K_wl.shape),
-        "wl_symmetric": bool(torch.allclose(K_wl, K_wl.t(), atol=1e-5).item()),
+        "wl_symmetric": bool(torch.allclose(K_wl, K_wl.t(), atol=1e-5)),
     }
     print_result(result, args.json)
     return result

@@ -244,20 +244,100 @@ class PrototypeMembershipScorer(nn.Module):
         self,
         candidates: List[Dict[str, Any]],
     ) -> torch.Tensor:
-        """Score a list of candidate graph dicts.
+        """Score a list of candidate graph dicts sequentially.
 
         Each dict must have keys ``node_features``, ``edge_index``,
         ``query_idx``.
 
+        For a faster batched forward (single GNN pass over all graphs),
+        use :meth:`score_batch_fast`.
+
         Returns:
             ``FloatTensor[len(candidates)]`` of logits.
         """
+        if not candidates:
+            raise ValueError("score_batch requires at least one candidate")
         logits = []
         for c in candidates:
             logit = self(
                 c["node_features"], c["edge_index"], c["query_idx"],
             )
             logits.append(logit)
+        return torch.stack(logits, dim=0)
+
+    def score_batch_fast(
+        self,
+        candidates: List[Dict[str, Any]],
+    ) -> torch.Tensor:
+        """Score a list of candidate graphs with a single batched GNN pass.
+
+        Concatenates all graphs into a single disjoint graph (no edges
+        across graph boundaries), runs one GNN forward, then extracts
+        per-graph support and query embeddings.
+
+        Compared to :meth:`score_batch` this reduces Python loop overhead
+        for large batches, but memory scales with total node count.
+
+        Args:
+            candidates: List of dicts with ``node_features``,
+                ``edge_index``, ``query_idx``.
+
+        Returns:
+            ``FloatTensor[B]`` of logits.
+        """
+        if not candidates:
+            raise ValueError("score_batch_fast requires at least one candidate")
+
+        # Build a batched (disjoint) graph.
+        node_feats_list = []
+        edge_index_list = []
+        query_indices = []  # global query node index
+        graph_slice = []    # (start_node, end_node) for each graph
+
+        offset = 0
+        for c in candidates:
+            x = self._prep_features(c["node_features"])
+            ei = c["edge_index"]
+            q = int(c["query_idx"])
+            N = x.size(0)
+            node_feats_list.append(x)
+            if ei.numel():
+                edge_index_list.append(ei + offset)
+            query_indices.append(offset + q)
+            graph_slice.append((offset, offset + N))
+            offset += N
+
+        # Concatenate all features.
+        all_feats = torch.cat(node_feats_list, dim=0)  # [total_N, D]
+        total_N = all_feats.size(0)
+        device = all_feats.device
+
+        if edge_index_list:
+            all_ei = torch.cat(edge_index_list, dim=1)
+        else:
+            all_ei = torch.zeros((2, 0), dtype=torch.long, device=device)
+
+        # Single GNN pass over the batched graph.
+        enc = self.encoder(all_feats, all_ei, total_N)  # [total_N, out_dim]
+
+        # Extract per-graph support and query embeddings.
+        logits = []
+        for i, (start, end) in enumerate(graph_slice):
+            q_global = query_indices[i]
+            # Support: all nodes in this graph except the query.
+            support_idx = [j for j in range(start, end) if j != q_global]
+            if support_idx:
+                support_emb = enc[support_idx].mean(dim=0)
+            else:
+                support_emb = torch.zeros(enc.size(1), device=device, dtype=enc.dtype)
+            query_emb = enc[q_global]
+            combined = torch.cat([
+                support_emb, query_emb,
+                (support_emb - query_emb).abs(),
+                support_emb * query_emb,
+            ], dim=0)
+            logits.append(self.scorer(combined).squeeze(-1))
+
         return torch.stack(logits, dim=0)
 
 

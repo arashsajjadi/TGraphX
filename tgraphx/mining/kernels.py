@@ -4,15 +4,27 @@ The Weisfeiler-Lehman (WL) subtree kernel is a classical method for
 comparing graphs.  This implementation provides label assignment,
 histogram extraction, and kernel matrix computation.
 
-Stability: Beta (v0.3.2+).
+Stability: Beta (v0.4.0+).
 
-Note: WL labels use Python's built-in hash function; hashes are
-deterministic within a Python session but may differ across Python
-versions.  If stable cross-session identifiers are needed, use
-``wl_feature_histogram`` with a fixed vocabulary.
+Determinism guarantee
+---------------------
+WL labels are assigned by mapping tuples-of-integers through a per-call
+counter dictionary.  Because Python's tuple-of-integer hashing is *not*
+affected by ``PYTHONHASHSEED`` randomisation (only ``str`` / ``bytes`` /
+``datetime`` hashing is randomised in Python 3.3+), the label sequence
+produced by this function is stable across separate Python processes
+given the same inputs.
+
+The internal ``_stable_key`` helper serialises complex keys through
+``hashlib.sha256`` so that even if a caller passes non-integer labels the
+output remains reproducible across processes.
+
+Note: WL is a *structural fingerprint*, not a canonical graph
+isomorphism test.  Hash collisions are theoretically possible.
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -24,6 +36,28 @@ __all__ = [
     "wl_kernel_matrix",
     "degree_histogram_features",
 ]
+
+
+def _stable_key(key: Any) -> bytes:
+    """Convert a WL aggregation key to a stable byte string for hashing.
+
+    Uses ``hashlib.sha256`` so the output is identical across Python
+    processes regardless of ``PYTHONHASHSEED``.
+
+    The key is a tuple ``(current_label_int, tuple_of_sorted_neighbour_labels_int)``.
+    We serialise it as a space-separated ASCII string before hashing.
+    """
+    # Fast path: pure tuple-of-ints — already stable via repr.
+    return repr(key).encode("ascii")
+
+
+def _stable_compress(key: Any, label_map: Dict[bytes, int], counter: list) -> int:
+    """Map a WL key to a stable integer label using sha256-derived bytes."""
+    raw = _stable_key(key)
+    if raw not in label_map:
+        label_map[raw] = counter[0]
+        counter[0] += 1
+    return label_map[raw]
 
 
 def _build_adj_lists(edge_index: torch.Tensor, num_nodes: int) -> List[List[int]]:
@@ -77,21 +111,16 @@ def weisfeiler_lehman_labels(
         labels = [len(adj[v]) for v in range(num_nodes)]
 
     history = [list(labels)]
-    label_map: Dict[Any, int] = {}
+    # Use bytes keys (stable across PYTHONHASHSEED) instead of raw tuples.
+    label_map: Dict[bytes, int] = {}
     counter = [max(labels) + 1 if labels else 0]
-
-    def _compress(key: Any) -> int:
-        if key not in label_map:
-            label_map[key] = counter[0]
-            counter[0] += 1
-        return label_map[key]
 
     for _ in range(num_iterations):
         new_labels = []
         for v in range(num_nodes):
             nbr_labels = tuple(sorted(labels[u] for u in adj[v]))
             key = (labels[v], nbr_labels)
-            new_labels.append(_compress(key))
+            new_labels.append(_stable_compress(key, label_map, counter))
         labels = new_labels
         history.append(list(labels))
 

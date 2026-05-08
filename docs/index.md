@@ -34,6 +34,9 @@ feature maps, `[C, D, H, W]` volumetric maps, or plain vectors `[D]`.
 | Graph algorithms | [graph_algorithms.md](graph_algorithms.md) |
 | Temporal utilities | [temporal.md](temporal.md) |
 | Graph mining and pattern recognition | [graph_mining.md](graph_mining.md) |
+| Neural graph mining | [neural_graph_mining.md](neural_graph_mining.md) |
+| Plotting utilities | [plotting.md](plotting.md) |
+| Reproducibility | [reproducibility.md](reproducibility.md) |
 | Performance | [performance.md](performance.md) |
 | Interoperability (PyG/DGL/OGB) | [comparison.md](comparison.md) |
 | API stability | [api_stability.md](api_stability.md) |

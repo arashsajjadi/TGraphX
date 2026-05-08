@@ -101,6 +101,35 @@ plan.
   time encoder.  Marked experimental until v0.3.4 evaluates it on a
   real temporal benchmark.
 
+## Beta — added in v0.4.0 / v0.4.1
+
+Full test coverage; may evolve before v0.5.0.
+
+- `tgraphx.mining.structural`, `.link_prediction`, `.motifs`, `.kernels`,
+  `.similarity`, `.communities`, `.random_walk`, `.reports` — classical
+  graph mining utilities.  See [graph_mining.md](graph_mining.md).
+- `tgraphx.plotting.*` — Matplotlib-based visualization.
+  See [plotting.md](plotting.md).
+- `tgraphx.reproducibility.set_seed`, `make_generator`, `seed_worker`,
+  `reproducibility_report`, `deterministic_mode`.
+  See [reproducibility.md](reproducibility.md).
+- `tgraphx.mining.neural.PrototypeMembershipScorer.score_batch_fast`
+  — batched forward with single GNN pass.
+
+## Experimental — added in v0.4.0 / v0.4.1
+
+APIs or semantics may change in minor releases.
+
+- `tgraphx.mining.neural.PrototypeMembershipScorer` — trainable
+  prototype membership scorer.
+- `tgraphx.mining.neural.GraphAutoencoderAnomalyDetector` — neural
+  anomaly detector.
+- `tgraphx.mining.neural.GraphPatternClassifier` — graph pattern
+  classifier.
+- `tgraphx.mining.anomaly.*`, `.prototype.*`, `.patterns.*`,
+  `.frequent.*`, `.temporal.*`, `.hetero.*` — experimental mining
+  utilities.
+
 ## Legacy / deprecated
 
 - `AttentionMessagePassing` — kept for backward compatibility; prefer
