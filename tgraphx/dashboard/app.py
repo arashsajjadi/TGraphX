@@ -84,6 +84,7 @@ _HTML = b"""<!DOCTYPE html>
       <section id="sec-overview"  class="sec active" aria-labelledby="sec-overview-title"></section>
       <section id="sec-metrics"   class="sec" aria-labelledby="sec-metrics-title"></section>
       <section id="sec-graph"     class="sec" aria-labelledby="sec-graph-title"></section>
+      <section id="sec-mining"    class="sec" aria-labelledby="sec-mining-title"></section>
       <section id="sec-hardware"  class="sec" aria-labelledby="sec-hardware-title"></section>
       <section id="sec-logs"      class="sec" aria-labelledby="sec-logs-title"></section>
       <section id="sec-config"    class="sec" aria-labelledby="sec-config-title"></section>
@@ -617,6 +618,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(_list_runs(logdir))
         elif endpoint == "config":
             self._api_config()
+        # ── Mining artifact endpoints (v0.4.2+) ────────────────────────────
+        elif endpoint == "mining_summary":
+            self._api_json_file(logdir, "graph_mining_summary.json")
+        elif endpoint == "motif_summary":
+            self._api_json_file(logdir, "motif_summary.json")
+        elif endpoint == "anomaly_summary":
+            self._api_json_file_capped(logdir, "anomaly_summary.json", max_list_rows=50)
+        elif endpoint == "community_summary":
+            self._api_json_file(logdir, "community_summary.json")
+        elif endpoint == "prototype_membership":
+            self._api_json_file_capped(logdir, "prototype_membership_report.json", max_list_rows=30)
+        elif endpoint == "neural_mining":
+            self._api_json_file(logdir, "neural_mining_report.json")
+        elif endpoint == "reproducibility":
+            self._api_json_file(logdir, "reproducibility_report.json")
+        elif endpoint == "mining_benchmark":
+            self._api_json_file_capped(logdir, "mining_benchmark_results.json", max_list_rows=50)
+        elif endpoint == "link_prediction_summary":
+            self._api_json_file_capped(logdir, "link_prediction_summary.json", max_list_rows=30)
         else:
             self._send_json({"error": f"Unknown endpoint: {endpoint}"}, 404)
 
@@ -853,6 +873,35 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError as exc:
             self._send_json({"error": f"JSON parse error in {filename}: {exc}"}, 500)
 
+    def _api_json_file_capped(
+        self,
+        logdir: str,
+        filename: str,
+        max_list_rows: int = 50,
+    ) -> None:
+        """Read a JSON file and cap any top-level lists to max_list_rows.
+
+        This prevents the dashboard from receiving unmanageably large
+        datasets (e.g. hundreds of top-k anomaly nodes).  Adds
+        ``'_truncated': True`` and the original length to capped lists.
+        """
+        content = _read_logfile(logdir, filename)
+        if content is None:
+            self._send_json({"_available": False})
+            return
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as exc:
+            self._send_json({"error": f"JSON parse error in {filename}: {exc}"}, 500)
+            return
+        if isinstance(data, dict):
+            for k, v in list(data.items()):
+                if isinstance(v, list) and len(v) > max_list_rows:
+                    data[k] = v[:max_list_rows]
+                    data[f"_{k}_total"] = len(v)
+                    data[f"_{k}_truncated"] = True
+        self._send_json(data)
+
     def _api_graph(self, logdir: str) -> None:
         content = _read_logfile(logdir, "graph_metadata.json")
         if content is None:
@@ -1073,6 +1122,7 @@ def export_dashboard_html(logdir: str, out_path: str) -> None:
       <section id="sec-overview"  class="sec active" aria-labelledby="sec-overview-title"></section>
       <section id="sec-metrics"   class="sec" aria-labelledby="sec-metrics-title"></section>
       <section id="sec-graph"     class="sec" aria-labelledby="sec-graph-title"></section>
+      <section id="sec-mining"    class="sec" aria-labelledby="sec-mining-title"></section>
       <section id="sec-hardware"  class="sec" aria-labelledby="sec-hardware-title"></section>
       <section id="sec-logs"      class="sec" aria-labelledby="sec-logs-title"></section>
       <section id="sec-config"    class="sec" aria-labelledby="sec-config-title"></section>

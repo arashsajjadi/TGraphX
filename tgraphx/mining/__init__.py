@@ -152,6 +152,75 @@ from .hetero import (
     relation_frequency_features,
 )
 
+# ── Centrality (Beta) ────────────────────────────────────────────────────────
+from .centrality import (
+    degree_centrality,
+    in_degree_centrality,
+    out_degree_centrality,
+    pagerank,
+    personalized_pagerank,
+    hits,
+    katz_centrality,
+    closeness_centrality,
+    harmonic_centrality,
+    betweenness_centrality,
+    eigenvector_centrality,
+    k_core_numbers,
+)
+
+# ── Graph generators (Beta) ──────────────────────────────────────────────────
+from .generators import (
+    erdos_renyi_graph,
+    barabasi_albert_graph,
+    stochastic_block_model_graph,
+    watts_strogatz_graph,
+    random_geometric_graph,
+    planted_partition_graph,
+    grid_2d_graph,
+    complete_graph,
+    cycle_graph,
+    path_graph,
+    star_graph,
+    karate_club_graph,
+    synthetic_anomaly_graph,
+    motif_injected_graph,
+)
+
+# ── Spectral analysis (Beta) ─────────────────────────────────────────────────
+from .spectral import (
+    graph_laplacian,
+    normalized_laplacian,
+    laplacian_eigenvalues,
+    fiedler_vector,
+    algebraic_connectivity,
+    laplacian_eigvec_positional_encoding,
+    spectral_clustering,
+    spectral_distance,
+    dirichlet_energy,
+)
+
+# ── Semi-supervised learning (Beta) ─────────────────────────────────────────
+from .label_prop import (
+    label_propagation,
+    LabelPropagationClassifier,
+)
+
+# ── Embeddings (Beta) ────────────────────────────────────────────────────────
+from .embeddings import (
+    extract_node_embeddings,
+    extract_graph_embeddings,
+    embedding_similarity_matrix,
+    embedding_pairwise_distances,
+    embedding_nearest_neighbors,
+)
+
+# ── High-level API (Beta) ────────────────────────────────────────────────────
+from .api import (
+    analyze_graph,
+    graph_mining_report,
+    run_link_prediction_baseline,
+)
+
 # ── Neural mining (Experimental) ─────────────────────────────────────────────
 from .neural import (
     PrototypeMembershipScorer,
@@ -242,6 +311,57 @@ __all__ = [
     "write_link_prediction_summary",
     "write_anomaly_summary",
     "write_prototype_membership_report",
+    # Centrality (Beta)
+    "degree_centrality",
+    "in_degree_centrality",
+    "out_degree_centrality",
+    "pagerank",
+    "personalized_pagerank",
+    "hits",
+    "katz_centrality",
+    "closeness_centrality",
+    "harmonic_centrality",
+    "betweenness_centrality",
+    "eigenvector_centrality",
+    "k_core_numbers",
+    # Generators (Beta)
+    "erdos_renyi_graph",
+    "barabasi_albert_graph",
+    "stochastic_block_model_graph",
+    "watts_strogatz_graph",
+    "random_geometric_graph",
+    "planted_partition_graph",
+    "grid_2d_graph",
+    "complete_graph",
+    "cycle_graph",
+    "path_graph",
+    "star_graph",
+    "karate_club_graph",
+    "synthetic_anomaly_graph",
+    "motif_injected_graph",
+    # Spectral (Beta)
+    "graph_laplacian",
+    "normalized_laplacian",
+    "laplacian_eigenvalues",
+    "fiedler_vector",
+    "algebraic_connectivity",
+    "laplacian_eigvec_positional_encoding",
+    "spectral_clustering",
+    "spectral_distance",
+    "dirichlet_energy",
+    # Semi-supervised (Beta)
+    "label_propagation",
+    "LabelPropagationClassifier",
+    # Embeddings (Beta)
+    "extract_node_embeddings",
+    "extract_graph_embeddings",
+    "embedding_similarity_matrix",
+    "embedding_pairwise_distances",
+    "embedding_nearest_neighbors",
+    # High-level API (Beta)
+    "analyze_graph",
+    "graph_mining_report",
+    "run_link_prediction_baseline",
     # Neural mining (Experimental)
     "PrototypeMembershipScorer",
     "GraphAutoencoderAnomalyDetector",

@@ -5,6 +5,93 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — v0.4.2 candidate
+
+### Added — Traditional graph mining expansion (Beta)
+
+**`tgraphx/mining/centrality.py`** — 12 centrality algorithms, pure PyTorch,
+size-guarded, with hand-computed toy tests:
+- `degree_centrality`, `in_degree_centrality`, `out_degree_centrality`
+- `pagerank` (power-iteration, O(iter·E))
+- `personalized_pagerank`
+- `hits` (hubs + authorities)
+- `katz_centrality`
+- `closeness_centrality` (exact BFS; max 2000 nodes)
+- `harmonic_centrality` (handles disconnected graphs)
+- `betweenness_centrality` (Brandes'; max 500 nodes)
+- `eigenvector_centrality` (power-iteration)
+- `k_core_numbers` (iterative peeling)
+
+**`tgraphx/mining/generators.py`** — 14 graph generators, all deterministic with seed:
+- `erdos_renyi_graph`, `barabasi_albert_graph`,
+  `stochastic_block_model_graph`, `watts_strogatz_graph`,
+  `random_geometric_graph`, `planted_partition_graph`
+- `grid_2d_graph`, `complete_graph`, `cycle_graph`, `path_graph`, `star_graph`
+- `karate_club_graph` (Zachary's karate club, 34 nodes)
+- `synthetic_anomaly_graph`, `motif_injected_graph`
+
+**`tgraphx/mining/spectral.py`** — 9 spectral utilities:
+- `graph_laplacian`, `normalized_laplacian`
+- `laplacian_eigenvalues`, `fiedler_vector`, `algebraic_connectivity`
+- `laplacian_eigvec_positional_encoding` (Dwivedi et al., for Graph Transformers)
+- `spectral_clustering` (k-means on Laplacian eigenvectors)
+- `spectral_distance`, `dirichlet_energy`
+
+**`tgraphx/mining/label_prop.py`** — Semi-supervised learning:
+- `label_propagation(edge_index, num_nodes, y, mask, num_classes, alpha, ...)`
+- `LabelPropagationClassifier` — sklearn-style API
+
+**`tgraphx/mining/embeddings.py`** — Embedding extraction:
+- `extract_node_embeddings(model, edge_index, node_features, ...)`
+- `extract_graph_embeddings(model, graphs, pooling="mean", ...)`
+- `embedding_similarity_matrix`, `embedding_pairwise_distances`,
+  `embedding_nearest_neighbors`
+
+**`tgraphx/mining/api.py`** — High-level API:
+- `analyze_graph(edge_index, num_nodes, ...)` — one-call structural analysis
+- `graph_mining_report(...)` — full-featured report with optional JSON output
+- `run_link_prediction_baseline(...)` — run all classical scorers at once
+
+### Added — Dashboard Mining UI (v0.4.2+)
+
+**`tgraphx/dashboard/static/dashboard.js`**:
+- New "Mining" navigation section (⛏ icon).
+- Mining panel renderer: fetches 8 artifact types in parallel from new API
+  endpoints, handles missing files gracefully, shows empty state with
+  help text.
+- Panels: Graph Overview, Motifs/Structural, Anomaly Detection, Communities,
+  Prototype Membership, Neural Mining, Reproducibility.
+- Inline SVG mini bar chart for motif counts.
+- KV table and list table helpers with row caps (max 20/50 rows).
+- All user-provided strings are HTML-escaped (via `esc()`).
+- Responsive two-column layout collapses to single column on mobile.
+
+**`tgraphx/dashboard/app.py`**:
+- New API endpoints: `/api/mining_summary`, `/api/motif_summary`,
+  `/api/anomaly_summary`, `/api/community_summary`,
+  `/api/prototype_membership`, `/api/neural_mining`,
+  `/api/reproducibility`, `/api/mining_benchmark`,
+  `/api/link_prediction_summary`.
+- `_api_json_file_capped()` helper — reads JSON and caps top-level lists
+  to prevent browser overload on large artifact files.
+
+**`tgraphx/dashboard/static/dashboard.css`**:
+- Mining panel styles: `.mining-panel`, `.kv-table`, `.kv-key/.kv-val`,
+  `.mining-cols` (responsive grid), `.mining-chart-wrap`,
+  `.empty-panel`, `.warn-note`.
+
+### Tests added
+
+- `tests/test_mining_centrality.py` (30 tests) — hand-computed toy graphs,
+  bounds, size guards, determinism.
+- `tests/test_mining_generators_spectral.py` (35 tests) — generator
+  determinism/properties, spectral math, label propagation correctness,
+  embedding shapes.
+
+**Total: 1867 tests pass, 12 skipped, 0 warnings.**
+
+---
+
 ## [Unreleased] — v0.4.1 candidate
 
 ### Added — Reproducibility module (`tgraphx.reproducibility`) — Beta

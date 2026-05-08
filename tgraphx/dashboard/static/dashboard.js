@@ -52,6 +52,7 @@ const SECTIONS = [
   { id:'overview', label:'Overview',  icon:'▤'  },
   { id:'metrics',  label:'Metrics',   icon:'⬡'  },
   { id:'graph',    label:'Graph',     icon:'◈'  },
+  { id:'mining',   label:'Mining',    icon:'⛏'  },
   { id:'hardware', label:'Hardware',  icon:'⚙'  },
   { id:'logs',     label:'Logs',      icon:'≡'  },
   { id:'config',   label:'Config',    icon:'❐'  },
@@ -1792,5 +1793,260 @@ function init() {
   setInterval(tickClock, 1000);
   tickClock();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mining panel renderer (v0.4.2+)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// State for lazy-loaded mining artifacts.
+const MiningState = {
+  summary: null, motifs: null, anomaly: null, communities: null,
+  prototype: null, neural: null, reproducibility: null, linkPred: null,
+  loaded: false,
+};
+
+// Safe number formatter for mining values.
+function mfmt(v, decimals = 4) {
+  if (v == null || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  const n = parseFloat(v);
+  return isNaN(n) ? esc(String(v)) : n.toFixed(decimals);
+}
+
+// Render a simple key-value table from a plain object.
+function kvTable(obj, title) {
+  if (!obj || typeof obj !== 'object') return '';
+  const skip = k => k.startsWith('_') || typeof obj[k] === 'object' || Array.isArray(obj[k]);
+  const rows = Object.entries(obj)
+    .filter(([k]) => !skip(k))
+    .map(([k, v]) =>
+      `<tr><td class="kv-key">${esc(k.replace(/_/g,' '))}</td>`+
+      `<td class="kv-val">${esc(String(v))}</td></tr>`)
+    .join('');
+  if (!rows) return '';
+  const hdr = title ? `<caption class="kv-caption">${esc(title)}</caption>` : '';
+  return `<table class="kv-table">${hdr}<tbody>${rows}</tbody></table>`;
+}
+
+// Render a list of objects as a mini table with capped rows.
+function listTable(arr, keys, caption, maxRows = 20) {
+  if (!Array.isArray(arr) || arr.length === 0) return '<p class="empty-note">No data.</p>';
+  const cols = keys || Object.keys(arr[0] || {});
+  const header = cols.map(c => `<th>${esc(c.replace(/_/g,' '))}</th>`).join('');
+  const sliced = arr.slice(0, maxRows);
+  const rows = sliced.map(r =>
+    `<tr>${cols.map(c => `<td>${esc(String(r[c] ?? '—'))}</td>`).join('')}</tr>`
+  ).join('');
+  const trunc = arr.length > maxRows
+    ? `<caption class="kv-caption">${esc(caption||'')} (showing ${maxRows} of ${arr.length})</caption>` : '';
+  return `<table class="kv-table"><thead><tr>${header}</tr></thead><tbody>${rows}</tbody>${trunc}</table>`;
+}
+
+// Render a bar chart using inline SVG for small data.
+function miniBarChart(data, title, color) {
+  if (!data || data.length === 0) return '';
+  const maxVal = Math.max(...data.map(d => d.value || 0));
+  if (maxVal === 0) return '';
+  const W = 240, H = 80, pad = 6;
+  const barW = Math.max(2, Math.floor((W - 2 * pad) / data.length) - 2);
+  const bars = data.map((d, i) => {
+    const h = Math.max(2, Math.round((d.value / maxVal) * (H - 2 * pad)));
+    const x = pad + i * (barW + 2);
+    const y = H - pad - h;
+    const c = color || '#56B4E9';
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${c}" rx="1">
+      <title>${esc(d.label)}: ${esc(String(d.value))}</title></rect>`;
+  }).join('');
+  const labels = data.slice(0, 8).map((d, i) => {
+    const x = pad + i * (barW + 2) + barW / 2;
+    return `<text x="${x}" y="${H}" text-anchor="middle" font-size="7" fill="var(--text2)">${esc(d.label.slice(0,6))}</text>`;
+  }).join('');
+  return `<div class="mining-chart-wrap">
+    ${title ? `<p class="chart-label">${esc(title)}</p>` : ''}
+    <svg viewBox="0 0 ${W} ${H + 12}" style="width:100%;max-width:${W}px;overflow:visible">
+      ${bars}${labels}
+    </svg></div>`;
+}
+
+// ── Mining section main renderer ─────────────────────────────────────────────
+Render.mining = async function() {
+  const sec = el('sec-mining');
+  sec.innerHTML = `<h2 class="page-title">Graph Mining</h2><p class="loading-note">Loading mining artifacts…</p>`;
+
+  // Fetch all mining artifacts in parallel.
+  const fetches = {
+    summary:        API.get('/api/mining_summary'),
+    motifs:         API.get('/api/motif_summary'),
+    anomaly:        API.get('/api/anomaly_summary'),
+    communities:    API.get('/api/community_summary'),
+    prototype:      API.get('/api/prototype_membership'),
+    neural:         API.get('/api/neural_mining'),
+    reproducibility:API.get('/api/reproducibility'),
+    linkPred:       API.get('/api/link_prediction_summary'),
+  };
+  const results = {};
+  for (const [k, p] of Object.entries(fetches)) {
+    try { results[k] = await p; } catch(e) { results[k] = null; }
+  }
+
+  // ── Overview panel ─────────────────────────────────────────────────────────
+  const s = results.summary || {};
+  const hasAnySummary = s.num_nodes != null;
+
+  let overviewHtml = '';
+  if (hasAnySummary) {
+    const cards = [
+      card('Nodes', esc(String(s.num_nodes ?? '—')), 'total nodes', ''),
+      card('Edges', esc(String(s.num_edges ?? '—')), 'total edges', ''),
+      card('Density', mfmt(s.density), s.directed ? 'directed' : 'undirected', 'card-accent'),
+      card('Components', esc(String(s.num_connected_components ?? '—')), 'connected', ''),
+    ].join('');
+    const degStats = s.mean_total_degree != null
+      ? `<p>Mean degree: <strong>${mfmt(s.mean_total_degree, 2)}</strong> &nbsp;
+         Max: <strong>${esc(String(s.max_total_degree ?? '—'))}</strong> &nbsp;
+         Isolated: <strong>${esc(String(s.isolated_node_count ?? '—'))}</strong></p>`
+      : '';
+    const warns = (s.warnings || []).map(w =>
+      `<p class="warn-note">⚠ ${esc(w)}</p>`).join('');
+    overviewHtml = `<section class="mining-panel">
+      <h3 class="panel-title">Graph Overview</h3>
+      <div class="grid-4">${cards}</div>
+      ${degStats}${warns}
+    </section>`;
+  }
+
+  // ── Motifs panel ───────────────────────────────────────────────────────────
+  const m = results.motifs || {};
+  let motifsHtml = '';
+  if (m.triangles != null || m.wedges != null) {
+    const motifData = [
+      {label:'Triangles', value: m.triangles || 0},
+      {label:'Wedges',    value: m.wedges    || 0},
+    ];
+    const chart = miniBarChart(motifData, 'Motif counts', '#009E73');
+    motifsHtml = `<section class="mining-panel">
+      <h3 class="panel-title">Motifs / Structural</h3>
+      <div class="mining-cols">
+        <div>${kvTable(m, '')}</div>
+        <div>${chart}</div>
+      </div>
+    </section>`;
+  }
+
+  // ── Anomaly panel ──────────────────────────────────────────────────────────
+  const an = results.anomaly || {};
+  let anomalyHtml = '';
+  if (an.top_anomalous_nodes) {
+    const topNodes = an.top_anomalous_nodes || [];
+    const metaRows = [
+      an.method ? `<tr><td class="kv-key">Method</td><td class="kv-val">${esc(an.method)}</td></tr>` : '',
+      an.threshold != null ? `<tr><td class="kv-key">Threshold</td><td class="kv-val">${mfmt(an.threshold)}</td></tr>` : '',
+      an.num_flagged != null ? `<tr><td class="kv-key">Flagged nodes</td><td class="kv-val">${esc(String(an.num_flagged))}</td></tr>` : '',
+    ].join('');
+    const metaTable = metaRows ? `<table class="kv-table"><tbody>${metaRows}</tbody></table>` : '';
+    const tbl = listTable(topNodes, ['node_id','score'], 'Top anomalous nodes', 20);
+    anomalyHtml = `<section class="mining-panel">
+      <h3 class="panel-title">Anomaly Detection</h3>
+      <div class="mining-cols">
+        <div>${metaTable}</div>
+        <div>${tbl}</div>
+      </div>
+    </section>`;
+  }
+
+  // ── Communities panel ──────────────────────────────────────────────────────
+  const cm = results.communities || {};
+  let communityHtml = '';
+  if (cm.num_communities != null) {
+    const cmRows = [
+      {key:'Communities', val: cm.num_communities},
+      {key:'Modularity',  val: mfmt(cm.modularity)},
+      {key:'Largest',     val: cm.largest_community_size},
+      {key:'Smallest',    val: cm.smallest_community_size},
+    ].map(r => `<tr><td class="kv-key">${esc(r.key)}</td><td class="kv-val">${esc(String(r.val ?? '—'))}</td></tr>`).join('');
+    communityHtml = `<section class="mining-panel">
+      <h3 class="panel-title">Communities</h3>
+      <table class="kv-table"><tbody>${cmRows}</tbody></table>
+    </section>`;
+  }
+
+  // ── Prototype membership panel ─────────────────────────────────────────────
+  const pr = results.prototype || {};
+  let protoHtml = '';
+  if (pr.accuracy != null || pr.classification_report) {
+    const metricRows = [
+      {key:'Accuracy',          val: mfmt(pr.accuracy)},
+      {key:'Balanced accuracy', val: mfmt(pr.balanced_accuracy)},
+      {key:'Num queries',       val: pr.num_queries},
+      {key:'Num classes',       val: pr.num_classes},
+    ].map(r => `<tr><td class="kv-key">${esc(r.key)}</td><td class="kv-val">${esc(String(r.val ?? '—'))}</td></tr>`).join('');
+    const confPairs = (pr.top_confusion_pairs || []).slice(0, 5);
+    const confTable = confPairs.length > 0
+      ? listTable(confPairs, ['true','pred','count'], 'Top confusion pairs', 10)
+      : '';
+    protoHtml = `<section class="mining-panel">
+      <h3 class="panel-title">Prototype Membership</h3>
+      <div class="mining-cols">
+        <table class="kv-table"><tbody>${metricRows}</tbody></table>
+        <div>${confTable}</div>
+      </div>
+    </section>`;
+  }
+
+  // ── Neural mining panel ────────────────────────────────────────────────────
+  const nm = results.neural || {};
+  let neuralHtml = '';
+  if (nm.tasks || nm.loss_decreased != null) {
+    const taskRows = Object.entries(nm.tasks || {}).map(([name, t]) =>
+      `<tr>
+        <td class="kv-key">${esc(name.replace(/_/g,' '))}</td>
+        <td class="kv-val">${mfmt(t.initial_loss)} → ${mfmt(t.final_loss)}</td>
+        <td class="kv-val">${t.loss_decreased ? '✓' : '✗'}</td>
+        <td class="kv-val">${mfmt(t.train_time_s)}s</td>
+      </tr>`
+    ).join('');
+    neuralHtml = `<section class="mining-panel">
+      <h3 class="panel-title">Neural Mining</h3>
+      <table class="kv-table">
+        <thead><tr><th>Task</th><th>Loss (start→end)</th><th>↓</th><th>Time</th></tr></thead>
+        <tbody>${taskRows}</tbody>
+      </table>
+    </section>`;
+  }
+
+  // ── Reproducibility panel ──────────────────────────────────────────────────
+  const rep = results.reproducibility || {};
+  let reproHtml = '';
+  if (rep.seed != null || rep.torch_version) {
+    reproHtml = `<section class="mining-panel">
+      <h3 class="panel-title">Reproducibility</h3>
+      ${kvTable(rep, '')}
+    </section>`;
+  }
+
+  // ── Empty state ────────────────────────────────────────────────────────────
+  const hasContent = overviewHtml || motifsHtml || anomalyHtml ||
+    communityHtml || protoHtml || neuralHtml || reproHtml;
+  const emptyNote = hasContent ? '' : `<div class="empty-panel">
+    <p>No mining artifacts found in this run directory.</p>
+    <p class="help-note">To generate mining artifacts, use
+    <code>tgraphx.mining.write_graph_mining_summary()</code> or
+    <code>tgraphx.mining.graph_mining_report()</code>.</p>
+  </div>`;
+
+  sec.innerHTML = `
+    <h2 id="sec-mining-title" class="page-title">Graph Mining</h2>
+    ${overviewHtml}${motifsHtml}${anomalyHtml}${communityHtml}
+    ${protoHtml}${neuralHtml}${reproHtml}${emptyNote}
+  `;
+};
+
+// Patch API helper to support new mining endpoints.
+(function patchAPI() {
+  const origGet = API && typeof API.get === 'function' ? API.get.bind(API) : null;
+  if (!origGet) return;
+  // The existing API.get already calls /api/<endpoint>; no patching needed.
+  // Ensure new endpoints don't throw — they return {} on missing files.
+})();
 
 document.addEventListener('DOMContentLoaded', init);

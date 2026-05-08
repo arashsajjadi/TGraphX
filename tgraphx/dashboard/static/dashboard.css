@@ -857,3 +857,78 @@ select:focus-visible {
 .pw-bar-wrap { flex: 1; margin: 0 12px; height: 5px; background: var(--border);
                border-radius: 3px; overflow: hidden; }
 .pw-bar { height: 100%; border-radius: 3px; transition: width .4s; background: var(--amber); }
+
+/* ── Mining panel styles (v0.4.2+) ─────────────────────────────────────── */
+.mining-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.mining-panel .panel-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+.mining-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 600px) {
+  .mining-cols { grid-template-columns: 1fr; }
+}
+.kv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .85rem;
+}
+.kv-table thead th {
+  text-align: left;
+  padding: 4px 8px;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.kv-table tbody tr:nth-child(even) { background: var(--bg-alt, rgba(0,0,0,.03)); }
+.kv-key {
+  padding: 3px 8px;
+  color: var(--text2);
+  white-space: nowrap;
+  font-weight: 500;
+}
+.kv-val {
+  padding: 3px 8px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+.kv-caption {
+  caption-side: top;
+  text-align: left;
+  font-size: .78rem;
+  color: var(--text3);
+  padding-bottom: 4px;
+}
+.mining-chart-wrap {
+  padding: 4px 0;
+}
+.mining-chart-wrap .chart-label {
+  font-size: .78rem;
+  color: var(--text2);
+  margin: 0 0 4px;
+}
+.empty-panel {
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  color: var(--text2);
+}
+.empty-note { color: var(--text3); font-size: .85rem; font-style: italic; }
+.warn-note { color: var(--amber); font-size: .82rem; margin: 4px 0; }
+.loading-note { color: var(--text2); font-size: .9rem; }
+.help-note { font-size: .8rem; color: var(--text3); margin-top: 8px; }
