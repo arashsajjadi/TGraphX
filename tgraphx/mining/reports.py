@@ -23,6 +23,21 @@ __all__ = [
     "write_link_prediction_summary",
     "write_anomaly_summary",
     "write_prototype_membership_report",
+    "write_kg_summary",
+    "write_kg_metrics_report",
+    "write_hypergraph_summary",
+    "write_vgae_report",
+    "write_loader_summary",
+    "write_feature_store_summary",
+    # v0.5.0 additions ──────────────────────────────────────────────────
+    "write_graphsaint_sampler_report",
+    "write_cluster_partition_report",
+    "write_hetero_summary",
+    "write_temporal_summary",
+    "write_ogb_tgb_report",
+    "write_estimator_report",
+    "write_pipeline_report",
+    "write_sparse_backend_report",
 ]
 
 
@@ -172,4 +187,161 @@ def write_prototype_membership_report(
     Returns:
         Resolved path string.
     """
+    return _atomic_write(path, report)
+
+
+def write_kg_summary(
+    path: str,
+    kg_summary: Dict[str, Any],
+) -> str:
+    """Write ``kg_summary.json`` for the KG dashboard panel.
+
+    Args:
+        path: Output file path.
+        kg_summary: Dict with entity count, relation count, triple count,
+            top relation frequencies, split counts, etc.
+
+    Returns:
+        Resolved path string.
+    """
+    return _atomic_write(path, kg_summary)
+
+
+def write_kg_metrics_report(
+    path: str,
+    metrics: Dict[str, Any],
+) -> str:
+    """Write ``kg_metrics_report.json`` (MRR, Hits@K, training curves).
+
+    Args:
+        path: Output file path.
+        metrics: Dict with mrr, hits@1/3/10, training_loss curves, etc.
+
+    Returns:
+        Resolved path string.
+    """
+    return _atomic_write(path, metrics)
+
+
+def write_hypergraph_summary(
+    path: str,
+    hg_summary: Dict[str, Any],
+) -> str:
+    """Write ``hypergraph_summary.json`` for the hypergraph dashboard panel.
+
+    Args:
+        path: Output file path.
+        hg_summary: Dict from :meth:`~tgraphx.mining.Hypergraph.summary`.
+
+    Returns:
+        Resolved path string.
+    """
+    return _atomic_write(path, hg_summary)
+
+
+def write_vgae_report(
+    path: str,
+    report: Dict[str, Any],
+) -> str:
+    """Write ``vgae_report.json`` for the VGAE dashboard panel.
+
+    Args:
+        path: Output file path.
+        report: Dict with reconstruction_loss, kl_loss, auroc, auprc,
+            accuracy, training curves.
+
+    Returns:
+        Resolved path string.
+    """
+    return _atomic_write(path, report)
+
+
+def write_loader_summary(
+    path: str,
+    summary: Dict[str, Any],
+) -> str:
+    """Write ``loader_summary.json`` (batch stats, fanout, negative sampling).
+
+    Returns:
+        Resolved path string.
+    """
+    return _atomic_write(path, summary)
+
+
+def write_feature_store_summary(
+    path: str,
+    summary: Dict[str, Any],
+) -> str:
+    """Write ``feature_store_summary.json`` (backend, feature shapes, sizes).
+
+    Returns:
+        Resolved path string.
+    """
+    return _atomic_write(path, summary)
+
+
+# ── v0.5.0 dashboard report writers ──────────────────────────────────────────
+
+
+def write_graphsaint_sampler_report(
+    path: str,
+    report: Dict[str, Any],
+) -> str:
+    """Write ``graphsaint_sampler_report.json`` (sampler type, sizes, norm)."""
+    return _atomic_write(path, report)
+
+
+def write_cluster_partition_report(
+    path: str,
+    report: Dict[str, Any],
+) -> str:
+    """Write ``cluster_partition_report.json`` (algorithm, sizes, cut, balance)."""
+    return _atomic_write(path, report)
+
+
+def write_hetero_summary(
+    path: str,
+    summary: Dict[str, Any],
+) -> str:
+    """Write ``hetero_summary.json`` (node types, edge types, relation counts)."""
+    return _atomic_write(path, summary)
+
+
+def write_temporal_summary(
+    path: str,
+    summary: Dict[str, Any],
+) -> str:
+    """Write ``temporal_summary.json`` (event count, time range, leakage status)."""
+    return _atomic_write(path, summary)
+
+
+def write_ogb_tgb_report(
+    path: str,
+    report: Dict[str, Any],
+) -> str:
+    """Write ``ogb_tgb_report.json`` (benchmark name, split, metric values)."""
+    return _atomic_write(path, report)
+
+
+def write_estimator_report(
+    path: str,
+    report: Dict[str, Any],
+) -> str:
+    """Write ``estimator_report.json`` (estimator class, params, metrics)."""
+    return _atomic_write(path, report)
+
+
+def write_pipeline_report(
+    path: str,
+    report: Dict[str, Any],
+) -> str:
+    """Write ``pipeline_report.json`` (pipeline steps, params, metrics)."""
+    return _atomic_write(path, report)
+
+
+def write_sparse_backend_report(
+    path: str,
+    report: Dict[str, Any],
+) -> str:
+    """Write ``sparse_backend_report.json`` (active backend, availability)."""
     return _atomic_write(path, report)

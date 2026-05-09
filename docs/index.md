@@ -1,53 +1,100 @@
 # TGraphX documentation
 
-TGraphX is a PyTorch library for graph neural networks whose node
-features are multi-dimensional tensors — `[C, H, W]` image-patch
-feature maps, `[C, D, H, W]` volumetric maps, or plain vectors `[D]`.
+TGraphX is a tensor-aware graph learning and graph mining framework for
+PyTorch. It supports vector/spatial/volumetric node features, graph neural
+networks, scalable samplers (GraphSAINT, Cluster-GCN), knowledge graphs,
+hypergraphs, temporal and heterogeneous graph learning, a local dashboard,
+sklearn-like estimators, and benchmark tooling — all in one package.
 
-## Documentation map
+## Getting started
 
-| Area | Doc |
+| Step | Doc |
 |------|-----|
 | Install + first steps | [getting_started.md](getting_started.md) |
 | 10-minute tutorial path | [tutorials.md](tutorials.md) |
+
+## Core graph data model
+
+| Topic | Doc |
+|-------|-----|
 | Core graph objects | [graph_basics.md](graph_basics.md) |
+| Tensor features | [edge_features.md](edge_features.md) |
+| Graph builders | [graph_builders.md](graph_builders.md) |
+| Batching | [batching.md](batching.md) |
+| Weighted edges | [weighted_edges.md](weighted_edges.md) |
+
+## GNN layers and neural mining
+
+| Topic | Doc |
+|-------|-----|
 | Spatial tensor GNN layers | [spatial_tensor_gnn.md](spatial_tensor_gnn.md) |
 | Vector GNN layers + model zoo | [vector_gnn.md](vector_gnn.md) |
 | 3-D volumetric support | [volumetric_3d.md](volumetric_3d.md) |
-| Weighted edges | [weighted_edges.md](weighted_edges.md) |
-| Graph builders | [graph_builders.md](graph_builders.md) |
-| Batching | [batching.md](batching.md) |
-| Datasets | [datasets.md](datasets.md) |
-| Transforms | [transforms.md](transforms.md) |
-| Metrics | [metrics.md](metrics.md) |
+| Heterogeneous graph layers (RGCN / HAN / HGT) | [hetero_gnns.md](hetero_gnns.md) |
+| Neural graph mining (VGAE / GAE / prototypes) | [neural_graph_mining.md](neural_graph_mining.md) |
+| Explainability | [explainability.md](explainability.md) |
+
+## Sampling and loaders
+
+| Topic | Doc |
+|-------|-----|
+| GraphSAINT samplers | [graphsaint.md](graphsaint.md) |
+| Cluster-GCN | [cluster_gcn.md](cluster_gcn.md) |
+| Negative sampling | [negative_sampling.md](negative_sampling.md) |
+| Feature store | [feature_store.md](feature_store.md) |
+| Sparse backend | [backends.md](backends.md) |
+
+## Knowledge graphs, hypergraphs, temporal, heterogeneous
+
+| Topic | Doc |
+|-------|-----|
+| Temporal graph learning (TGN / TGAT) | [temporal_graph_learning.md](temporal_graph_learning.md) |
+| Temporal utilities | [temporal.md](temporal.md) |
+| Heterogeneous graphs | [hetero_gnns.md](hetero_gnns.md) |
+| Graph algorithms | [graph_algorithms.md](graph_algorithms.md) |
+| Graph mining and pattern recognition | [graph_mining.md](graph_mining.md) |
+
+## Training, experiments, dashboard
+
+| Topic | Doc |
+|-------|-----|
 | Training utilities | [training_utilities.md](training_utilities.md) |
 | Factories (`make_layer`, `build_model`) | [factories.md](factories.md) |
 | Experiment manager | [experiments.md](experiments.md) |
-| Explainability | [explainability.md](explainability.md) |
 | Dashboard | [dashboard.md](dashboard.md) |
+| Reproducibility | [reproducibility.md](reproducibility.md) |
+| Distributed training | [distributed_training.md](distributed_training.md) |
+| sklearn-like API | [sklearn_api.md](sklearn_api.md) |
+
+## Datasets, transforms, benchmarks
+
+| Topic | Doc |
+|-------|-----|
+| Datasets | [datasets.md](datasets.md) |
+| Transforms | [transforms.md](transforms.md) |
+| Metrics | [metrics.md](metrics.md) |
+| Benchmarks | [benchmarks.md](benchmarks.md) |
+| OGB / TGB integration | [ogb_tgb_integration.md](ogb_tgb_integration.md) |
 | Public dataset validation | [public_dataset_validation.md](public_dataset_validation.md) |
 | Device validation | [device_validation.md](device_validation.md) |
-| Benchmarks | [benchmarks.md](benchmarks.md) |
-| Public benchmark protocol | [benchmark_protocol.md](benchmark_protocol.md) |
-| Public benchmark reports | [public_benchmark_reports.md](public_benchmark_reports.md) |
-| Negative sampling | [negative_sampling.md](negative_sampling.md) |
-| Graph algorithms | [graph_algorithms.md](graph_algorithms.md) |
-| Temporal utilities | [temporal.md](temporal.md) |
-| Graph mining and pattern recognition | [graph_mining.md](graph_mining.md) |
-| Neural graph mining | [neural_graph_mining.md](neural_graph_mining.md) |
-| Plotting utilities | [plotting.md](plotting.md) |
-| Reproducibility | [reproducibility.md](reproducibility.md) |
-| Performance | [performance.md](performance.md) |
-| Interoperability (PyG/DGL/OGB) | [comparison.md](comparison.md) |
+| Benchmark protocol | [benchmark_protocol.md](benchmark_protocol.md) |
+| Plotting | [plotting.md](plotting.md) |
+
+## API reference and policies
+
+| Topic | Doc |
+|-------|-----|
 | API stability | [api_stability.md](api_stability.md) |
 | Limitations | [limitations.md](limitations.md) |
 | Roadmap | [roadmap.md](roadmap.md) |
-| Architecture (v0.3.x → v0.4.0) | [architecture.md](architecture.md) |
-| Migration guide | [migration_v0_2_to_v0_3.md](migration_v0_2_to_v0_3.md) |
+| Performance | [performance.md](performance.md) |
+| Interoperability (PyG/DGL/OGB) | [comparison.md](comparison.md) |
 | Deprecation policy | [deprecation_policy.md](deprecation_policy.md) |
 | Experimental policy | [experimental_policy.md](experimental_policy.md) |
 | Release checklist | [release_checklist.md](release_checklist.md) |
-| License/citation policy | [dataset_license_policy.md](dataset_license_policy.md) |
+| Dataset license policy | [dataset_license_policy.md](dataset_license_policy.md) |
+| Architecture | [architecture.md](architecture.md) |
+| Migration guide | [migration_v0_2_to_v0_3.md](migration_v0_2_to_v0_3.md) |
 
 ## Examples
 

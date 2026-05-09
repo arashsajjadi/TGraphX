@@ -22,8 +22,12 @@ from .time_encoding import (
     LearnableTimeEncoding,
     sinusoidal_time_encoding,
 )
+from .tgn import TGNMemory
+from .tgat import TGATConv
 
 __all__ = [
     "sinusoidal_time_encoding",
     "LearnableTimeEncoding",
+    "TGNMemory",
+    "TGATConv",
 ]

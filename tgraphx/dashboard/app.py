@@ -637,6 +637,52 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._api_json_file_capped(logdir, "mining_benchmark_results.json", max_list_rows=50)
         elif endpoint == "link_prediction_summary":
             self._api_json_file_capped(logdir, "link_prediction_summary.json", max_list_rows=30)
+        # ── v0.5.0 artifact endpoints ────────────────────────────────────────
+        elif endpoint == "kg_summary":
+            self._api_json_file_capped(logdir, "kg_summary.json", max_list_rows=50)
+        elif endpoint == "kg_metrics":
+            self._api_json_file(logdir, "kg_metrics_report.json")
+        elif endpoint == "hypergraph_summary":
+            self._api_json_file(logdir, "hypergraph_summary.json")
+        elif endpoint == "vgae_report":
+            self._api_json_file(logdir, "vgae_report.json")
+        elif endpoint == "loader_summary":
+            self._api_json_file(logdir, "loader_summary.json")
+        elif endpoint == "feature_store_summary":
+            self._api_json_file(logdir, "feature_store_summary.json")
+        elif endpoint == "sparse_backend_report":
+            self._api_json_file(logdir, "sparse_backend_report.json")
+        elif endpoint == "distributed_run_summary":
+            self._api_json_file(logdir, "distributed_run_summary.json")
+        # ── v0.5.0 additions ────────────────────────────────────────────────
+        elif endpoint == "graphsaint_sampler_report":
+            self._api_json_file(logdir, "graphsaint_sampler_report.json")
+        elif endpoint == "cluster_partition_report":
+            self._api_json_file_capped(logdir, "cluster_partition_report.json", max_list_rows=200)
+        elif endpoint == "hetero_summary":
+            self._api_json_file(logdir, "hetero_summary.json")
+        elif endpoint == "temporal_summary":
+            self._api_json_file(logdir, "temporal_summary.json")
+        elif endpoint == "ogb_tgb_report":
+            self._api_json_file(logdir, "ogb_tgb_report.json")
+        elif endpoint == "estimator_report":
+            self._api_json_file(logdir, "estimator_report.json")
+        elif endpoint == "pipeline_report":
+            self._api_json_file(logdir, "pipeline_report.json")
+        elif endpoint == "graphsaint_benchmark":
+            self._api_json_file_capped(logdir, "graphsaint_sampler_report.json", max_list_rows=50)
+        elif endpoint == "cluster_gcn_benchmark":
+            self._api_json_file_capped(logdir, "cluster_partition_report.json", max_list_rows=50)
+        elif endpoint == "hetero_model_benchmark":
+            self._api_json_file(logdir, "hetero_summary.json")
+        elif endpoint == "temporal_model_benchmark":
+            self._api_json_file(logdir, "temporal_summary.json")
+        elif endpoint == "public_dataset_smoke":
+            self._api_json_file(logdir, "public_dataset_smoke_report.json")
+        elif endpoint == "distributed_smoke":
+            self._api_json_file(logdir, "distributed_run_summary.json")
+        elif endpoint == "calibration_report":
+            self._api_json_file(logdir, "calibration_report.json")
         else:
             self._send_json({"error": f"Unknown endpoint: {endpoint}"}, 404)
 

@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — v0.5.0 candidate
+
+### Added — Large-scale loaders, feature store, sparse backend, VGAE, RGCN
+
+-  (Beta): NeighborLoader, LinkNeighborLoader, GraphLoader, convenience factories
+-  (Beta): InMemoryFeatureStore, MemmapFeatureStore
+-  (Beta): coalesce, sort, remove/add self-loops, degree, segment ops, CSR/CSC, chunked top-k
+-  (Experimental): GraphAutoencoder, VGAE, GCNEncoder, decoders, link prediction metrics
+-  (Experimental): RGCNConv with basis decomposition
+- Dashboard: 8 new API endpoints for KG, hypergraph, VGAE, loaders, feature store
+- Report writers: write_kg_summary, write_hypergraph_summary, write_vgae_report, write_loader_summary, write_feature_store_summary
+- Tests: 2045 pass (+53), 0 warnings; 60 examples pass
+
+---
+
 ## [Unreleased] — v0.4.4 candidate
 
 ### Added — Matching, coloring, clique enumeration, and max-flow (`tgraphx/mining/matching_coloring.py`) — Beta/Experimental

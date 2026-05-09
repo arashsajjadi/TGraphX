@@ -133,6 +133,39 @@ from .sampling_negative import (
     hard_negative_sampling,
 )
 
+# ── Production-scale loaders + feature store (v0.5.0 Beta) ───────────────────
+from .loaders import (
+    NeighborLoader,
+    LinkNeighborLoader,
+    GraphLoader,
+    fetch_features_for_subgraph,
+    make_neighbor_loader,
+    make_link_loader,
+    make_graph_loader,
+)
+from .feature_store import (
+    InMemoryFeatureStore,
+    MemmapFeatureStore,
+    FeatureStoreError,
+)
+
+# ── GraphSAINT and Cluster-GCN samplers/loaders (v0.5.0 Beta) ────────────────
+from .graphsaint import (
+    GraphSAINTNodeSampler,
+    GraphSAINTEdgeSampler,
+    GraphSAINTRandomWalkSampler,
+    GraphSAINTLoader,
+    estimate_norm_coefficients,
+)
+from .cluster_gcn import (
+    PartitionResult,
+    RandomBalancedPartitioner,
+    BFSPartitioner,
+    ConnectedComponentPartitioner,
+    SpectralPartitioner,
+    ClusterLoader,
+)
+
 __all__ = [
     "__version__",
     # Core
@@ -242,6 +275,29 @@ __all__ = [
     "structured_negative_sampling",
     "batched_negative_sampling",
     "hard_negative_sampling",
+    # v0.5.0 Beta: production loaders + feature store
+    "NeighborLoader",
+    "LinkNeighborLoader",
+    "GraphLoader",
+    "fetch_features_for_subgraph",
+    "make_neighbor_loader",
+    "make_link_loader",
+    "make_graph_loader",
+    "InMemoryFeatureStore",
+    "MemmapFeatureStore",
+    "FeatureStoreError",
+    # v0.5.0 Beta: GraphSAINT / Cluster-GCN
+    "GraphSAINTNodeSampler",
+    "GraphSAINTEdgeSampler",
+    "GraphSAINTRandomWalkSampler",
+    "GraphSAINTLoader",
+    "estimate_norm_coefficients",
+    "PartitionResult",
+    "RandomBalancedPartitioner",
+    "BFSPartitioner",
+    "ConnectedComponentPartitioner",
+    "SpectralPartitioner",
+    "ClusterLoader",
     # Graph algorithms (v0.3.2 beta)
     # (imported from tgraphx.algorithms; not re-exported at top level
     #  to avoid namespace pollution)

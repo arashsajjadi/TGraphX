@@ -14,7 +14,11 @@
 
 Developed by **Arash Sajjadi**, PhD Candidate in Computer Science, University of Saskatchewan. Academic supervision: **Mark Eramian**.
 
-TGraphX is a PyTorch library for graph neural networks whose **node features are multi-dimensional tensors** — `[C, H, W]` image-patch feature maps, `[C, D, H, W]` volumetric maps, or plain vectors `[D]`. Convolutional message passing operates directly on spatial node features, so local structure is never destroyed by flattening.
+TGraphX is a tensor-aware graph learning and graph mining framework for PyTorch. It supports **multi-dimensional node/edge features** (`[C, H, W]`, `[C, D, H, W]`, `[D]`), graph neural networks, scalable mini-batch samplers (GraphSAINT, Cluster-GCN), knowledge graph and hypergraph foundations, temporal and heterogeneous graph learning, a local dashboard with offline HTML export, sklearn-like estimators, reproducibility utilities, and benchmark tooling — all in a single package with no mandatory external dependencies beyond PyTorch.
+
+> *Graph learning, graph mining, tensor features, sampling, and experiment dashboards — in one research-focused Python framework.*
+
+**[Graph algorithms](docs/graph_algorithms.md)** · **[Graph mining](docs/graph_mining.md)** · **[Tensor GNNs](docs/vector_gnn.md)** · **[Sampling](docs/graphsaint.md)** · **[FeatureStore](docs/feature_store.md)** · **[Sparse](docs/backends.md)** · **[Node2Vec/VGAE](examples/vgae_link_prediction_demo.py)** · **[Hetero](docs/hetero_gnns.md)** · **[Temporal](docs/temporal_graph_learning.md)** · **[KG/Hypergraph](examples/knowledge_graph_demo.py)** · **[Dashboard](docs/dashboard.md)** · **[Reproducibility](docs/reproducibility.md)** · **[sklearn API](docs/sklearn_api.md)**
 
 ---
 
@@ -81,6 +85,124 @@ out.sum().backward()
 
 A Colab tutorial walks through every workflow:
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1agls1xtqE5WxbWthcG0HEa3Gbk3fvoCD?usp=sharing)
+
+---
+
+## Capability map
+
+| Area | Capabilities | Stability | Start here |
+|------|-------------|-----------|------------|
+| **Tensor-aware graphs** | vector / image / volume node features, edge features, graph metadata | Beta | [docs/graph_basics.md](docs/graph_basics.md) |
+| **Graph algorithms** | BFS/DFS, shortest paths, MST, max-flow, matching, coloring | Beta | [examples/graph_paths_algorithms_demo.py](examples/graph_paths_algorithms_demo.py) |
+| **Graph mining** | motifs, centrality, spectral analysis, WL features, similarity | Beta | [docs/graph_mining.md](docs/graph_mining.md) |
+| **GNN layers** | GCN/SAGE/GAT/GIN/GATv2/APPNP vector layers; tensor GAT/SAGE/GIN/ConvMP | Beta | [docs/vector_gnn.md](docs/vector_gnn.md) |
+| **Sampling & loaders** | NeighborLoader, LinkNeighborLoader, GraphLoader, GraphSAINT, Cluster-GCN | Beta | [docs/graphsaint.md](docs/graphsaint.md) |
+| **Feature store** | In-memory & memmap tensor feature storage; NeighborLoader integration | Beta | [docs/feature_store.md](docs/feature_store.md) |
+| **Sparse backend** | CSR/CSC, coalesce, segment ops, optional torch_scatter acceleration | Beta | [docs/backends.md](docs/backends.md) |
+| **Knowledge graphs** | triples, TransE/DistMult, negative sampling, filtered metrics | Experimental | [examples/knowledge_graph_demo.py](examples/knowledge_graph_demo.py) |
+| **Hypergraphs** | incidence matrix, clique/star expansion | Experimental | [examples/graph_algorithms_advanced_demo.py](examples/graph_algorithms_advanced_demo.py) |
+| **Heterogeneous graphs** | RGCN, HAN, HGT; typed neighbor sampling | Experimental | [docs/hetero_gnns.md](docs/hetero_gnns.md) |
+| **Temporal graphs** | TGNMemory, TGATConv, time encoding, temporal splits | Experimental | [docs/temporal_graph_learning.md](docs/temporal_graph_learning.md) |
+| **Graph autoencoders** | GAE / VGAE; dot-product & MLP edge decoders | Experimental | [examples/vgae_link_prediction_demo.py](examples/vgae_link_prediction_demo.py) |
+| **Representation learning** | Node2Vec, DeepWalk, graph embeddings | Beta | [examples/node2vec_demo.py](examples/node2vec_demo.py) |
+| **Semi-supervised** | label propagation, masks, graph splits | Beta | [docs/graph_mining.md](docs/graph_mining.md) |
+| **Experiment manager** | YAML/JSON configs, runners, callbacks, CLI (`tgraphx-train`) | Beta | [docs/experiments.md](docs/experiments.md) |
+| **Explainability** | saliency, integrated gradients, edge attribution | Beta | [docs/explainability.md](docs/explainability.md) |
+| **sklearn-like API** | estimators, GraphPipeline, splits, EarlyStopping | Beta | [docs/sklearn_api.md](docs/sklearn_api.md) |
+| **Calibration** | ECE, temperature scaling, reliability diagram data | Beta | `tgraphx.calibration` |
+| **Dashboard** | local HTTP server, offline HTML, run artifacts, benchmark panels | Beta | [docs/dashboard.md](docs/dashboard.md) |
+| **Reproducibility** | `set_seed`, deterministic mode, `reproducibility_report.json` | Beta | [docs/reproducibility.md](docs/reproducibility.md) |
+| **Distributed helpers** | rank-zero utilities, DDP wrapping, shard helpers | Experimental | [docs/distributed_training.md](docs/distributed_training.md) |
+| **OGB / TGB wrappers** | optional evaluators with no hidden downloads | Beta (optional) | [docs/ogb_tgb_integration.md](docs/ogb_tgb_integration.md) |
+
+---
+
+## Choose your workflow
+
+### Analyse a graph
+
+```python
+from tgraphx.mining import graph_summary, degree_statistics
+
+summary = graph_summary(graph.edge_index, num_nodes=graph.num_nodes)
+# {'num_nodes': ..., 'num_edges': ..., 'density': ..., 'is_directed': ...}
+```
+
+→ [docs/graph_mining.md](docs/graph_mining.md)
+
+### Train a GNN
+
+```python
+from tgraphx.reproducibility import set_seed
+from tgraphx.loaders import NeighborLoader
+
+set_seed(42)
+loader = NeighborLoader(graph, fanouts=[15, 10], batch_size=64, seed=42)
+for sub, seeds in loader:
+    logits = model(sub.node_features, sub.edge_index)
+```
+
+→ [docs/vector_gnn.md](docs/vector_gnn.md)
+
+### Scalable mini-batch training
+
+```python
+from tgraphx.graphsaint import GraphSAINTNodeSampler, GraphSAINTLoader
+
+sampler = GraphSAINTNodeSampler(graph, budget=512, num_steps=100, seed=0)
+for sub in GraphSAINTLoader(sampler, attach_norm=True):
+    out = model(sub.node_features, sub.edge_index)
+```
+
+→ [docs/graphsaint.md](docs/graphsaint.md) · [docs/cluster_gcn.md](docs/cluster_gcn.md)
+
+### Knowledge graph learning
+
+```python
+import torch
+from tgraphx.mining import KnowledgeGraph, TransE
+
+heads = torch.tensor([0, 1, 2])
+relations = torch.tensor([0, 0, 1])
+tails = torch.tensor([1, 2, 0])
+kg = KnowledgeGraph(heads, relations, tails, num_entities=3, num_relations=2)
+model = TransE(num_entities=kg.num_entities, num_relations=kg.num_relations)
+```
+
+→ [examples/knowledge_graph_demo.py](examples/knowledge_graph_demo.py)
+
+### Temporal / heterogeneous graphs
+
+```python
+from tgraphx.temporal import TGNMemory, TGATConv
+from tgraphx.layers.hgt import HGTConv
+
+# TGN memory for temporal link prediction
+mem = TGNMemory(num_nodes=N, memory_dim=64, message_dim=64)
+mem.update(node_ids, messages, timestamps)  # raises on future-data leakage
+```
+
+→ [docs/temporal_graph_learning.md](docs/temporal_graph_learning.md) · [docs/hetero_gnns.md](docs/hetero_gnns.md)
+
+### Dashboard-ready experiments
+
+```python
+from tgraphx.mining.reports import write_graph_mining_summary
+write_graph_mining_summary("logs/graph_mining_summary.json", summary)
+# → python -m tgraphx.dashboard logs/
+```
+
+→ [docs/dashboard.md](docs/dashboard.md)
+
+---
+
+## Stability labels
+
+| Label | Meaning |
+|-------|---------|
+| **Beta** | Tested, documented; API stable within v0.x series |
+| **Experimental** | Correct foundations; API or semantics may evolve before v1.0 |
+| **Optional** | Requires an optional dependency or explicit `--download` |
 
 ---
 
@@ -325,20 +447,42 @@ No `~/.tgraphx` directory or user-level config is created.
 
 ---
 
-## Examples and tutorials
+## Examples
 
+### Graph algorithms and mining
 ```bash
-python examples/run_all_fast_examples.py        # every CPU-safe demo
-python examples/datasets_quickstart.py           # registry + synthetic datasets
-python examples/transforms_metrics_demo.py       # Compose + classification report
-python examples/synthetic_datasets_demo.py       # all 7 native synthetic datasets
-python examples/sampling_demo_v028.py            # random walk + hetero + temporal sampling
-python examples/training_with_dashboard.py      # fit() + CSVLogger → dashboard
-python examples/graph_transformer_demo.py        # vector graph transformer
-python examples/gat_chunking_demo.py             # GAT chunked forward parity
+python examples/graph_paths_algorithms_demo.py      # shortest paths, MST, BFS/DFS
+python examples/graph_algorithms_advanced_demo.py   # max-flow, matching, coloring
+python examples/graph_mining_structural_demo.py     # motifs, centrality, WL
+python examples/knowledge_graph_demo.py             # KG triples, TransE
+python examples/node2vec_demo.py                    # Node2Vec embeddings
 ```
 
-The full set of demos lives under `examples/` (see [examples/README.md](examples/README.md) when present).
+### Sampling and scalable training
+```bash
+python examples/neighbor_loader_demo.py             # NeighborLoader / LinkNeighborLoader
+python examples/graphsaint_sampler_demo.py          # GraphSAINT node/edge/RW samplers
+python examples/cluster_loader_demo.py              # Cluster-GCN partitioners
+```
+
+### Neural graph learning
+```bash
+python examples/graph_learning_demo.py              # GCN/SAGE/GAT training
+python examples/vgae_link_prediction_demo.py        # GAE / VGAE link prediction
+python examples/gat_chunking_demo.py                # chunked GAT forward parity
+```
+
+### Dashboard, experiments, sklearn API
+```bash
+python examples/training_with_dashboard.py          # fit() + CSVLogger → dashboard
+python examples/sklearn_style_graph_pipeline_demo.py # estimator/pipeline API
+python examples/distributed_smoke.py --world-size 2 --subprocess-pair  # DDP smoke
+```
+
+### All fast examples
+```bash
+python examples/run_all_fast_examples.py            # runs 60+ demos in sequence
+```
 
 ### Validation scripts
 
@@ -359,19 +503,22 @@ exact invocations and policy.
 
 ---
 
-## Boundaries
+## Maturity and scope
 
-TGraphX is intentionally focused.
+TGraphX is an actively developing pre-1.0 research framework. It already includes tested foundations across tensor-aware GNNs, graph algorithms, graph mining, scalable sampling, sparse utilities, feature stores, dashboard reporting, knowledge graphs, hypergraphs, temporal graphs, heterogeneous GNNs, sklearn-style workflows, calibration, benchmarks, and reproducibility tooling. Newer systems are labeled Beta or Experimental until broader benchmark and real-dataset validation is completed.
 
-* TGraphX is not a drop-in replacement for PyG or DGL; the optional adapters convert data only.
-* TGraphX provides DDP-aware helpers and a single-process smoke example, not an automatic multi-GPU training framework.
-* Per-pixel and per-voxel GAT attention scores are not shipped — naive `[E, K, H, W]` score tensors are memory-prohibitive. Per-channel attention is shipped as `attention_mode="channel"`.
-* Recurrent temporal memory modules (TGN, TGAT) are not shipped; temporal workflows use a stateless snapshot-loop pattern.
-* Synthetic datasets are sanity / tutorial datasets, not benchmarks; benchmark scripts are reproducibility tools, not real-world performance comparisons.
-* `kNN`, `radius`, `IoU`, and fully-connected graph builders are mathematically `O(N²)` and warn on large `N`; chunked variants reduce peak memory.
-* Universal arbitrary-rank node-feature support across every layer is a future direction; the supported layouts today are vector `[N, D]`, 2-D spatial `[N, C, H, W]`, and 3-D volumetric `[N, C, D, H, W]`.
+Current maturity boundaries:
 
-Detailed limitations live in [docs/limitations.md](docs/limitations.md); the roadmap is in [docs/roadmap.md](docs/roadmap.md).
+- **Distributed utilities** — DDP-aware helpers and a validated two-process CPU/gloo smoke path; broader multi-node training remains a roadmap item.
+- **GraphSAINT / Cluster-GCN** — available as Beta foundations with benchmark scripts; production-scale benchmarks should continue to expand.
+- **HAN / HGT / TGN / TGAT** — Experimental foundations with unit, toy-overfit, and no-leakage validation; broader reference-parity comparisons remain future work.
+- **OGB / TGB integrations** — optional wrappers around official evaluators; require explicit user setup.
+- **Dense graph operations** — some builders (`kNN`, `radius`, `IoU`, fully-connected) are O(N²) and emit warnings on large N; the spectral partitioner is O(N³) and is restricted to ≤ 4096 nodes.
+- **Per-pixel / per-voxel GAT scores** — not shipped; `[E, K, H, W]` score tensors are memory-prohibitive.
+
+TGraphX is built to complement and interoperate with mature graph ecosystems. PyG and DGL provide large-scale GNN infrastructures; NetworkX provides extensive classical graph algorithms; PyKEEN focuses on knowledge graph embeddings. TGraphX focuses on a different integration point: tensor-aware graph learning, graph mining, reproducible experiments, and dashboard-ready research workflows in one package.
+
+Detailed limitations: [docs/limitations.md](docs/limitations.md) · Roadmap: [docs/roadmap.md](docs/roadmap.md)
 
 ---
 

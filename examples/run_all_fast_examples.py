@@ -97,6 +97,9 @@ FAST_EXAMPLES = [
     ("graph_algorithms_advanced_demo.py",     "Max-flow, matching, coloring, hypergraph, IO", None),
     ("knowledge_graph_demo.py",               "TransE/DistMult knowledge graph embeddings",  None),
     ("node2vec_demo.py",                      "Node2Vec/DeepWalk unsupervised embeddings",   None),
+    # v0.5.0 — VGAE, loaders, feature store
+    ("vgae_link_prediction_demo.py",          "VGAE/GAE link prediction demo",              None),
+    ("neighbor_loader_demo.py",               "NeighborLoader + FeatureStore scalability",  None),
 ]
 
 

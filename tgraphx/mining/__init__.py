@@ -344,6 +344,17 @@ from .neural import (
     train_graph_pattern_classifier_step,
 )
 
+# ── VGAE / Graph Autoencoder (Experimental) ─────────────────────────────────
+from .vgae import (
+    GraphAutoencoder,
+    VGAE,
+    DotProductDecoder,
+    MLPEdgeDecoder,
+    GCNEncoder as VGAEGCNEncoder,
+    train_gae_step,
+    evaluate_link_prediction,
+)
+
 # ── Reports ───────────────────────────────────────────────────────────────────
 from .reports import (
     write_graph_mining_summary,
@@ -351,6 +362,20 @@ from .reports import (
     write_link_prediction_summary,
     write_anomaly_summary,
     write_prototype_membership_report,
+    write_kg_summary,
+    write_kg_metrics_report,
+    write_hypergraph_summary,
+    write_vgae_report,
+    write_loader_summary,
+    write_feature_store_summary,
+    write_graphsaint_sampler_report,
+    write_cluster_partition_report,
+    write_hetero_summary,
+    write_temporal_summary,
+    write_ogb_tgb_report,
+    write_estimator_report,
+    write_pipeline_report,
+    write_sparse_backend_report,
 )
 
 __all__ = [
