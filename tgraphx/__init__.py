@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "0.6.0"
+__version__ = "1.0.0"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
