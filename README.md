@@ -18,7 +18,7 @@ TGraphX is a tensor-aware graph learning and graph mining framework for PyTorch.
 
 > *Graph learning, graph mining, tensor features, sampling, and experiment dashboards — in one research-focused Python framework.*
 
-**[Graph algorithms](docs/graph_algorithms.md)** · **[Graph mining](docs/graph_mining.md)** · **[Tensor GNNs](docs/vector_gnn.md)** · **[Sampling](docs/graphsaint.md)** · **[FeatureStore](docs/feature_store.md)** · **[Sparse](docs/backends.md)** · **[Node2Vec/VGAE](examples/vgae_link_prediction_demo.py)** · **[Hetero](docs/hetero_gnns.md)** · **[Temporal](docs/temporal_graph_learning.md)** · **[KG/Hypergraph](examples/knowledge_graph_demo.py)** · **[Dashboard](docs/dashboard.md)** · **[Reproducibility](docs/reproducibility.md)** · **[sklearn API](docs/sklearn_api.md)**
+**[Graph algorithms](docs/graph_algorithms.md)** · **[Graph mining](docs/graph_mining.md)** · **[Tensor GNNs](docs/vector_gnn.md)** · **[Sampling](docs/graphsaint.md)** · **[FeatureStore](docs/feature_store.md)** · **[Sparse](docs/backends.md)** · **[Node2Vec/VGAE](examples/vgae_link_prediction_demo.py)** · **[Hetero](docs/hetero_gnns.md)** · **[Temporal](docs/temporal_graph_learning.md)** · **[KG](docs/knowledge_graphs.md)** · **[Dashboard](docs/dashboard.md)** · **[Reproducibility](docs/reproducibility.md)** · **[sklearn API](docs/sklearn_api.md)**
 
 ---
 
@@ -99,7 +99,7 @@ A Colab tutorial walks through every workflow:
 | **Sampling & loaders** | NeighborLoader, LinkNeighborLoader, GraphLoader, GraphSAINT, Cluster-GCN | Beta | [docs/graphsaint.md](docs/graphsaint.md) |
 | **Feature store** | In-memory & memmap tensor feature storage; NeighborLoader integration | Beta | [docs/feature_store.md](docs/feature_store.md) |
 | **Sparse backend** | CSR/CSC, coalesce, segment ops, optional torch_scatter acceleration | Beta | [docs/backends.md](docs/backends.md) |
-| **Knowledge graphs** | triples, TransE/DistMult, negative sampling, filtered metrics | Experimental | [examples/knowledge_graph_demo.py](examples/knowledge_graph_demo.py) |
+| **Knowledge graphs** | triples, TransE/DistMult/ComplEx/RotatE, filtered ranking, KG+RGCN, multimodal entity features (image/user/text), temporal KG, reasoning | Beta/Experimental | [docs/knowledge_graphs.md](docs/knowledge_graphs.md) |
 | **Hypergraphs** | incidence matrix, clique/star expansion | Experimental | [examples/graph_algorithms_advanced_demo.py](examples/graph_algorithms_advanced_demo.py) |
 | **Heterogeneous graphs** | RGCN, HAN, HGT; typed neighbor sampling | Experimental | [docs/hetero_gnns.md](docs/hetero_gnns.md) |
 | **Temporal graphs** | TGNMemory, TGATConv, time encoding, temporal splits | Experimental | [docs/temporal_graph_learning.md](docs/temporal_graph_learning.md) |

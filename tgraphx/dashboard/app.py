@@ -683,6 +683,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._api_json_file(logdir, "distributed_run_summary.json")
         elif endpoint == "calibration_report":
             self._api_json_file(logdir, "calibration_report.json")
+        # ── v0.6.0 KG endpoints ──────────────────────────────────────────────
+        elif endpoint == "kg_summary":
+            self._api_json_file(logdir, "kg_summary.json")
+        elif endpoint == "kg_evaluation_report":
+            self._api_json_file(logdir, "kg_evaluation_report.json")
+        elif endpoint == "kg_training_report":
+            self._api_json_file(logdir, "kg_training_report.json")
+        elif endpoint == "kg_model_report":
+            self._api_json_file(logdir, "kg_model_report.json")
+        elif endpoint == "kg_gnn_report":
+            self._api_json_file(logdir, "kg_gnn_report.json")
+        elif endpoint == "temporal_kg_report":
+            self._api_json_file(logdir, "temporal_kg_report.json")
+        elif endpoint == "kg_reasoning_report":
+            self._api_json_file_capped(logdir, "kg_reasoning_report.json", max_list_rows=50)
+        elif endpoint == "kg_benchmark_report":
+            self._api_json_file(logdir, "kg_benchmark_report.json")
+        elif endpoint == "kg_multimodal_feature_report":
+            self._api_json_file(logdir, "kg_multimodal_feature_report.json")
         else:
             self._send_json({"error": f"Unknown endpoint: {endpoint}"}, 404)
 

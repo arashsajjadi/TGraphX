@@ -48,6 +48,17 @@ sklearn-like estimators, and benchmark tooling — all in one package.
 
 | Topic | Doc |
 |-------|-----|
+| Knowledge graph overview | [knowledge_graphs.md](knowledge_graphs.md) |
+| KG data model | [kg_evaluation.md](kg_evaluation.md) |
+| KG models (TransE, DistMult, ComplEx, RotatE) | [kg_models.md](kg_models.md) |
+| Filtered ranking evaluation | [kg_evaluation.md](kg_evaluation.md) |
+| KG training pipeline | [kg_training.md](kg_training.md) |
+| KG + GNN integration | [kg_gnn_integration.md](kg_gnn_integration.md) |
+| Temporal knowledge graphs | [temporal_knowledge_graphs.md](temporal_knowledge_graphs.md) |
+| KG reasoning (paths, rules, constraints) | [kg_reasoning.md](kg_reasoning.md) |
+| KG datasets (synthetic) | [kg_datasets.md](kg_datasets.md) |
+| KG benchmarks | [kg_benchmarks.md](kg_benchmarks.md) |
+| Multimodal tensor KG features | [kg_multimodal_tensor_features.md](kg_multimodal_tensor_features.md) |
 | Temporal graph learning (TGN / TGAT) | [temporal_graph_learning.md](temporal_graph_learning.md) |
 | Temporal utilities | [temporal.md](temporal.md) |
 | Heterogeneous graphs | [hetero_gnns.md](hetero_gnns.md) |
