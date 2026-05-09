@@ -14,9 +14,11 @@
 
 Developed by **Arash Sajjadi**, PhD Candidate in Computer Science, University of Saskatchewan. Academic supervision: **Mark Eramian**.
 
-TGraphX is a tensor-aware graph learning and graph mining framework for PyTorch. It supports **multi-dimensional node/edge features** (`[C, H, W]`, `[C, D, H, W]`, `[D]`), graph neural networks, scalable mini-batch samplers (GraphSAINT, Cluster-GCN), knowledge graph and hypergraph foundations, temporal and heterogeneous graph learning, a local dashboard with offline HTML export, sklearn-like estimators, reproducibility utilities, and benchmark tooling — all in a single package with no mandatory external dependencies beyond PyTorch.
+TGraphX is a **tensor-native graph intelligence framework** for research workflows that combine graph learning, graph mining, knowledge graphs, graph generation, evolutionary optimization, graph reinforcement learning, reproducibility, and dashboard-ready reporting — all in PyTorch, with no mandatory external dependencies.
 
-> *Graph learning, graph mining, tensor features, sampling, and experiment dashboards — in one research-focused Python framework.*
+It preserves **multi-dimensional node/edge features** (`[C, H, W]`, `[C, D, H, W]`, `[D]`) through every message-passing step, supports scalable mini-batch samplers (GraphSAINT, Cluster-GCN), multimodal tensor-aware knowledge graphs, 13 graph RL algorithms, classical and neural graph generation, multi-objective evolutionary optimization, a local dashboard with offline HTML export, sklearn-like estimators, and a full benchmark + tutorial suite.
+
+> *Tensor-native graph learning · mining · generation · optimization · reinforcement learning · dashboard — in one research-focused package.*
 
 **[Graph algorithms](docs/graph_algorithms.md)** · **[Graph mining](docs/graph_mining.md)** · **[Tensor GNNs](docs/vector_gnn.md)** · **[Sampling](docs/graphsaint.md)** · **[FeatureStore](docs/feature_store.md)** · **[Sparse](docs/backends.md)** · **[Node2Vec/VGAE](examples/vgae_link_prediction_demo.py)** · **[Hetero](docs/hetero_gnns.md)** · **[Temporal](docs/temporal_graph_learning.md)** · **[KG](docs/knowledge_graphs.md)** · **[Dashboard](docs/dashboard.md)** · **[Reproducibility](docs/reproducibility.md)** · **[sklearn API](docs/sklearn_api.md)**
 
@@ -100,6 +102,9 @@ A Colab tutorial walks through every workflow:
 | **Feature store** | In-memory & memmap tensor feature storage; NeighborLoader integration | Beta | [docs/feature_store.md](docs/feature_store.md) |
 | **Sparse backend** | CSR/CSC, coalesce, segment ops, optional torch_scatter acceleration | Beta | [docs/backends.md](docs/backends.md) |
 | **Knowledge graphs** | triples, TransE/DistMult/ComplEx/RotatE, filtered ranking, KG+RGCN, multimodal entity features (image/user/text), temporal KG, reasoning | Beta/Experimental | [docs/knowledge_graphs.md](docs/knowledge_graphs.md) |
+| **Graph generation** | classical generators with tensor features, VGAE generation, autoregressive generation, generation metrics (validity/uniqueness/novelty/diversity/MMD) | Experimental | [docs/graph_generation.md](docs/graph_generation.md) |
+| **Evolutionary optimization** | genetic algorithm, simulated annealing, NSGA-II multi-objective, mutation/crossover/selection | Experimental | [docs/evolutionary_graph_optimization.md](docs/evolutionary_graph_optimization.md) |
+| **Graph reinforcement learning** | RL environments (navigation/coloring/max-cut/generation/KG), policy/value/Q networks, REINFORCE/A2C/DQN/PPO | Experimental | [docs/graph_reinforcement_learning.md](docs/graph_reinforcement_learning.md) |
 | **Hypergraphs** | incidence matrix, clique/star expansion | Experimental | [examples/graph_algorithms_advanced_demo.py](examples/graph_algorithms_advanced_demo.py) |
 | **Heterogeneous graphs** | RGCN, HAN, HGT; typed neighbor sampling | Experimental | [docs/hetero_gnns.md](docs/hetero_gnns.md) |
 | **Temporal graphs** | TGNMemory, TGATConv, time encoding, temporal splits | Experimental | [docs/temporal_graph_learning.md](docs/temporal_graph_learning.md) |
@@ -114,6 +119,8 @@ A Colab tutorial walks through every workflow:
 | **Reproducibility** | `set_seed`, deterministic mode, `reproducibility_report.json` | Beta | [docs/reproducibility.md](docs/reproducibility.md) |
 | **Distributed helpers** | rank-zero utilities, DDP wrapping, shard helpers | Experimental | [docs/distributed_training.md](docs/distributed_training.md) |
 | **OGB / TGB wrappers** | optional evaluators with no hidden downloads | Beta (optional) | [docs/ogb_tgb_integration.md](docs/ogb_tgb_integration.md) |
+| **Tutorials** | CPU-runnable Colab-ready quickstarts for generation, evolutionary optimization, and graph RL | Stable | [tutorials/](tutorials/) |
+| **Benchmarks** | 13 benchmark scripts with `--small --json` for CI-friendly validation | Stable | [benchmarks/](benchmarks/) |
 
 ---
 
@@ -205,6 +212,101 @@ mem.update(node_ids, messages, timestamps)  # raises on future-data leakage
 
 → [docs/temporal_graph_learning.md](docs/temporal_graph_learning.md) · [docs/hetero_gnns.md](docs/hetero_gnns.md)
 
+### Graph generation and evolutionary optimization
+
+```python
+from tgraphx.generation import FeatureAwareERGraph, uniqueness_score
+from tgraphx.evolutionary import GraphGenome, GeneticAlgorithmOptimizer, GeneticAlgorithmConfig, connectivity_fitness
+import torch
+
+# Generate graphs with tensor features
+graphs = [FeatureAwareERGraph(n=20, p=0.3, node_feature_dim=8, seed=i) for i in range(10)]
+print("Uniqueness:", uniqueness_score(graphs))
+
+# Evolve a graph to maximize connectivity
+def make_genome(n=6, seed=0):
+    ei = torch.tensor([[0, 1, 2], [1, 2, 0]], dtype=torch.long)
+    return GraphGenome(edge_index=ei, num_nodes=n)
+
+config = GeneticAlgorithmConfig(population_size=10, n_generations=20, seed=42)
+result = GeneticAlgorithmOptimizer(config, connectivity_fitness).optimize([make_genome(seed=i) for i in range(10)])
+print(f"Best connectivity: {result.best_fitness:.4f}")
+```
+
+→ [docs/graph_generation.md](docs/graph_generation.md) · [docs/evolutionary_graph_optimization.md](docs/evolutionary_graph_optimization.md) · [examples/classical_graph_generation_demo.py](examples/classical_graph_generation_demo.py) · [examples/evolutionary_graph_optimization_demo.py](examples/evolutionary_graph_optimization_demo.py)
+
+### One-liner graph generation
+
+```python
+from tgraphx.generation import run_graph_generation
+
+graphs = run_graph_generation(
+    method="barabasi_albert",
+    num_graphs=16,
+    num_nodes=50,
+    m=2,
+    node_feature_dim=8,
+    seed=42,
+)
+print(f"Generated {len(graphs.graphs)} graphs. Validity: {graphs.metrics['validity']:.2f}")
+```
+
+→ [docs/graph_generation.md](docs/graph_generation.md) · [docs/evolutionary_graph_optimization.md](docs/evolutionary_graph_optimization.md)
+
+### Graph reinforcement learning
+
+```python
+from tgraphx.rl import GraphNavigationEnv, GraphEnvConfig, GraphPolicyNetwork, REINFORCEAgent
+import torch
+
+ei = torch.tensor([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=torch.long)
+env = GraphNavigationEnv(ei, 5, node_features=torch.randn(5, 8), target_node=4,
+                         config=GraphEnvConfig(max_steps=20))
+
+policy = GraphPolicyNetwork(node_in_dim=8, hidden_dim=32, num_actions=4)
+agent = REINFORCEAgent(policy, torch.optim.Adam(policy.parameters(), lr=1e-3))
+
+for ep in range(50):
+    traj = agent.collect_episode(env, max_steps=20)
+    agent.update(traj)
+```
+
+→ [docs/graph_reinforcement_learning.md](docs/graph_reinforcement_learning.md) · [docs/graph_rl_algorithms.md](docs/graph_rl_algorithms.md) · [examples/graph_reinforce_demo.py](examples/graph_reinforce_demo.py) · [examples/graph_dqn_demo.py](examples/graph_dqn_demo.py)
+
+### One-liner graph RL
+
+```python
+from tgraphx.rl import run_graph_rl
+
+result = run_graph_rl(
+    env="graph_navigation",
+    algorithm="dqn",
+    episodes=50,
+    seed=42,
+)
+print(f"Mean return: {result.metrics['mean_return']:.2f}")
+```
+
+→ [docs/graph_reinforcement_learning.md](docs/graph_reinforcement_learning.md)
+
+### Graph RL algorithms
+
+| Algorithm | Action type | Core idea | Stability | One-liner |
+|-----------|-------------|-----------|-----------|-----------|
+| Random | discrete | Uniform random sampling of valid actions | Beta | `run_graph_rl(..., algorithm="random")` |
+| Greedy | discrete | Highest Q-value action, no learning | Beta | `run_graph_rl(..., algorithm="greedy")` |
+| REINFORCE | discrete | Monte Carlo policy gradient + entropy | Experimental | `run_graph_rl(..., algorithm="reinforce")` |
+| Actor-Critic | discrete | Synchronous actor-critic with GAE | Experimental | `run_graph_rl(..., algorithm="actor_critic")` |
+| A2C | discrete | Advantage Actor-Critic with GAE | Experimental | `run_graph_rl(..., algorithm="a2c")` |
+| DQN | discrete | Deep Q-Network + ε-greedy + replay | Experimental | `run_graph_rl(..., algorithm="dqn")` |
+| Double DQN | discrete | Decoupled action selection/evaluation | Experimental | `run_graph_rl(..., algorithm="double_dqn")` |
+| Dueling DQN | discrete | V(s) + A(s,a) − mean(A) decomposition | Experimental | `run_graph_rl(..., algorithm="dueling_dqn")` |
+| PPO | discrete | Clipped surrogate objective | Experimental | `run_graph_rl(..., algorithm="ppo")` |
+| DDPG | continuous | Deterministic policy + critic, soft update | Experimental | `run_graph_rl(..., algorithm="ddpg")` |
+| Delayed DDPG | continuous | DDPG with delayed actor updates | Experimental | `run_graph_rl(..., algorithm="delayed_ddpg")` |
+| TD3 | continuous | Twin critics + clipped target noise + delayed update | Experimental | `run_graph_rl(..., algorithm="td3")` |
+| SAC | continuous | Entropy-regularized twin-critic, stochastic actor | Experimental | `run_graph_rl(..., algorithm="sac")` |
+
 ### Dashboard-ready experiments
 
 ```python
@@ -221,8 +323,8 @@ write_graph_mining_summary("logs/graph_mining_summary.json", summary)
 
 | Label | Meaning |
 |-------|---------|
-| **Beta** | Tested, documented; API stable within v0.x series |
-| **Experimental** | Correct foundations; API or semantics may evolve before v1.0 |
+| **Beta** | Tested, documented; API stable within the v1.x series |
+| **Experimental** | Correct foundations; API or semantics may evolve in future minor releases |
 | **Optional** | Requires an optional dependency or explicit `--download` |
 
 ---
@@ -491,6 +593,27 @@ python examples/cluster_loader_demo.py              # Cluster-GCN partitioners
 python examples/graph_learning_demo.py              # GCN/SAGE/GAT training
 python examples/vgae_link_prediction_demo.py        # GAE / VGAE link prediction
 python examples/gat_chunking_demo.py                # chunked GAT forward parity
+```
+
+### Graph generation, evolutionary optimization, and RL (Experimental)
+```bash
+python examples/classical_graph_generation_demo.py       # ER/BA/temporal/typed generators
+python examples/neural_graph_generation_demo.py          # VGAE/autoregressive/transformer
+python examples/evolutionary_graph_optimization_demo.py  # GA, SA, NSGA-II
+python examples/graph_rl_environments_demo.py            # all RL environments demo
+python examples/graph_reinforce_demo.py                  # REINFORCE on navigation
+python examples/graph_dqn_demo.py                        # DQN on graph coloring
+python examples/graph_ppo_demo.py                        # PPO on navigation
+python examples/graph_td3_sac_demo.py                    # TD3/SAC continuous RL
+python examples/generation_rl_high_level_api_demo.py     # one-line API demo
+python examples/graph_lstm_sequence_demo.py              # GraphRNN sequence model
+```
+
+### Quickstart tutorials (CPU runnable, deterministic)
+```bash
+python tutorials/graph_generation_quickstart.py       # ER/BA/SBM + metrics + dashboard
+python tutorials/evolutionary_optimization_quickstart.py # GA/SA/NSGA-II + Pareto front
+python tutorials/graph_rl_quickstart.py               # random/DQN/PPO/TD3/SAC comparison
 ```
 
 ### Dashboard, experiments, sklearn API

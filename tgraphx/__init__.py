@@ -170,6 +170,49 @@ from .cluster_gcn import (
     ClusterLoader,
 )
 
+# ── Graph generation (Experimental, v0.7.0+) ─────────────────────────────────
+from .generation import (
+    GeneratedGraph, GraphEditState, GraphGenerationTrajectory, GraphGenerationBatch,
+    GraphActionType, GraphAction, GraphActionSpace,
+    graph_to_generation_state, generation_state_to_graph, validate_generated_graph,
+    apply_graph_action, sample_valid_action,
+    VGAEGraphGenerator, AutoregressiveEdgeGenerator,
+    VectorNodeProjector, ImageNodeEncoder, EdgeFeatureProjector,
+    validity_score, uniqueness_score, novelty_score, diversity_score,
+    GraphGenerationConfig,
+    write_graph_generation_report, write_generation_metrics_report,
+    run_graph_generation, list_graph_generation_methods, GenerationResult,
+)
+
+# ── Evolutionary optimization (Experimental, v0.7.0+) ────────────────────────
+from .evolutionary import (
+    GraphGenome, GeneticAlgorithmOptimizer, SimulatedAnnealingOptimizer,
+    NSGAIIOptimizer, HillClimbingOptimizer,
+    EvolutionConfig, EvolutionResult, ParetoFront,
+    mutate_add_node, mutate_add_edge, mutate_node_feature,
+    edge_set_crossover, composite_fitness,
+    write_evolution_report,
+    run_evolutionary_optimization, list_evolutionary_optimizers, OptimizationResult,
+)
+
+# ── Graph RL (Experimental, v0.7.0+) ─────────────────────────────────────────
+from .rl import (
+    GraphNavigationEnv, GraphColoringEnv, MaxCutEnv, GraphGenerationEnv,
+    KGPathReasoningEnv, ShortestPathEnv,
+    ContinuousNavigationEnv, ContinuousGraphEditEnv, ContinuousGraphActionSpace,
+    GraphPolicyNetwork, GraphValueNetwork, GraphQNetwork, GraphActorCriticNetwork,
+    MaskedCategoricalPolicy,
+    REINFORCEAgent, ActorCriticAgent, A2CAgent, DQNAgent, DoubleDQNAgent, PPOAgent,
+    GraphDDPGAgent, GraphTD3Agent, GraphSACAgent,
+    ContinuousGraphActor, StochasticGraphActor, ContinuousGraphCritic, TwinContinuousGraphCritic,
+    RandomPolicy, GreedyPolicy,
+    ReplayBuffer, RolloutBuffer, EpsilonGreedy,
+    soft_update, OUNoise, GaussianNoise,
+    RLTrainingConfig, PolicyConfig,
+    write_graph_rl_training_report, write_graph_rl_env_report,
+    run_graph_rl, list_graph_rl_algorithms, make_graph_env, RLResult,
+)
+
 __all__ = [
     "__version__",
     # Core

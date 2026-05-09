@@ -1,0 +1,51 @@
+[thresholds]
+max_file_lines = 1200
+warn_file_lines = 800
+max_function_lines = 150
+warn_function_lines = 80
+max_cyclomatic_complexity = 15
+warn_cyclomatic_complexity = 10
+min_module_coverage = 50
+warn_module_coverage = 70
+max_public_api_without_reference = 0
+fail_on_broken_links = true
+fail_on_version_mismatch = true
+
+[weights]
+complexity_debt = 15
+dead_code_debt = 12
+test_coverage_debt = 15
+docs_api_drift_debt = 15
+type_debt = 10
+architecture_import_debt = 10
+performance_guard_debt = 10
+security_debt = 5
+packaging_release_debt = 3
+ai_code_smell_debt = 5
+
+[patterns]
+# Performance guard: patterns that suggest O(N²) or worse without guards
+quadratic_patterns = [
+    "full_adjacency",
+    "all_pairs",
+    "pairwise",
+    "for i in range.*for j in range",
+]
+
+# Unsafe patterns in library code
+security_patterns = [
+    "eval(",
+    "exec(",
+    "pickle.loads",
+    "__reduce__",
+]
+
+[ci]
+# In CI mode, fail on these (0 tolerance)
+fail_on_blockers = true
+fail_on_broken_links = true
+fail_on_version_mismatch = true
+fail_on_import_failures = true
+# Warn but do not fail on these in CI
+warn_on_complexity = true
+warn_on_dead_code = true

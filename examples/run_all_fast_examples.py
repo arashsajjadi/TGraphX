@@ -100,6 +100,17 @@ FAST_EXAMPLES = [
     # v0.5.0 — VGAE, loaders, feature store
     ("vgae_link_prediction_demo.py",          "VGAE/GAE link prediction demo",              None),
     ("neighbor_loader_demo.py",               "NeighborLoader + FeatureStore scalability",  None),
+    # v0.6.0 / v1.0.0 — graph generation, evolutionary optimization, graph RL
+    ("classical_graph_generation_demo.py",    "Classical graph generation (ER/BA/temporal)", None),
+    ("neural_graph_generation_demo.py",       "Neural graph generation (VGAE/AR/transformer)", None),
+    ("evolutionary_graph_optimization_demo.py","Evolutionary optimization (GA/SA/NSGA-II)", None),
+    ("graph_rl_environments_demo.py",         "Graph RL environments survey",               None),
+    ("graph_reinforce_demo.py",               "REINFORCE on graph navigation",              None),
+    ("graph_dqn_demo.py",                     "DQN on graph coloring",                      None),
+    ("graph_ppo_demo.py",                     "PPO on graph navigation",                    None),
+    ("graph_td3_sac_demo.py",                 "TD3/SAC continuous graph RL",                None),
+    ("generation_rl_high_level_api_demo.py",  "High-level API: generation + evolution + RL",None),
+    ("graph_lstm_sequence_demo.py",           "GraphRNN sequence model",                    None),
 ]
 
 

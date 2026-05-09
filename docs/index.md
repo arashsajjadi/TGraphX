@@ -107,6 +107,36 @@ sklearn-like estimators, and benchmark tooling — all in one package.
 | Architecture | [architecture.md](architecture.md) |
 | Migration guide | [migration_v0_2_to_v0_3.md](migration_v0_2_to_v0_3.md) |
 
+## Graph generation, evolutionary optimization, and graph RL
+
+| Topic | Doc |
+|-------|-----|
+| Graph generation | [graph_generation.md](graph_generation.md) |
+| Neural graph generation (VGAE, autoregressive, transformer) | [neural_graph_generation.md](neural_graph_generation.md) |
+| Generation metrics (validity/uniqueness/diversity/MMD) | [graph_generation_metrics.md](graph_generation_metrics.md) |
+| Evolutionary graph optimization (GA, SA, NSGA-II) | [evolutionary_graph_optimization.md](evolutionary_graph_optimization.md) |
+| Evolutionary algorithms detail | [evolutionary_algorithms.md](evolutionary_algorithms.md) |
+| Graph reinforcement learning overview | [graph_reinforcement_learning.md](graph_reinforcement_learning.md) |
+| Graph RL algorithms (13 implemented) | [graph_rl_algorithms.md](graph_rl_algorithms.md) |
+| Graph RL environments | [graph_rl_environments.md](graph_rl_environments.md) |
+| Continuous action spaces (DDPG/TD3/SAC) | [graph_rl_continuous_actions.md](graph_rl_continuous_actions.md) |
+| Graph RL customization | [graph_rl_customization.md](graph_rl_customization.md) |
+| Graph action spaces | [graph_action_spaces.md](graph_action_spaces.md) |
+| Graph sequence models | [graph_sequence_models.md](graph_sequence_models.md) |
+| Graph workflow API | [graph_workflow_api.md](graph_workflow_api.md) |
+
+## Tutorials
+
+CPU-runnable quickstarts (deterministic, under 60 seconds each):
+
+| Tutorial | Capability |
+|----------|-----------|
+| [tutorials/graph_generation_quickstart.py](../tutorials/graph_generation_quickstart.py) | ER/BA/SBM generation + metrics + dashboard |
+| [tutorials/evolutionary_optimization_quickstart.py](../tutorials/evolutionary_optimization_quickstart.py) | GA/SA/NSGA-II + Pareto front + dashboard |
+| [tutorials/graph_rl_quickstart.py](../tutorials/graph_rl_quickstart.py) | random/DQN/PPO/TD3/SAC comparison + dashboard |
+
+See [tutorial_gallery.md](tutorial_gallery.md) for the full tutorial index.
+
 ## Examples
 
 See [examples/README.md](../examples/README.md) for a gallery of all

@@ -5,6 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.0] — 2026-05-09
+
+First stable research release of TGraphX.
+
+### Summary
+
+- **Tensor-native GNN layers** preserving `[C,H,W]` and `[C,D,H,W]` node features through message passing (Beta)
+- **Graph algorithms** — BFS/DFS, shortest paths, MST, max-flow, matching, coloring (Beta)
+- **Graph mining** — motifs, centrality, spectral, WL features, Node2Vec/DeepWalk (Beta)
+- **Sampling and loaders** — GraphSAINT, Cluster-GCN, NeighborLoader, LinkNeighborLoader, GraphLoader (Beta)
+- **Feature store** — InMemoryFeatureStore, MemmapFeatureStore (Beta)
+- **Sparse backend** — CSR/CSC, coalesce, segment ops (Beta)
+- **Knowledge graphs** — TransE/DistMult/ComplEx/RotatE, filtered ranking, RGCN, multimodal entity features (Beta/Experimental)
+- **Hypergraphs** — incidence matrix, clique/star expansion (Experimental)
+- **GAE / VGAE** — dot-product and MLP edge decoders, link prediction (Experimental)
+- **Heterogeneous graphs** — RGCN, HAN, HGT, typed neighbor sampling (Experimental)
+- **Temporal graphs** — TGNMemory, TGATConv, time encodings, temporal splits (Experimental)
+- **Graph generation** — 14 methods (classical + neural VGAE/autoregressive/transformer), quality metrics, one-liner API (Experimental)
+- **Evolutionary graph optimization** — GA, SA, NSGA-II, hill climbing, random search, multi-objective Pareto, one-liner API (Experimental)
+- **Graph RL** — 13 algorithms (random through SAC), 9 environments (navigation through continuous graph edit), one-liner API (Experimental)
+- **Dashboard** — local HTTP server, offline HTML, generation/evolution/RL artifact writers, no telemetry (Beta)
+- **Tutorials** — 3 CPU-runnable Colab-ready quickstarts (Stable)
+- **Benchmarks** — 13 scripts with `--small --json` validation, all including `package_version`, `seed`, `device`, `status`, `limitations` (Stable)
+- **Reproducibility** — `set_seed`, deterministic mode, `reproducibility_report.json` (Beta)
+- **sklearn-like API** — estimators, GraphPipeline, EarlyStopping (Beta)
+- **Experiment manager** — YAML/JSON configs, runners, CLI (`tgraphx-train`) (Beta)
+- **Wheel** — pure Python wheel, no data files, lightweight import, optional features skip cleanly
+
+### API changes from v0.6.0
+
+- `run_evolutionary_optimization()` now accepts `n_generations` as an alias for `generations`
+- `OptimizationResult` now has `.metrics` dict (best_fitness, n_generations, algorithm, objective)
+- `list_graph_rl_algorithms()` returns a `dict` (not a list); use `.keys()` for names
+- All 13 benchmark scripts now include `package_version`, `seed`, `device`, `status`, `limitations` in JSON output
+
+### Tests and validation
+
+- 217 generation/RL/evolutionary tests pass; full suite 2000+ tests pass
+- All 13 benchmarks pass `--small --json`
+- CPU + CUDA device validation: `all_passed: true`
+- Wheel: `twine check PASSED`, wheel smoke PASSED
+- All 3 tutorials: PASS
+
+---
+
+## [0.6.0] — 2026-05-08
+
+### Added — Graph generation, evolutionary optimization, graph RL subsystems
+
+- (Experimental): `tgraphx.generation` — classical generators (ER, BA, SBM, WS, grid, cycle, path, star, complete, random geometric, temporal, typed, anomaly/motif injected), neural generators (VGAE, autoregressive, transformer), action spaces, quality metrics (validity, uniqueness, novelty, diversity, MMD, WL hash), projectors for vector/image/volume features, high-level API `run_graph_generation`, dashboard report writers
+- (Experimental): `tgraphx.evolutionary` — `GraphGenome`, mutation/crossover operators, selection (tournament, roulette, rank, elitism, diversity-preserving), fitness functions (connectivity, density, clustering, motif count, composite), NSGA-II multi-objective (non-dominated sort, crowding distance, hypervolume), algorithms (GA, SA, NSGA-II, hill climbing, random search), high-level API `run_evolutionary_optimization`, dashboard report writers
+- (Experimental): `tgraphx.rl` — 9 graph environments (navigation, shortest path, coloring, max-cut, vertex cover, graph generation, KG reasoning, continuous navigation, continuous graph edit), 13 algorithms (random, greedy, REINFORCE, actor-critic, A2C, DQN, double DQN, dueling DQN, PPO, DDPG, delayed DDPG, TD3, SAC), exploration strategies (epsilon-greedy, Boltzmann, UCB, entropy), high-level API `run_graph_rl` / `list_graph_rl_algorithms`, auto-routing of continuous algorithms to continuous environments, dashboard report writers
+- (Experimental): `tgraphx.generation.neural` — `VGAEGraphGenerator`, `AutoregressiveEdgeGenerator`, `GraphTransformerGenerator`
+- Tutorials: `tutorials/graph_generation_quickstart.py`, `tutorials/evolutionary_optimization_quickstart.py`, `tutorials/graph_rl_quickstart.py` — CPU-runnable, deterministic, under 60 seconds each
+- Examples: `examples/neural_graph_generation_demo.py`, `examples/generation_rl_high_level_api_demo.py`, `examples/graph_ppo_demo.py`, `examples/graph_td3_sac_demo.py`
+- Benchmarks: `benchmarks/generation/`, `benchmarks/evolution/`, `benchmarks/rl/` — all support `--small --json` for CI-friendly runs
+- Tests: 217 new tests for generation/evolution/RL subsystems; all pass on Python 3.10-3.13 (CPU and CUDA)
+- Tensor-native: projectors (VectorNodeProjector, ImageNodeEncoder, VolumeNodeEncoder, EdgeFeatureProjector, GraphFeatureProjector) preserve `[N,C,H,W]` and `[N,C,D,H,W]` feature shapes; gradients reach projectors; no silent flattening
+- Dashboard artifacts: `generation_*.json`, `evo_*.json`, `rl_*.json` written by high-level APIs; no raw tensors; malicious strings not eval'd
+
+### Changed
+- README: added generation/evolution/RL algorithm tables, tutorial section, all new example references
+- CHANGELOG: formalized v0.6.0 entry
+
+---
+
 ## [Unreleased] — v0.5.0 candidate
 
 ### Added — Large-scale loaders, feature store, sparse backend, VGAE, RGCN

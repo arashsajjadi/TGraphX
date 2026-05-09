@@ -55,6 +55,10 @@ dev = [
     "matplotlib>=3.7",
     "build>=0.10",
     "twine>=4.0",
+    # optional deeper static analysis (not required for tests or normal dev)
+    "radon>=5.1",
+    "vulture>=2.7",
+    "bandit>=1.7",
 ]
 # Hardware-monitoring extras for the dashboard
 monitoring = [

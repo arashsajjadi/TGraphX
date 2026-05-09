@@ -105,7 +105,7 @@ def launch_dashboard_background(
 
 def _print_banner(host: str, port: int, token: Optional[str]) -> None:
     if host == "0.0.0.0":
-        print(f"\n  TGraphX Dashboard")
+        print("\n  TGraphX Dashboard")
         print(f"  Local  → http://127.0.0.1:{port}")
         print(f"  LAN    → use this machine's LAN IP, port {port}  (token required)")
     else:

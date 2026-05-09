@@ -1039,46 +1039,36 @@ class DashboardServer(ThreadingHTTPServer):
 # Offline standalone HTML export
 # ─────────────────────────────────────────────────────────────────────────────
 
-def export_dashboard_html(logdir: str, out_path: str) -> None:
-    """Produce a self-contained offline HTML snapshot of a run.
+def _load_export_assets() -> tuple:
+    """Load dashboard CSS and JS from the static directory.
 
-    Reads the packaged dashboard CSS/JS and the run log files, embeds
-    everything into one HTML file.  No server required to open the result.
+    Returns:
+        (css_content, js_content) as strings.
 
-    Security contract
-    -----------------
-    * Token is never embedded.
-    * Embedded JSON is serialized safely and ``</script>`` occurrences
-      inside values are escaped so the browser parser never closes the
-      ``<script>`` block prematurely.
-    * No external URLs or CDN references.
-    * No ``eval`` or ``new Function``.
-
-    Args:
-        logdir:   Directory containing run log files.
-        out_path: Destination HTML file path.  Parent directory must exist.
+    Raises:
+        FileNotFoundError: If static assets are missing.
     """
-    logdir_real = os.path.realpath(logdir)
-    if not os.path.isdir(logdir_real):
-        raise ValueError(f"logdir does not exist or is not a directory: {logdir!r}")
-
-    out_real = os.path.realpath(out_path)
-    parent = os.path.dirname(out_real)
-    if not os.path.isdir(parent):
-        raise ValueError(f"Output directory does not exist: {parent!r}")
-
-    # Read static assets.
     css_path = os.path.join(STATIC_DIR, "dashboard.css")
-    js_path  = os.path.join(STATIC_DIR, "dashboard.js")
+    js_path = os.path.join(STATIC_DIR, "dashboard.js")
     if not os.path.isfile(css_path) or not os.path.isfile(js_path):
         raise FileNotFoundError(f"Dashboard static assets not found in {STATIC_DIR!r}")
     with open(css_path, "r", encoding="utf-8") as f:
-        css_content = f.read()
+        css = f.read()
     with open(js_path, "r", encoding="utf-8") as f:
-        js_content = f.read()
+        js = f.read()
+    return css, js
 
-    # Collect run data from logdir.
-    def _read(fname: str):
+
+def _collect_run_snapshot(logdir_real: str) -> dict:
+    """Read and parse run log files from logdir into a snapshot dict.
+
+    Args:
+        logdir_real: Realpath of the run directory.
+
+    Returns:
+        Dict with keys: metrics, metadata, graph, graph_stats, logdir_basename.
+    """
+    def _read_file(fname: str) -> Optional[str]:
         p = os.path.join(logdir_real, fname)
         if not os.path.isfile(p):
             return None
@@ -1088,26 +1078,31 @@ def export_dashboard_html(logdir: str, out_path: str) -> None:
         except OSError:
             return None
 
-    metrics_raw  = _read("metrics.csv")
-    metadata_raw = _read("run_metadata.json")
-    graph_raw    = _read("graph_metadata.json")
-    stats_raw    = _read("graph_stats.json")
+    metrics_raw = _read_file("metrics.csv")
+    metadata_raw = _read_file("run_metadata.json")
+    graph_raw = _read_file("graph_metadata.json")
+    stats_raw = _read_file("graph_stats.json")
 
-    metrics_data  = _parse_metrics_bounded(metrics_raw, _DEFAULT_MAX_METRIC_ROWS) if metrics_raw else {"headers": [], "rows": [], "total_row_count": 0, "truncated": False, "max_rows": _DEFAULT_MAX_METRIC_ROWS}
-    metadata_data = {}
-    graph_data    = {"available": False}
-    stats_data    = {"available": False}
+    metrics_data: dict = (
+        _parse_metrics_bounded(metrics_raw, _DEFAULT_MAX_METRIC_ROWS)
+        if metrics_raw
+        else {"headers": [], "rows": [], "total_row_count": 0, "truncated": False,
+              "max_rows": _DEFAULT_MAX_METRIC_ROWS}
+    )
+    metadata_data: dict = {}
+    graph_data: dict = {"available": False}
+    stats_data: dict = {"available": False}
 
     if metadata_raw:
         try:
             metadata_data = json.loads(metadata_raw)
         except json.JSONDecodeError:
             pass
+
     if graph_raw:
         try:
             graph_data = json.loads(graph_raw)
             graph_data["available"] = True
-            # Strip large edge_index if beyond threshold.
             if graph_data.get("num_nodes", 0) > 200 or graph_data.get("num_edges", 0) > 1000:
                 graph_data.pop("edge_index", None)
                 graph_data["render_mode"] = "summary"
@@ -1117,6 +1112,7 @@ def export_dashboard_html(logdir: str, out_path: str) -> None:
                 graph_data["render_mode"] = "summary"
         except json.JSONDecodeError:
             pass
+
     if stats_raw:
         try:
             stats_data = json.loads(stats_raw)
@@ -1124,7 +1120,7 @@ def export_dashboard_html(logdir: str, out_path: str) -> None:
         except json.JSONDecodeError:
             pass
 
-    snapshot = {
+    return {
         "metrics": metrics_data,
         "metadata": metadata_data,
         "graph": graph_data,
@@ -1132,31 +1128,18 @@ def export_dashboard_html(logdir: str, out_path: str) -> None:
         "logdir_basename": os.path.basename(logdir_real),
     }
 
-    # Serialize snapshot safely: escape </script> so the parser never exits
-    # the script block prematurely.  json.dumps produces valid JSON literals,
-    # never `eval`-dependent code.
-    snapshot_js = json.dumps(snapshot, ensure_ascii=True).replace(
-        "</script>", r"<\/script>"
-    )
 
-    # Estimate size warning threshold.
-    approx_kb = (len(css_content) + len(js_content) + len(snapshot_js)) // 1024
-    size_comment = (
-        f"<!-- Exported snapshot ~{approx_kb} KB -->\n"
-        if approx_kb > 512
-        else ""
-    )
-
-    html = f"""<!DOCTYPE html>
+_HTML_SHELL = """\
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark light">
 <meta name="referrer" content="no-referrer">
-<title>TGraphX Snapshot — {os.path.basename(logdir_real)}</title>
+<title>TGraphX Snapshot — {title}</title>
 {size_comment}<style>
-{css_content}
+{css}
 </style>
 </head>
 <body>
@@ -1211,19 +1194,88 @@ def export_dashboard_html(logdir: str, out_path: str) -> None:
 window.__TGXSNAP = {snapshot_js};
 </script>
 <script>
-{js_content}
+{js}
 </script>
 </body>
 </html>"""
 
+
+def _render_snapshot_html(
+    css_content: str,
+    js_content: str,
+    snapshot: dict,
+    logdir_basename: str,
+) -> bytes:
+    """Render the offline HTML snapshot and return it as UTF-8 bytes.
+
+    Args:
+        css_content: Dashboard CSS string.
+        js_content: Dashboard JS string.
+        snapshot: Run data dict from _collect_run_snapshot.
+        logdir_basename: Display name for the run directory.
+
+    Returns:
+        HTML as UTF-8 bytes.
+    """
+    snapshot_js = json.dumps(snapshot, ensure_ascii=True).replace(
+        "</script>", r"<\/script>"
+    )
+    approx_kb = (len(css_content) + len(js_content) + len(snapshot_js)) // 1024
+    size_comment = f"<!-- Exported snapshot ~{approx_kb} KB -->\n" if approx_kb > 512 else ""
+
+    html = _HTML_SHELL.format(
+        title=logdir_basename,
+        size_comment=size_comment,
+        css=css_content,
+        snapshot_js=snapshot_js,
+        js=js_content,
+    )
     out_bytes = html.encode("utf-8")
+
     if approx_kb > 10240:
         import warnings
         warnings.warn(
             f"Snapshot HTML is large (~{approx_kb} KB). "
             "Consider lowering --max-metric-rows before exporting.",
-            stacklevel=2,
+            stacklevel=3,
         )
+
+    return out_bytes
+
+
+def export_dashboard_html(logdir: str, out_path: str) -> None:
+    """Produce a self-contained offline HTML snapshot of a run.
+
+    Reads the packaged dashboard CSS/JS and the run log files, embeds
+    everything into one HTML file.  No server required to open the result.
+
+    Security contract
+    -----------------
+    * Token is never embedded.
+    * Embedded JSON is serialized safely and ``</script>`` occurrences
+      inside values are escaped so the browser parser never closes the
+      ``<script>`` block prematurely.
+    * No external URLs or CDN references.
+    * No ``eval`` or ``new Function``.
+
+    Args:
+        logdir:   Directory containing run log files.
+        out_path: Destination HTML file path.  Parent directory must exist.
+    """
+    logdir_real = os.path.realpath(logdir)
+    if not os.path.isdir(logdir_real):
+        raise ValueError(f"logdir does not exist or is not a directory: {logdir!r}")
+
+    out_real = os.path.realpath(out_path)
+    parent = os.path.dirname(out_real)
+    if not os.path.isdir(parent):
+        raise ValueError(f"Output directory does not exist: {parent!r}")
+
+    css_content, js_content = _load_export_assets()
+    snapshot = _collect_run_snapshot(logdir_real)
+    out_bytes = _render_snapshot_html(
+        css_content, js_content, snapshot, os.path.basename(logdir_real)
+    )
 
     with open(out_real, "wb") as f:
         f.write(out_bytes)
@@ -1314,9 +1366,9 @@ def main() -> None:
             parser.error(str(exc))
         import os as _os
         size_kb = _os.path.getsize(out_path) // 1024
-        print(f"\n  TGraphX Dashboard snapshot exported.")
+        print("\n  TGraphX Dashboard snapshot exported.")
         print(f"  → {out_path}  ({size_kb} KB)")
-        print(f"  Open the file in any browser — no server needed.\n")
+        print("  Open the file in any browser — no server needed.\n")
         return
 
     # 'auto' token: generate a short URL-safe token rather than echo it twice.
@@ -1337,7 +1389,7 @@ def main() -> None:
 
     bound_host, bound_port = server.server_address
 
-    print(f"\n  TGraphX Dashboard")
+    print("\n  TGraphX Dashboard")
     print(f"  Local  → http://127.0.0.1:{bound_port}")
     if args.host == "0.0.0.0":
         lan_ip = _detect_lan_ip()
@@ -1347,16 +1399,16 @@ def main() -> None:
         else:
             print(f"  LAN    → use this machine's LAN IP, port {bound_port}")
         if token:
-            print(f"  Token  → required for non-localhost clients (printed once).")
+            print("  Token  → required for non-localhost clients (printed once).")
         else:
             # The DashboardServer constructor would have refused this, but
             # guard against future refactors.
-            print(f"  Warning: LAN mode without a token; this should never happen.")
+            print("  Warning: LAN mode without a token; this should never happen.")
     elif args.host not in _LOOPBACK:
         print(f"  → bound to {args.host}:{bound_port}  (token protected)")
     print(f"  logdir: {args.logdir}")
     print(f"  Refresh: {server.refresh_interval_s}s  ·  Max rows: {server.max_metric_rows}")
-    print(f"  Press Ctrl-C to stop.\n")
+    print("  Press Ctrl-C to stop.\n")
 
     if args.open_browser:
         try:

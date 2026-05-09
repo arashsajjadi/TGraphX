@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-05-09T01:12:03.610590",
+  "version": "0.6.0",
+  "total_score": 12.5,
+  "severity": "excellent",
+  "blockers": [],
+  "blocker_count": 0,
+  "high_count": 7,
+  "medium_count": 158,
+  "category_scores": {
+    "complexity_debt": 33.4,
+    "dead_code_debt": 0.0,
+    "test_coverage_debt": 0.0,
+    "docs_api_drift_debt": 24.0,
+    "type_debt": 8.8,
+    "architecture_import_debt": 27.6,
+    "performance_guard_debt": 2.6,
+    "security_debt": 0.0,
+    "packaging_release_debt": 0.0,
+    "ai_code_smell_debt": 0.6,
+    "total": 12.5
+  }
+}

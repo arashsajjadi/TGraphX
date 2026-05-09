@@ -639,7 +639,9 @@ def write_path_summary(
     Returns:
         Resolved path string.
     """
-    import json, os, tempfile
+    import json
+    import os
+    import tempfile
     from pathlib import Path
     payload = {}
     if source is not None:

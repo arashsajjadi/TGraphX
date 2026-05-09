@@ -251,8 +251,8 @@ class TensorGATLayer(nn.Module):
                         f"[E, edge_dim] instead."
                     )
                 raise ValueError(
-                    f"TensorGATLayer expects edge_features of shape "
-                    f"[E, edge_dim] or [E, edge_dim, " +
+                    "TensorGATLayer expects edge_features of shape "
+                    "[E, edge_dim] or [E, edge_dim, " +
                     ("H, W]" if rank == 2 else "D, H, W]") +
                     f"; got {tuple(edge_features.shape)}."
                 )
