@@ -139,6 +139,7 @@ from .sampling_negative import (
 
 # ── Production-scale loaders + feature store (v0.5.0 Beta) ───────────────────
 from .loaders import (
+    GraphMiniBatch,
     NeighborLoader,
     LinkNeighborLoader,
     GraphLoader,
@@ -146,6 +147,8 @@ from .loaders import (
     make_neighbor_loader,
     make_link_loader,
     make_graph_loader,
+    map_global_to_local,
+    seed_logits,
 )
 from .feature_store import (
     InMemoryFeatureStore,
@@ -213,8 +216,14 @@ from .rl import (
     run_graph_rl, list_graph_rl_algorithms, make_graph_env, RLResult,
 )
 
+# ── Easy mode (optional high-level API, v1.0.1+) ─────────────────────────────
+# Import as `import tgraphx as tgx; tgx.easy.train_node_classifier(...)`.
+# Imported here as a module so users can do `tgx.easy.xxx`.
+from . import easy
+
 __all__ = [
     "__version__",
+    "easy",
     # Core
     "Graph",
     "GraphBatch",
@@ -323,6 +332,7 @@ __all__ = [
     "batched_negative_sampling",
     "hard_negative_sampling",
     # v0.5.0 Beta: production loaders + feature store
+    "GraphMiniBatch",
     "NeighborLoader",
     "LinkNeighborLoader",
     "GraphLoader",
@@ -330,6 +340,8 @@ __all__ = [
     "make_neighbor_loader",
     "make_link_loader",
     "make_graph_loader",
+    "map_global_to_local",
+    "seed_logits",
     "InMemoryFeatureStore",
     "MemmapFeatureStore",
     "FeatureStoreError",

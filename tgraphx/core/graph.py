@@ -91,15 +91,31 @@ class Graph:
         edge_features (Tensor, optional): ``[E, ...]`` per-edge feature tensor
             (vector ``[E, D_e]``, image-like ``[E, C_e, H, W]``, or volumetric
             ``[E, C_e, D, H, W]``).
+        edge_attr (Tensor, optional): Alias for ``edge_features``.  If both are
+            provided, they must be the same tensor; providing both raises an error.
         node_labels (Tensor, optional): ``[N, ...]`` per-node labels.
+        y (Tensor, optional): Alias for ``node_labels`` (PyG-style).  If both
+            ``y`` and ``node_labels`` are provided they must be identical.
+        labels (Tensor, optional): Alias for ``node_labels``.
         edge_labels (Tensor, optional): ``[E, ...]`` per-edge labels.
         graph_label (Tensor, optional): a graph-level label tensor.
+        graph_features (Tensor, optional): Alias for ``graph_label``.
+        train_mask (Tensor, optional): ``BoolTensor[N]`` training mask stored
+            in ``metadata['masks']['train']``.
+        val_mask (Tensor, optional): ``BoolTensor[N]`` validation mask.
+        test_mask (Tensor, optional): ``BoolTensor[N]`` test mask.
         metadata (dict, optional): arbitrary user data carried alongside the
             graph. Preserved verbatim by ``GraphBatch``.
 
     The constructor validates every input eagerly and raises ``TypeError`` /
     ``ValueError`` with descriptive messages on mismatched shape, dtype, or
     device. No silent coercion is performed.
+
+    PyG/DGL users:
+        ``graph.x`` → ``node_features``
+        ``graph.y`` → ``node_labels``
+        ``graph.edge_attr`` → ``edge_features``
+        ``graph.num_node_features`` → ``node_features.shape[1:]`` item count
     """
 
     def __init__(
@@ -112,7 +128,47 @@ class Graph:
         edge_labels: Optional[torch.Tensor] = None,
         graph_label: Optional[torch.Tensor] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        *,
+        y: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+        edge_attr: Optional[torch.Tensor] = None,
+        graph_features: Optional[torch.Tensor] = None,
+        train_mask: Optional[torch.Tensor] = None,
+        val_mask: Optional[torch.Tensor] = None,
+        test_mask: Optional[torch.Tensor] = None,
     ) -> None:
+        # --- alias resolution ---
+        # edge_attr → edge_features
+        if edge_attr is not None:
+            if edge_features is not None and edge_attr is not edge_features:
+                raise ValueError(
+                    "Provide edge_features or edge_attr, not both. "
+                    "They are aliases for the same field."
+                )
+            edge_features = edge_attr
+
+        # y / labels → node_labels
+        label_sources = [(v, n) for v, n in [(y, "y"), (labels, "labels"), (node_labels, "node_labels")] if v is not None]
+        if len(label_sources) > 1:
+            # Check they all point to the same tensor; if not, error.
+            vals = [v for v, _ in label_sources]
+            if not all(v is vals[0] for v in vals[1:]):
+                names = [n for _, n in label_sources]
+                raise ValueError(
+                    f"Provide at most one of y / labels / node_labels. "
+                    f"Got multiple: {names}."
+                )
+        if label_sources:
+            node_labels = label_sources[0][0]
+
+        # graph_features → graph_label
+        if graph_features is not None:
+            if graph_label is not None and graph_features is not graph_label:
+                raise ValueError(
+                    "Provide graph_label or graph_features, not both. "
+                    "They are aliases for the same field."
+                )
+            graph_label = graph_features
         # --- node_features ---
         if not isinstance(node_features, torch.Tensor):
             raise TypeError(
@@ -172,6 +228,29 @@ class Graph:
                 f"metadata must be a dict or None, got {type(metadata).__name__}"
             )
 
+        # Store masks inside metadata so they travel with the graph.
+        if train_mask is not None or val_mask is not None or test_mask is not None:
+            metadata = dict(metadata) if metadata else {}
+            masks: Dict[str, torch.Tensor] = {}
+            for mask_tensor, mask_name in [
+                (train_mask, "train"),
+                (val_mask, "val"),
+                (test_mask, "test"),
+            ]:
+                if mask_tensor is not None:
+                    if not isinstance(mask_tensor, torch.Tensor):
+                        raise TypeError(
+                            f"{mask_name}_mask must be a torch.Tensor or None, "
+                            f"got {type(mask_tensor).__name__}"
+                        )
+                    if mask_tensor.size(0) != num_nodes:
+                        raise ValueError(
+                            f"{mask_name}_mask has {mask_tensor.size(0)} entries "
+                            f"but graph has {num_nodes} nodes."
+                        )
+                    masks[mask_name] = mask_tensor.to(device)
+            metadata["masks"] = masks
+
         self.node_features = node_features
         self.edge_index = edge_index
         self.edge_weight = edge_weight
@@ -220,6 +299,116 @@ class Graph:
     @property
     def dtype(self) -> torch.dtype:
         return self.node_features.dtype
+
+    # ----- PyG-compatible aliases ---------------------------------------- #
+
+    @property
+    def x(self) -> torch.Tensor:
+        """Alias for ``node_features`` (PyG/DGL style)."""
+        return self.node_features
+
+    @x.setter
+    def x(self, value: torch.Tensor) -> None:
+        self.node_features = value
+
+    @property
+    def y(self) -> Optional[torch.Tensor]:
+        """Alias for ``node_labels`` (PyG/DGL style)."""
+        return self.node_labels
+
+    @y.setter
+    def y(self, value: Optional[torch.Tensor]) -> None:
+        self.node_labels = value
+
+    @property
+    def labels(self) -> Optional[torch.Tensor]:
+        """Alias for ``node_labels``."""
+        return self.node_labels
+
+    @labels.setter
+    def labels(self, value: Optional[torch.Tensor]) -> None:
+        self.node_labels = value
+
+    @property
+    def edge_attr(self) -> Optional[torch.Tensor]:
+        """Alias for ``edge_features`` (PyG/DGL style)."""
+        return self.edge_features
+
+    @edge_attr.setter
+    def edge_attr(self, value: Optional[torch.Tensor]) -> None:
+        self.edge_features = value
+
+    @property
+    def num_node_features(self) -> int:
+        """Total number of scalar node features (product of per-node tensor dims)."""
+        shape = self.node_features.shape[1:]
+        result = 1
+        for s in shape:
+            result *= s
+        return result
+
+    @property
+    def num_classes(self) -> Optional[int]:
+        """Inferred number of classes from integer ``node_labels``, or ``None``."""
+        if self.node_labels is None:
+            return None
+        if not (self.node_labels.dtype in (torch.long, torch.int, torch.int8, torch.int16, torch.int32)):
+            return None
+        if self.node_labels.dim() != 1:
+            return None
+        return int(self.node_labels.max().item()) + 1
+
+    @property
+    def train_mask(self) -> Optional[torch.Tensor]:
+        """Training mask stored in ``metadata['masks']['train']``."""
+        if isinstance(self.metadata, dict):
+            return self.metadata.get("masks", {}).get("train")
+        return None
+
+    @property
+    def val_mask(self) -> Optional[torch.Tensor]:
+        """Validation mask stored in ``metadata['masks']['val']``."""
+        if isinstance(self.metadata, dict):
+            return self.metadata.get("masks", {}).get("val")
+        return None
+
+    @property
+    def test_mask(self) -> Optional[torch.Tensor]:
+        """Test mask stored in ``metadata['masks']['test']``."""
+        if isinstance(self.metadata, dict):
+            return self.metadata.get("masks", {}).get("test")
+        return None
+
+    # ----- label helpers ------------------------------------------------- #
+
+    def has_labels(self) -> bool:
+        """Return ``True`` if this graph has per-node labels (``node_labels`` / ``y``)."""
+        return self.node_labels is not None
+
+    def get_labels(self) -> torch.Tensor:
+        """Return ``node_labels``, raising a helpful error if absent.
+
+        Raises:
+            ValueError: If ``node_labels`` is ``None``.  The error message
+                tells the user how to add labels.
+        """
+        if self.node_labels is None:
+            raise ValueError(
+                "Graph labels are missing.  Create the graph with "
+                "Graph(..., y=labels) or assign graph.y = labels.\n"
+                "See docs/graph_basics.md#labels for more information."
+            )
+        return self.node_labels
+
+    def with_labels(self, labels: torch.Tensor) -> "Graph":
+        """Return a shallow copy with ``node_labels`` set to ``labels``.
+
+        The original graph is not modified.
+        """
+        import copy as _copy
+        g = _copy.copy(self)
+        g.node_labels = labels
+        return g
 
     # ----- copy / device / dtype ----------------------------------------- #
 
@@ -387,18 +576,19 @@ class Graph:
         parts = [
             f"num_nodes={self.num_nodes}",
             f"num_edges={self.num_edges}",
-            f"feature_shape={self.feature_shape}",
+            f"node_features_shape={tuple(self.node_features.shape)}",
         ]
         if self.has_edge_weight:
             parts.append("edge_weight=True")
         if self.has_edge_features:
             parts.append(f"edge_feature_shape={self.edge_feature_shape}")
         if self.node_labels is not None:
-            parts.append("node_labels=True")
+            parts.append(f"y_shape={tuple(self.node_labels.shape)}")
         if self.edge_labels is not None:
             parts.append("edge_labels=True")
         if self.graph_label is not None:
             parts.append("graph_label=True")
+        parts.append(f"device={self.device}")
         return f"Graph({', '.join(parts)})"
 
 

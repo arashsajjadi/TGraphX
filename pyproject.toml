@@ -92,6 +92,8 @@ tgraphx-dashboard = "tgraphx.dashboard.app:main"
 tgraphx-train = "tgraphx.experiments.cli:train_main"
 tgraphx-grid = "tgraphx.experiments.cli:grid_main"
 tgraphx-report = "tgraphx.experiments.cli:report_main"
+tgraphx-doctor = "tgraphx.__main__:main"
+tgraphx-info = "tgraphx.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/arashsajjadi/TGraphX"

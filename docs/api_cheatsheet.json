@@ -1,0 +1,136 @@
+{
+  "version": "1.0.1",
+  "tasks": [
+    "node_classification",
+    "graph_classification",
+    "link_prediction",
+    "node_regression",
+    "graph_regression",
+    "knowledge_graph_completion",
+    "graph_generation",
+    "evolutionary_optimization",
+    "graph_rl",
+    "graph_mining"
+  ],
+  "models": {
+    "node_classification": [
+      "tensor_gcn",
+      "vector_gcn",
+      "tensor_sage",
+      "auto"
+    ],
+    "graph_classification": [
+      "tensor_gcn_pool",
+      "vector_gcn_pool",
+      "auto"
+    ],
+    "link_prediction": [
+      "dot_product",
+      "bilinear"
+    ],
+    "knowledge_graph": [
+      "TransE",
+      "DistMult",
+      "ComplEx",
+      "RotatE"
+    ]
+  },
+  "samplers": [
+    "neighbor",
+    "full",
+    "graphsaint_node",
+    "graphsaint_edge",
+    "graphsaint_rw",
+    "cluster"
+  ],
+  "graph_rl_algorithms": [
+    "random",
+    "greedy",
+    "reinforce",
+    "actor_critic",
+    "a2c",
+    "dqn",
+    "double_dqn",
+    "dueling_dqn",
+    "ppo",
+    "ddpg",
+    "delayed_ddpg",
+    "td3",
+    "sac"
+  ],
+  "graph_rl_environments": [
+    "navigation",
+    "coloring",
+    "max_cut",
+    "vertex_cover",
+    "generation",
+    "kg_reasoning",
+    "shortest_path",
+    "continuous_navigation",
+    "continuous_graph_edit"
+  ],
+  "graph_generation_methods": [
+    "er",
+    "ba",
+    "vgae",
+    "autoregressive",
+    "transformer"
+  ],
+  "evolutionary_optimizers": [
+    "genetic",
+    "simulated_annealing",
+    "nsga2",
+    "hill_climbing",
+    "random_search"
+  ],
+  "graph_constructor": {
+    "required": ["node_features"],
+    "optional_positional": ["edge_index", "edge_weight", "edge_features", "node_labels", "edge_labels", "graph_label", "metadata"],
+    "optional_keyword_only": ["y", "labels", "edge_attr", "graph_features", "train_mask", "val_mask", "test_mask"],
+    "aliases": {
+      "y": "node_labels",
+      "labels": "node_labels",
+      "edge_attr": "edge_features",
+      "graph_features": "graph_label"
+    }
+  },
+  "graph_mini_batch": {
+    "attributes": ["node_features", "x", "edge_index", "edge_features", "edge_attr", "edge_weight", "y", "labels", "seed_y", "seed_labels", "seed_node_ids", "seed_local_indices", "input_nodes", "batch_size", "num_nodes", "num_edges", "metadata"],
+    "methods": ["seed_logits", "all_logits", "loss", "to", "as_tuple"]
+  },
+  "easy_mode": {
+    "data_creation": [
+      "synthetic_tensor_node_classification",
+      "synthetic_vector_node_classification",
+      "synthetic_link_prediction",
+      "synthetic_graph_classification"
+    ],
+    "training": [
+      "train_node_classifier",
+      "fit_node_classifier"
+    ],
+    "discovery": [
+      "list_tasks",
+      "list_models",
+      "list_samplers",
+      "list_workflows",
+      "explain_workflow"
+    ],
+    "diagnostics": [
+      "doctor",
+      "check_install",
+      "show_capabilities"
+    ],
+    "result_fields": ["metrics", "history", "model", "graph", "config", "artifacts", "loader", "optimizer", "elapsed"],
+    "result_methods": ["summary", "print_summary", "to_dict", "to_json", "to_markdown", "plot_loss", "plot_metrics", "save_report"]
+  },
+  "imports": {
+    "node_classification": "from tgraphx import Graph, ConvMessagePassing, NeighborLoader, GraphMiniBatch",
+    "easy_mode": "import tgraphx as tgx; tgx.easy.train_node_classifier(...)",
+    "kg": "from tgraphx.kg import KnowledgeGraph, TransEModel, KGTrainer",
+    "generation": "from tgraphx import run_graph_generation, list_graph_generation_methods",
+    "rl": "from tgraphx import run_graph_rl, list_graph_rl_algorithms",
+    "mining": "from tgraphx.mining import analyze_graph",
+    "reproducibility": "from tgraphx.reproducibility import set_seed"
+  }
+}

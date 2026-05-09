@@ -70,6 +70,19 @@ from .reports import (
     write_kg_multimodal_feature_report,
 )
 
+_KG_MODELS: dict = {
+    "TransE": "Translation-based embedding (Bordes et al., 2013).",
+    "DistMult": "Diagonal bilinear scoring (Yang et al., 2015).",
+    "ComplEx": "Complex-valued embeddings (Trouillon et al., 2016).",
+    "RotatE": "Rotation-based relational embedding (Sun et al., 2019).",
+}
+
+
+def list_kg_models() -> dict:
+    """Return available KG embedding model names and descriptions."""
+    return dict(_KG_MODELS)
+
+
 __all__ = [
     # Data model
     "KnowledgeGraph",
@@ -118,6 +131,8 @@ __all__ = [
     "AcademicKG",
     "MultimodalKG",
     "generate_synthetic_kg",
+    # Discovery
+    "list_kg_models",
     # Reports
     "write_kg_summary",
     "write_kg_evaluation_report",

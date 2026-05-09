@@ -111,6 +111,12 @@ FAST_EXAMPLES = [
     ("graph_td3_sac_demo.py",                 "TD3/SAC continuous graph RL",                None),
     ("generation_rl_high_level_api_demo.py",  "High-level API: generation + evolution + RL",None),
     ("graph_lstm_sequence_demo.py",           "GraphRNN sequence model",                    None),
+    # v1.0.1 — UX / easy mode examples
+    ("tensor_node_classification_neighbor_loader_demo.py", "GraphMiniBatch + seed_logits demo", None),
+    ("easy_tensor_node_classification_no_torch.py", "Easy mode no-torch import demo",      None),
+    ("easy_graph_generation_no_torch.py",     "Easy graph generation demo",                None),
+    ("easy_graph_rl_no_torch.py",             "Easy graph RL demo",                        None),
+    ("easy_kg_training_no_torch.py",          "Easy KG training demo",                     None),
 ]
 
 

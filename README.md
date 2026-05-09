@@ -53,6 +53,52 @@ pip install tgraphx
 
 ---
 
+## Easy mode — start without boilerplate
+
+For beginners, Colab users, and LLM-generated code, the `tgraphx.easy` namespace
+provides zero-boilerplate workflows:
+
+```python
+import tgraphx as tgx
+
+data = tgx.easy.synthetic_tensor_node_classification(
+    num_nodes=1000, node_shape=(16, 8, 8), num_classes=10, seed=42,
+)
+result = tgx.easy.train_node_classifier(
+    data, model="tensor_gcn", sampler="neighbor", epochs=5, seed=42,
+)
+print(result.metrics)
+result.summary()
+```
+
+Advanced users can always drop down to PyTorch: `result.model`, `result.graph`,
+`result.loader`, `result.optimizer` are all standard PyTorch objects.
+
+→ [docs/easy_mode.md](docs/easy_mode.md) · [docs/llm_usage_guide.md](docs/llm_usage_guide.md) · [examples/easy_tensor_node_classification_no_torch.py](examples/easy_tensor_node_classification_no_torch.py)
+
+---
+
+## If you want to...
+
+| Goal | Use this | Minimal example | Tutorial |
+|------|----------|-----------------|---------|
+| Train on image-like node tensors | `Graph + ConvMessagePassing + NeighborLoader` | [below](#train-a-gnn) | [tensor_node_classification_neighbor_loader.py](tutorials/tensor_node_classification_neighbor_loader.py) |
+| Train on vector node features | `Graph + GCNConv` | [below](#train-a-gnn) | [01_vector_node_classification.py](examples/01_vector_node_classification.py) |
+| Zero-boilerplate training | `tgx.easy.train_node_classifier(...)` | [easy mode](#easy-mode--start-without-boilerplate) | [easy_mode.md](docs/easy_mode.md) |
+| Sample large graphs | `NeighborLoader / GraphSAINT / Cluster-GCN` | [below](#scalable-mini-batch-training) | [docs/graphsaint.md](docs/graphsaint.md) |
+| Mine graph structure | `analyze_graph / graph_summary` | [below](#analyse-a-graph) | [docs/graph_mining.md](docs/graph_mining.md) |
+| Train a KG model | `KGTrainer + TransEModel` | [below](#knowledge-graph-learning) | [docs/knowledge_graphs.md](docs/knowledge_graphs.md) |
+| Build multimodal KG | `KnowledgeGraph(entity_features=...)` | [example](examples/kg_multimodal_tensor_features_demo.py) | [docs/kg_multimodal_tensor_features.md](docs/kg_multimodal_tensor_features.md) |
+| Generate graphs | `run_graph_generation(method=...)` | [below](#one-liner-graph-generation) | [tutorials/graph_generation_quickstart.py](tutorials/graph_generation_quickstart.py) |
+| Optimize graphs | `run_evolutionary_optimization(...)` | [below](#graph-generation-and-evolutionary-optimization) | [tutorials/evolutionary_optimization_quickstart.py](tutorials/evolutionary_optimization_quickstart.py) |
+| Run graph RL | `run_graph_rl(algorithm=..., env=...)` | [below](#one-liner-graph-rl) | [tutorials/graph_rl_quickstart.py](tutorials/graph_rl_quickstart.py) |
+| Open dashboard | `tgraphx-dashboard` | [docs/dashboard.md](docs/dashboard.md) | — |
+| Check installation | `python -m tgraphx doctor` | — | — |
+| Discover capabilities | `tgx.easy.list_tasks()` | — | [docs/easy_mode.md](docs/easy_mode.md) |
+| LLM code generation | Follow the contract in the guide | — | [docs/llm_usage_guide.md](docs/llm_usage_guide.md) |
+
+---
+
 ## 60-second quickstart
 
 **Vector node features:**
@@ -140,16 +186,23 @@ summary = graph_summary(graph.edge_index, num_nodes=graph.num_nodes)
 ### Train a GNN
 
 ```python
+import torch.nn.functional as F
+from tgraphx import Graph, NeighborLoader
 from tgraphx.reproducibility import set_seed
-from tgraphx.loaders import NeighborLoader
 
 set_seed(42)
-loader = NeighborLoader(graph, fanouts=[15, 10], batch_size=64, seed=42)
-for sub, seeds in loader:
-    logits = model(sub.node_features, sub.edge_index)
+g = Graph(node_features=x, edge_index=edge_index, y=y)  # y= for labels
+loader = NeighborLoader(g, fanouts=[15, 10], batch_size=64, seed=42)
+
+for batch in loader:
+    logits = model(batch.node_features, batch.edge_index)
+    # batch.seed_logits() extracts logits for supervision nodes only.
+    # batch.seed_y returns labels for those same nodes.
+    loss = F.cross_entropy(batch.seed_logits(logits), batch.seed_y)
+    loss.backward()
 ```
 
-→ [docs/vector_gnn.md](docs/vector_gnn.md)
+→ [docs/neighbor_loader.md](docs/neighbor_loader.md) · [docs/vector_gnn.md](docs/vector_gnn.md)
 
 ### Scalable mini-batch training
 
@@ -167,13 +220,14 @@ for sub in GraphSAINTLoader(sampler, attach_norm=True):
 
 ```python
 import torch
-from tgraphx.mining import KnowledgeGraph, TransE
+from tgraphx.kg import KnowledgeGraph, TransEModel, KGTrainer, KGTrainingConfig
 
-heads = torch.tensor([0, 1, 2])
-relations = torch.tensor([0, 0, 1])
-tails = torch.tensor([1, 2, 0])
-kg = KnowledgeGraph(heads, relations, tails, num_entities=3, num_relations=2)
-model = TransE(num_entities=kg.num_entities, num_relations=kg.num_relations)
+triples = torch.tensor([[0, 0, 1], [1, 0, 2], [2, 1, 0]], dtype=torch.long)
+kg = KnowledgeGraph(triples, num_entities=3, num_relations=2)
+model = TransEModel(num_entities=kg.num_entities, num_relations=kg.num_relations, embedding_dim=32)
+config = KGTrainingConfig(epochs=10, lr=1e-3, seed=42)
+trainer = KGTrainer(model, kg, config=config)
+trainer.train()
 ```
 
 → [examples/knowledge_graph_demo.py](examples/knowledge_graph_demo.py)
