@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "0.4.4"
+__version__ = "0.5.0"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -132,6 +132,10 @@ from .sampling_negative import (
     batched_negative_sampling,
     hard_negative_sampling,
 )
+
+# ── KG subsystem (v0.6.0) — imported lazily from tgraphx.kg ─────────────────
+# tgraphx.kg is available as `from tgraphx.kg import KnowledgeGraph, ...`
+# It is NOT re-exported at the top level to avoid heavy namespace pollution.
 
 # ── Production-scale loaders + feature store (v0.5.0 Beta) ───────────────────
 from .loaders import (
