@@ -1,26 +1,35 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/arashsajjadi/TGraphX/main/TGRAPHX.png" alt="TGraphX logo" width="220">
+  <img src="TGRAPHX.png" alt="TGraphX logo" width="220">
 </p>
 
-# TGraphX
+<h1 align="center">TGraphX</h1>
 
-[![Tests](https://github.com/arashsajjadi/TGraphX/actions/workflows/tests.yml/badge.svg)](https://github.com/arashsajjadi/TGraphX/actions/workflows/tests.yml)
-[![PyPI version](https://img.shields.io/pypi/v/tgraphx.svg)](https://pypi.org/project/tgraphx/)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![PyTorch 1.13+](https://img.shields.io/badge/pytorch-1.13%2B-orange.svg)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<p align="center">
+  <strong>Tensor-native graph learning, mining, knowledge graphs, generation, evolutionary optimization, reinforcement learning, and dashboard-ready research workflows — in PyTorch.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/arashsajjadi/TGraphX/actions/workflows/tests.yml"><img src="https://github.com/arashsajjadi/TGraphX/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="https://pypi.org/project/tgraphx/"><img src="https://img.shields.io/pypi/v/tgraphx.svg" alt="PyPI version"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
+  <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/pytorch-1.13%2B-orange.svg" alt="PyTorch 1.13+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  Tensor-aware GNNs &nbsp;·&nbsp; Graph Mining &nbsp;·&nbsp; Knowledge Graphs &nbsp;·&nbsp; Graph Generation &nbsp;·&nbsp;
+  Evolutionary Optimization &nbsp;·&nbsp; Graph RL &nbsp;·&nbsp; Dashboard &nbsp;·&nbsp; Easy Mode &nbsp;·&nbsp; Benchmarks &nbsp;·&nbsp; Tutorials
+</p>
+
+---
 
 **Preprint:** [TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning](https://arxiv.org/abs/2504.03953) · *Sajjadi & Eramian, arXiv 2025*
-
-Developed by **Arash Sajjadi**, PhD Candidate in Computer Science, University of Saskatchewan. Academic supervision: **Mark Eramian**.
 
 TGraphX is a **tensor-native graph intelligence framework** for research workflows that combine graph learning, graph mining, knowledge graphs, graph generation, evolutionary optimization, graph reinforcement learning, reproducibility, and dashboard-ready reporting — all in PyTorch, with no mandatory external dependencies.
 
 It preserves **multi-dimensional node/edge features** (`[C, H, W]`, `[C, D, H, W]`, `[D]`) through every message-passing step, supports scalable mini-batch samplers (GraphSAINT, Cluster-GCN), multimodal tensor-aware knowledge graphs, 13 graph RL algorithms, classical and neural graph generation, multi-objective evolutionary optimization, a local dashboard with offline HTML export, sklearn-like estimators, and a full benchmark + tutorial suite.
 
-> *Tensor-native graph learning · mining · generation · optimization · reinforcement learning · dashboard — in one research-focused package.*
-
-**[Graph algorithms](docs/graph_algorithms.md)** · **[Graph mining](docs/graph_mining.md)** · **[Tensor GNNs](docs/vector_gnn.md)** · **[Sampling](docs/graphsaint.md)** · **[FeatureStore](docs/feature_store.md)** · **[Sparse](docs/backends.md)** · **[Node2Vec/VGAE](examples/vgae_link_prediction_demo.py)** · **[Hetero](docs/hetero_gnns.md)** · **[Temporal](docs/temporal_graph_learning.md)** · **[KG](docs/knowledge_graphs.md)** · **[Dashboard](docs/dashboard.md)** · **[Reproducibility](docs/reproducibility.md)** · **[sklearn API](docs/sklearn_api.md)**
+**Quick links:** [Graph algorithms](docs/graph_algorithms.md) · [Graph mining](docs/graph_mining.md) · [Tensor GNNs](docs/vector_gnn.md) · [Sampling](docs/graphsaint.md) · [FeatureStore](docs/feature_store.md) · [KG](docs/knowledge_graphs.md) · [Dashboard](docs/dashboard.md) · [Easy Mode](docs/easy_mode.md) · [LLM guide](docs/llm_usage_guide.md)
 
 ---
 
@@ -140,17 +149,20 @@ A Colab tutorial walks through every workflow:
 
 | Area | Capabilities | Stability | Start here |
 |------|-------------|-----------|------------|
-| **Tensor-aware graphs** | vector / image / volume node features, edge features, graph metadata | Beta | [docs/graph_basics.md](docs/graph_basics.md) |
+| **Tensor-aware graphs** | vector / image / volume node features, edge features, graph metadata, PyG-compatible `.x`/`.y`/`.edge_attr` aliases | Beta | [docs/graph_basics.md](docs/graph_basics.md) |
 | **Graph algorithms** | BFS/DFS, shortest paths, MST, max-flow, matching, coloring | Beta | [examples/graph_paths_algorithms_demo.py](examples/graph_paths_algorithms_demo.py) |
 | **Graph mining** | motifs, centrality, spectral analysis, WL features, similarity | Beta | [docs/graph_mining.md](docs/graph_mining.md) |
 | **GNN layers** | GCN/SAGE/GAT/GIN/GATv2/APPNP vector layers; tensor GAT/SAGE/GIN/ConvMP | Beta | [docs/vector_gnn.md](docs/vector_gnn.md) |
-| **Sampling & loaders** | NeighborLoader, LinkNeighborLoader, GraphLoader, GraphSAINT, Cluster-GCN | Beta | [docs/graphsaint.md](docs/graphsaint.md) |
+| **Sampling & loaders** | `NeighborLoader` → `GraphMiniBatch` (seed-node aware), `LinkNeighborLoader`, `GraphLoader`, GraphSAINT, Cluster-GCN | Beta | [docs/neighbor_loader.md](docs/neighbor_loader.md) |
 | **Feature store** | In-memory & memmap tensor feature storage; NeighborLoader integration | Beta | [docs/feature_store.md](docs/feature_store.md) |
 | **Sparse backend** | CSR/CSC, coalesce, segment ops, optional torch_scatter acceleration | Beta | [docs/backends.md](docs/backends.md) |
-| **Knowledge graphs** | triples, TransE/DistMult/ComplEx/RotatE, filtered ranking, KG+RGCN, multimodal entity features (image/user/text), temporal KG, reasoning | Beta/Experimental | [docs/knowledge_graphs.md](docs/knowledge_graphs.md) |
-| **Graph generation** | classical generators with tensor features, VGAE generation, autoregressive generation, generation metrics (validity/uniqueness/novelty/diversity/MMD) | Experimental | [docs/graph_generation.md](docs/graph_generation.md) |
-| **Evolutionary optimization** | genetic algorithm, simulated annealing, NSGA-II multi-objective, mutation/crossover/selection | Experimental | [docs/evolutionary_graph_optimization.md](docs/evolutionary_graph_optimization.md) |
-| **Graph reinforcement learning** | RL environments (navigation/coloring/max-cut/generation/KG), policy/value/Q networks, REINFORCE/A2C/DQN/PPO | Experimental | [docs/graph_reinforcement_learning.md](docs/graph_reinforcement_learning.md) |
+| **Knowledge graphs** | triples, TransE/DistMult/ComplEx/RotatE, filtered ranking, KG+RGCN, multimodal entity features, temporal KG, reasoning | Beta | [docs/knowledge_graphs.md](docs/knowledge_graphs.md) |
+| **Classical graph generation** | ER/BA/SBM/temporal/typed generators, generation metrics (validity/uniqueness/novelty/diversity/MMD) | Beta | [docs/graph_generation.md](docs/graph_generation.md) |
+| **Neural graph generation** | VGAE generation, autoregressive generation, transformer generation | Experimental | [docs/neural_graph_generation.md](docs/neural_graph_generation.md) |
+| **Evolutionary optimization** | genetic algorithm, simulated annealing, NSGA-II multi-objective, mutation/crossover/selection | Beta | [docs/evolutionary_graph_optimization.md](docs/evolutionary_graph_optimization.md) |
+| **Graph reinforcement learning** | RL environments, policy/Q/value networks, 13 algorithms (REINFORCE/A2C/DQN/PPO/TD3/SAC/…) | Experimental | [docs/graph_reinforcement_learning.md](docs/graph_reinforcement_learning.md) |
+| **RL baselines** | Random, Greedy — environment-agnostic no-learn baselines | Beta | [docs/graph_rl_algorithms.md](docs/graph_rl_algorithms.md) |
+| **Easy Mode** | `tgraphx.easy` — zero-boilerplate workflows, discovery, diagnostics, EasyResult | Beta | [docs/easy_mode.md](docs/easy_mode.md) |
 | **Hypergraphs** | incidence matrix, clique/star expansion | Experimental | [examples/graph_algorithms_advanced_demo.py](examples/graph_algorithms_advanced_demo.py) |
 | **Heterogeneous graphs** | RGCN, HAN, HGT; typed neighbor sampling | Experimental | [docs/hetero_gnns.md](docs/hetero_gnns.md) |
 | **Temporal graphs** | TGNMemory, TGATConv, time encoding, temporal splits | Experimental | [docs/temporal_graph_learning.md](docs/temporal_graph_learning.md) |
@@ -225,8 +237,8 @@ from tgraphx.kg import KnowledgeGraph, TransEModel, KGTrainer, KGTrainingConfig
 triples = torch.tensor([[0, 0, 1], [1, 0, 2], [2, 1, 0]], dtype=torch.long)
 kg = KnowledgeGraph(triples, num_entities=3, num_relations=2)
 model = TransEModel(num_entities=kg.num_entities, num_relations=kg.num_relations, embedding_dim=32)
-config = KGTrainingConfig(epochs=10, lr=1e-3, seed=42)
-trainer = KGTrainer(model, kg, config=config)
+config = KGTrainingConfig(num_epochs=10, lr=1e-3, seed=42)
+trainer = KGTrainer(model, config, kg.triples)
 trainer.train()
 ```
 
@@ -377,9 +389,12 @@ write_graph_mining_summary("logs/graph_mining_summary.json", summary)
 
 | Label | Meaning |
 |-------|---------|
-| **Beta** | Tested, documented; API stable within the v1.x series |
+| **Stable** | Public API will not change in v1.x; backward compatibility guaranteed |
+| **Beta** | Tested and documented; API stable within the v1.x series; may expand |
 | **Experimental** | Correct foundations; API or semantics may evolve in future minor releases |
 | **Optional** | Requires an optional dependency or explicit `--download` |
+
+See [docs/api_stability.md](docs/api_stability.md) for the detailed per-component stability contract.
 
 ---
 
@@ -679,7 +694,7 @@ python examples/distributed_smoke.py --world-size 2 --subprocess-pair  # DDP smo
 
 ### All fast examples
 ```bash
-python examples/run_all_fast_examples.py            # runs 60+ demos in sequence
+python examples/run_all_fast_examples.py            # runs 75+ demos in sequence
 ```
 
 ### Validation scripts
@@ -703,7 +718,7 @@ exact invocations and policy.
 
 ## Maturity and scope
 
-TGraphX is an actively developing pre-1.0 research framework. It already includes tested foundations across tensor-aware GNNs, graph algorithms, graph mining, scalable sampling, sparse utilities, feature stores, dashboard reporting, knowledge graphs, hypergraphs, temporal graphs, heterogeneous GNNs, sklearn-style workflows, calibration, benchmarks, and reproducibility tooling. Newer systems are labeled Beta or Experimental until broader benchmark and real-dataset validation is completed.
+TGraphX v1.0 is a validated research framework with tested foundations across tensor-aware GNNs, graph algorithms, graph mining, scalable sampling, sparse utilities, feature stores, dashboard reporting, knowledge graphs, hypergraphs, temporal graphs, heterogeneous GNNs, sklearn-style workflows, calibration, benchmarks, and reproducibility tooling. Components are labeled Beta or Experimental based on evidence — see [docs/api_stability.md](docs/api_stability.md) for the full contract.
 
 Current maturity boundaries:
 
@@ -738,8 +753,15 @@ Detailed limitations: [docs/limitations.md](docs/limitations.md) · Roadmap: [do
 
 ## Authorship
 
+<p>
+  <img src="USASKCSlogo.png" alt="University of Saskatchewan, Department of Computer Science" width="200" align="right">
+</p>
+
 **Software author and maintainer:** Arash Sajjadi, PhD Candidate in Computer Science, University of Saskatchewan ([arash.sajjadi@usask.ca](mailto:arash.sajjadi@usask.ca)).
+
 **Academic supervision:** Mark Eramian, PhD supervisor / academic advisor, University of Saskatchewan.
+
+Developed as part of doctoral research in the Department of Computer Science at the University of Saskatchewan. TGraphX is an independent research software project; it does not represent an official product or endorsement of the University of Saskatchewan.
 
 ---
 
