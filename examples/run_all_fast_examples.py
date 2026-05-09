@@ -93,6 +93,10 @@ FAST_EXAMPLES = [
     # v0.4.3 — paths, graph learning, sequence models
     ("graph_paths_algorithms_demo.py",      "BFS/DFS, Dijkstra, MST, cuts",              None),
     ("graph_learning_demo.py",              "Self-supervised learning, contrastive, DGI", None),
+    # v0.4.4 — advanced algorithms, KG, Node2Vec
+    ("graph_algorithms_advanced_demo.py",     "Max-flow, matching, coloring, hypergraph, IO", None),
+    ("knowledge_graph_demo.py",               "TransE/DistMult knowledge graph embeddings",  None),
+    ("node2vec_demo.py",                      "Node2Vec/DeepWalk unsupervised embeddings",   None),
 ]
 
 

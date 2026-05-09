@@ -280,6 +280,59 @@ from .sequence_models import (
     pad_sequences,
 )
 
+# ── Matching, coloring, clique, max-flow (Beta/Experimental) ─────────────────
+from .matching_coloring import (
+    greedy_maximal_matching,
+    bipartite_greedy_matching,
+    greedy_coloring,
+    welsh_powell_coloring,
+    greedy_maximal_independent_set,
+    enumerate_maximal_cliques,
+    edmonds_karp_max_flow,
+    min_cut_from_max_flow,
+    wl_isomorphism_test,
+    write_algorithm_report,
+)
+
+# ── Node2Vec / DeepWalk (Experimental) ───────────────────────────────────────
+from .node2vec import (
+    node2vec_walks,
+    deepwalk_walks,
+    generate_skipgram_pairs,
+    Node2VecEmbedding,
+    train_node2vec_step,
+    extract_node2vec_embeddings,
+)
+
+# ── Knowledge graphs (Experimental) ─────────────────────────────────────────
+from .knowledge_graph import (
+    KnowledgeGraph,
+    negative_triple_sampling,
+    filtered_ranking_metrics,
+    TransE,
+    DistMult,
+    train_kg_step,
+)
+
+# ── Hypergraphs (Experimental) ───────────────────────────────────────────────
+from .hypergraph import (
+    Hypergraph,
+    incidence_to_bipartite_graph,
+    clique_expansion,
+    star_expansion,
+    hypergraph_density,
+)
+
+# ── Graph IO (Beta) ───────────────────────────────────────────────────────────
+from .graph_io import (
+    read_edge_list_csv,
+    write_edge_list_csv,
+    read_graph_json,
+    write_graph_json,
+    save_graph_npz,
+    load_graph_npz,
+)
+
 # ── Neural mining (Experimental) ─────────────────────────────────────────────
 from .neural import (
     PrototypeMembershipScorer,

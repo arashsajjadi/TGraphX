@@ -5,6 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — v0.4.4 candidate
+
+### Added — Matching, coloring, clique enumeration, and max-flow (`tgraphx/mining/matching_coloring.py`) — Beta/Experimental
+
+- `greedy_maximal_matching` — greedy O(E) maximal matching
+- `bipartite_greedy_matching` — greedy matching for bipartite graphs
+- `greedy_coloring` / `welsh_powell_coloring` — valid graph coloring with largest-first ordering
+- `greedy_maximal_independent_set` — seed-controlled O(N+E) MIS
+- `enumerate_maximal_cliques` — Bron-Kerbosch with pivot (guarded at 50 nodes)
+- `edmonds_karp_max_flow` — BFS-based Ford-Fulkerson max-flow for small graphs (guarded at 500 nodes)
+- `min_cut_from_max_flow` — min-cut via max-flow min-cut theorem
+- `wl_isomorphism_test` — WL graph isomorphism heuristic (necessary but not sufficient)
+- `write_algorithm_report` — JSON dashboard artifact writer
+
+Tests: `tests/test_matching_coloring_flow.py` (21 tests).
+
+### Added — Node2Vec / DeepWalk unsupervised embeddings (`tgraphx/mining/node2vec.py`) — Experimental
+
+- `node2vec_walks` — biased random walks with return parameter p and in-out parameter q
+- `deepwalk_walks` — uniform walks (p=q=1 special case)
+- `generate_skipgram_pairs` — (center, context, negative) pairs from walks
+- `Node2VecEmbedding` — skip-gram embedding model with negative sampling
+- `train_node2vec_step` — one training step
+- `extract_node2vec_embeddings` — L2-normalised embedding extraction
+
+Validation: loss decreases on synthetic 2-community SBM graph; intra-community similarity (0.936) >> inter-community (-0.679).
+
+### Added — Knowledge graph foundation (`tgraphx/mining/knowledge_graph.py`) — Experimental
+
+- `KnowledgeGraph` — triple container with entity/relation ID mapping, positive lookup, random split
+- `negative_triple_sampling` — head/tail corruption with optional filtered negatives
+- `filtered_ranking_metrics` — filtered MRR / Hits@1/3/10 evaluator
+- `TransE` — margin-based scoring (Bordes et al., 2013)
+- `DistMult` — trilinear scoring with L2 regularization (Yang et al., 2015)
+- `train_kg_step` — one training step
+
+Tests: `tests/test_node2vec_kg_hypergraph.py` (35 tests) — ID mapping, loss decreases, gradient health, filtered metrics.
+
+### Added — Hypergraph foundation (`tgraphx/mining/hypergraph.py`) — Experimental
+
+- `Hypergraph` — incidence-list representation with hyperdegree, edge degree, density, summary
+- `incidence_to_bipartite_graph` — bipartite node-hyperedge graph conversion
+- `clique_expansion` — connect all members of each hyperedge
+- `star_expansion` — connect each member to a hyperedge node
+- `hypergraph_density` — fraction of active (node, hyperedge) pairs
+
+### Added — Graph IO (`tgraphx/mining/graph_io.py`) — Beta
+
+- `read_edge_list_csv` / `write_edge_list_csv` — CSV roundtrip with optional edge weights
+- `read_graph_json` / `write_graph_json` — atomic JSON graph format with schema versioning
+- `save_graph_npz` / `load_graph_npz` — compressed NumPy format with node features support
+
+All IO: atomic writes, path-safe, no unsafe pickle, clear errors for malformed input.
+
+### Added — Examples
+
+- `examples/graph_algorithms_advanced_demo.py` — max-flow, matching, coloring, hypergraph, IO
+- `examples/knowledge_graph_demo.py` — TransE + DistMult training demo
+- `examples/node2vec_demo.py` — Node2Vec walks + embedding training
+
+All added to `run_all_fast_examples.py`.
+
+**Total: 1992 tests pass (+56 new), 12 skipped, 0 warnings. 58 examples pass.**
+
+---
+
 ## [Unreleased] — v0.4.3 candidate
 
 ### Added — Graph path algorithms (`tgraphx/mining/paths.py`) — Beta
