@@ -753,10 +753,6 @@ Detailed limitations: [docs/limitations.md](docs/limitations.md) · Roadmap: [do
 
 ## Authorship
 
-<p>
-  <img src="USASKCSlogo.png" alt="University of Saskatchewan, Department of Computer Science" width="200" align="right">
-</p>
-
 **Software author and maintainer:** Arash Sajjadi, PhD Candidate in Computer Science, University of Saskatchewan ([arash.sajjadi@usask.ca](mailto:arash.sajjadi@usask.ca)).
 
 **Academic supervision:** Mark Eramian, PhD supervisor / academic advisor, University of Saskatchewan.

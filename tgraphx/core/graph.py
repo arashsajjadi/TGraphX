@@ -98,8 +98,12 @@ class Graph:
             ``y`` and ``node_labels`` are provided they must be identical.
         labels (Tensor, optional): Alias for ``node_labels``.
         edge_labels (Tensor, optional): ``[E, ...]`` per-edge labels.
-        graph_label (Tensor, optional): a graph-level label tensor.
-        graph_features (Tensor, optional): Alias for ``graph_label``.
+        graph_label (Tensor, optional): graph-level **target label** tensor used for
+            graph classification / regression tasks.  Stored in ``self.graph_label``.
+        graph_features (Tensor, optional): graph-level **input feature** tensor (e.g.
+            a global context vector for the whole graph).  Stored in
+            ``self.graph_features``.  This is *distinct* from ``graph_label``; do not
+            confuse graph-level input features with graph-level target labels.
         train_mask (Tensor, optional): ``BoolTensor[N]`` training mask stored
             in ``metadata['masks']['train']``.
         val_mask (Tensor, optional): ``BoolTensor[N]`` validation mask.
@@ -161,14 +165,15 @@ class Graph:
         if label_sources:
             node_labels = label_sources[0][0]
 
-        # graph_features → graph_label
+        # graph_features is a separate graph-level INPUT feature field.
+        # It is stored in self.graph_features, NOT aliased to graph_label.
+        # graph_label stores the graph-level TARGET (for graph classification).
         if graph_features is not None:
-            if graph_label is not None and graph_features is not graph_label:
-                raise ValueError(
-                    "Provide graph_label or graph_features, not both. "
-                    "They are aliases for the same field."
+            if not isinstance(graph_features, torch.Tensor):
+                raise TypeError(
+                    f"graph_features must be a torch.Tensor or None, "
+                    f"got {type(graph_features).__name__}"
                 )
-            graph_label = graph_features
         # --- node_features ---
         if not isinstance(node_features, torch.Tensor):
             raise TypeError(
@@ -222,6 +227,13 @@ class Graph:
                     f"node_features device ({device})"
                 )
 
+        # --- graph_features device check ---
+        if graph_features is not None and graph_features.device != device:
+            raise ValueError(
+                f"graph_features device ({graph_features.device}) must match "
+                f"node_features device ({device})"
+            )
+
         # --- metadata ---
         if metadata is not None and not isinstance(metadata, dict):
             raise TypeError(
@@ -258,6 +270,7 @@ class Graph:
         self.node_labels = node_labels
         self.edge_labels = edge_labels
         self.graph_label = graph_label
+        self.graph_features = graph_features  # graph-level INPUT features (not the label)
         self.metadata = metadata
 
     # ----- properties ----------------------------------------------------- #
@@ -414,7 +427,7 @@ class Graph:
 
     def clone(self) -> "Graph":
         """Deep-copy: every tensor is cloned and metadata is deep-copied."""
-        return Graph(
+        g = Graph(
             node_features=self.node_features.clone(),
             edge_index=self.edge_index.clone() if self.edge_index is not None else None,
             edge_weight=self.edge_weight.clone() if self.edge_weight is not None else None,
@@ -424,6 +437,9 @@ class Graph:
             graph_label=self.graph_label.clone() if self.graph_label is not None else None,
             metadata=copy.deepcopy(self.metadata) if self.metadata is not None else None,
         )
+        if self.graph_features is not None:
+            g.graph_features = self.graph_features.clone()
+        return g
 
     def to(
         self,
@@ -440,6 +456,7 @@ class Graph:
         self.node_labels = _move(self.node_labels, device=device, dtype=dtype, allow_dtype=False)
         self.edge_labels = _move(self.edge_labels, device=device, dtype=dtype, allow_dtype=False)
         self.graph_label = _move(self.graph_label, device=device, dtype=dtype, allow_dtype=False)
+        self.graph_features = _move(self.graph_features, device=device, dtype=dtype)
         return self
 
     def cpu(self) -> "Graph":
@@ -480,6 +497,11 @@ class Graph:
         if self.graph_label is not None and self.graph_label.device != device:
             raise ValueError(
                 f"graph_label device ({self.graph_label.device}) must match "
+                f"node_features device ({device})"
+            )
+        if self.graph_features is not None and self.graph_features.device != device:
+            raise ValueError(
+                f"graph_features device ({self.graph_features.device}) must match "
                 f"node_features device ({device})"
             )
         return self
@@ -588,6 +610,8 @@ class Graph:
             parts.append("edge_labels=True")
         if self.graph_label is not None:
             parts.append("graph_label=True")
+        if self.graph_features is not None:
+            parts.append(f"graph_features_shape={tuple(self.graph_features.shape)}")
         parts.append(f"device={self.device}")
         return f"Graph({', '.join(parts)})"
 

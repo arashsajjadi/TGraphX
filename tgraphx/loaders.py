@@ -62,6 +62,9 @@ def map_global_to_local(
 ) -> torch.Tensor:
     """Map ``global_ids`` to their local positions within ``sampled_global_ids``.
 
+    Uses a dense lookup table for small max-IDs and a ``searchsorted``-based
+    fallback for large / sparse global ID spaces to avoid allocating huge arrays.
+
     Args:
         global_ids: ``LongTensor[K]`` of global node IDs.
         sampled_global_ids: ``LongTensor[M]`` of global IDs of the sampled
@@ -74,17 +77,34 @@ def map_global_to_local(
         ValueError: If any ID in ``global_ids`` is not found in
             ``sampled_global_ids``.
     """
-    # Build a position lookup: global_id → local_index.
     device = sampled_global_ids.device
     global_ids = global_ids.to(device)
-    max_sampled = int(sampled_global_ids.max().item()) + 1
-    max_query = int(global_ids.max().item()) + 1
+
+    M = sampled_global_ids.size(0)
+    max_sampled = int(sampled_global_ids.max().item()) + 1 if M > 0 else 0
+    max_query = int(global_ids.max().item()) + 1 if global_ids.numel() > 0 else 0
     max_id = max(max_sampled, max_query)
-    lookup = torch.full((max_id,), -1, dtype=torch.long, device=device)
-    local_pos = torch.arange(sampled_global_ids.size(0), dtype=torch.long, device=device)
-    lookup[sampled_global_ids] = local_pos
-    local = lookup[global_ids]
-    missing = (local == -1).nonzero(as_tuple=False).view(-1)
+
+    # Dense path: O(max_id) memory — safe when IDs are compact.
+    # Threshold: 16 MB of Long (64-bit) ≈ 2M entries; above that use searchsorted.
+    _DENSE_THRESHOLD = 2_000_000
+    if max_id <= _DENSE_THRESHOLD:
+        lookup = torch.full((max_id,), -1, dtype=torch.long, device=device)
+        local_pos = torch.arange(M, dtype=torch.long, device=device)
+        lookup[sampled_global_ids] = local_pos
+        local = lookup[global_ids]
+        missing = (local == -1).nonzero(as_tuple=False).view(-1)
+    else:
+        # Sparse path: sort sampled IDs, use searchsorted, then re-map positions.
+        # Memory: O(M log M) time, O(M) memory — independent of max_id.
+        sorted_sampled, perm = sampled_global_ids.sort()
+        pos = torch.searchsorted(sorted_sampled, global_ids)
+        pos_clamped = pos.clamp(0, M - 1)
+        found = sorted_sampled[pos_clamped] == global_ids
+        # Map found positions back through perm to get original local indices.
+        local = torch.where(found, perm[pos_clamped], torch.full_like(pos_clamped, -1))
+        missing = (~found).nonzero(as_tuple=False).view(-1)
+
     if missing.numel() > 0:
         bad = global_ids[missing[:5]].tolist()
         raise ValueError(
