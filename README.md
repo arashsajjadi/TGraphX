@@ -171,6 +171,27 @@ model = TransE(num_entities=kg.num_entities, num_relations=kg.num_relations)
 
 → [examples/knowledge_graph_demo.py](examples/knowledge_graph_demo.py)
 
+### Multimodal tensor-aware knowledge graphs
+
+TGraphX KG can represent different entity types such as image nodes, user nodes, text/document nodes, item nodes, paper nodes, method nodes, and dataset nodes. Each entity type can carry its own tensor features, while relations and triples can also carry features such as weights, timestamps, confidence, or provenance.
+
+```
+image_001 --viewedBy--> user_123
+user_123  --wrote-->    text_doc_045
+text_doc_045 --describes--> image_001
+```
+
+- **Image entities** can carry image tensors or precomputed image embeddings through a lightweight modality-specific projector.
+- **User entities** can carry profile vectors or learned user embeddings.
+- **Text entities** should currently be provided as precomputed embeddings (e.g. from a sentence encoder); raw text tokenization is not built in.
+- **Modality masks** handle missing modalities gracefully, so heterogeneous graphs with partially observed features are supported.
+- **Modality-specific projectors** are differentiable: gradients flow through them and the model learns from these features, not only stores them.
+- Tested behaviour: image/user/text feature sensitivity is verified, gradients flow through all projectors, and a toy multimodal KG training loop shows loss decrease.
+
+This is not a full vision-language foundation model and makes no claim to SOTA. The image projector is intentionally lightweight. For an end-to-end demo and the API reference:
+
+→ [docs/kg_multimodal_tensor_features.md](docs/kg_multimodal_tensor_features.md) · [examples/kg_multimodal_tensor_features_demo.py](examples/kg_multimodal_tensor_features_demo.py)
+
 ### Temporal / heterogeneous graphs
 
 ```python
