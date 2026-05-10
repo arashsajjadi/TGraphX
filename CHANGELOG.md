@@ -5,6 +5,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.4] — 2026-05-10
+
+Comprehensive Colab-facing regression fix: mining API, benchmark portability, notebook hygiene.
+
+### Fixed
+- Added `motif_profile` as a public alias for `motif_counts` in `tgraphx.mining`
+  (notebook 20 ImportError).
+- Added `wl_subtree_kernel(edge_index_a, num_nodes_a, edge_index_b, num_nodes_b, h, ...)`
+  to both `tgraphx.mining` and `tgraphx.mining.kernels` (notebook 21 ImportError).
+- Added `centrality_summary(edge_index, num_nodes, ...)` to `tgraphx.mining`
+  (notebook 22 / structural-role ImportError).
+- Fixed exception slicing in draft notebook generator: `e[:120]` → `str(e)[:120]`
+  (TypeError when formatting ValueError).
+- Fixed NSGA-II notebook to use `objectives=[fn1, fn2]` list instead of
+  `composite_fitness` directly (composite_fitness requires an extra `components` arg).
+- Made `run_v13_benchmark_suite` available as a package-level function
+  (`from tgraphx.benchmarks import run_v13_benchmark_suite`) so it works
+  from a pip-installed package without the repository source tree.
+- Added `python -m tgraphx.benchmarks.run_v13_benchmark_suite` CLI entry point.
+- Removed `notebooks/` from git tracking; added to `.gitignore`.
+  Notebooks are now generated locally with `python tools/generate_notebooks.py`.
+  Updated `tests/test_notebooks_v130.py` to skip gracefully when notebooks/ is absent.
+- Updated `docs/colab_gallery.md` to remove references to tracked local notebooks
+  and direct users to the Google Drive links instead.
+
+### Added
+- `tgraphx.mining.motif_profile` — alias for `motif_counts`.
+- `tgraphx.mining.wl_subtree_kernel` — two-graph WL subtree kernel wrapper.
+- `tgraphx.mining.centrality_summary` — degree-based centrality summary.
+- `tgraphx.benchmarks.run_v13_benchmark_suite(small, device, seed, ...)` — package function.
+- `tgraphx/benchmarks/run_v13_benchmark_suite.py` — `python -m` CLI entry.
+- `tests/test_colab_regressions_v134.py` — 33 regression tests for all reported Colab bugs.
+
+### Documentation
+- Updated notebook gallery and README to reflect that notebooks/ is no longer tracked.
+- Colab gallery consolidated as the single source for notebook links.
+
+---
+
 ## [1.3.3] — 2026-05-10
 
 Easy Mode reproducibility improvement and expanded notebook gallery.

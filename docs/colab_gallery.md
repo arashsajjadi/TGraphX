@@ -77,23 +77,15 @@ tensor-native graph intelligence workflows.
 
 ---
 
-## Committed Notebooks (v1.3, in repository, locally runnable)
+## Generating Notebooks Locally
 
-These 7 notebooks ship with TGraphX and are validated:
+Notebook source files are **not** committed to this repository.
+Generate them locally with:
 
-| # | File | Scenario |
-|---|------|----------|
-| 01 | [notebooks/01_easy_tensor_node_classification.ipynb](../notebooks/01_easy_tensor_node_classification.ipynb) | Easy Mode tensor node classification |
-| 02 | [notebooks/02_image_patch_tensor_graph.ipynb](../notebooks/02_image_patch_tensor_graph.ipynb) | Image-patch graph, tensor-vs-flatten comparison |
-| 03 | [notebooks/03_kg_completion_rescal_simple_hpo.ipynb](../notebooks/03_kg_completion_rescal_simple_hpo.ipynb) | KG completion with RESCAL, TransE, SimplE + HPO |
-| 04 | [notebooks/04_graph_generation_and_optimization.ipynb](../notebooks/04_graph_generation_and_optimization.ipynb) | Graph generation + evolutionary optimization |
-| 05 | [notebooks/05_graph_rl_coloring_and_navigation.ipynb](../notebooks/05_graph_rl_coloring_and_navigation.ipynb) | Graph RL with callbacks |
-| 06 | [notebooks/06_graph_io_roundtrip.ipynb](../notebooks/06_graph_io_roundtrip.ipynb) | GraphML write/read round-trip |
-| 07 | [notebooks/07_benchmark_suite_and_dashboard.ipynb](../notebooks/07_benchmark_suite_and_dashboard.ipynb) | v1.3 benchmark suite and dashboard artifacts |
-
-Regenerate: `python tools/generate_notebooks.py`
-
----
+```bash
+python tools/generate_notebooks.py   # creates notebooks/ (gitignored)
+python tools/validate_notebooks.py   # validates structure
+```
 
 ## Tutorial Scripts (no Jupyter required)
 

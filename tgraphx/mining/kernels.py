@@ -283,3 +283,37 @@ def degree_histogram_features(
         if n > 0:
             feat[i] = feat[i] / float(n)
     return feat
+
+
+def wl_subtree_kernel(
+    edge_index_a,
+    num_nodes_a: int,
+    edge_index_b,
+    num_nodes_b: int,
+    h: int = 2,
+    node_labels_a=None,
+    node_labels_b=None,
+    normalize: bool = False,
+) -> float:
+    """WL subtree kernel between two graphs.
+
+    Thin wrapper around :func:`wl_kernel_matrix` for the common case of
+    comparing exactly two graphs.  See ``tgraphx.mining.wl_subtree_kernel``
+    for the full docstring.
+
+    Stability: Beta (v1.3.4+).
+    """
+    graphs = [
+        {"edge_index": edge_index_a, "num_nodes": num_nodes_a,
+         **({"node_labels": node_labels_a} if node_labels_a is not None else {})},
+        {"edge_index": edge_index_b, "num_nodes": num_nodes_b,
+         **({"node_labels": node_labels_b} if node_labels_b is not None else {})},
+    ]
+    K = wl_kernel_matrix(graphs, num_iterations=h, normalize=False)
+    k_ab = float(K[0, 1].item())
+    if normalize:
+        k_aa = float(K[0, 0].item())
+        k_bb = float(K[1, 1].item())
+        denom = (k_aa * k_bb) ** 0.5
+        return k_ab / denom if denom > 0.0 else 0.0
+    return k_ab

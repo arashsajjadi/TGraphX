@@ -1,6 +1,14 @@
-"""Notebook structural tests (v1.3).
+"""Notebook structural tests (v1.3 / v1.3.4+).
 
 Validates every notebook/*.ipynb without executing code.
+
+The notebooks/ folder is NOT tracked in git (it is gitignored as of v1.3.4).
+These tests skip gracefully when notebooks/ is absent so that CI remains
+green in the absence of locally generated notebooks.
+
+To run locally, first generate notebooks with::
+
+    python tools/generate_notebooks.py
 """
 from __future__ import annotations
 
@@ -11,26 +19,36 @@ from pathlib import Path
 import pytest
 
 NOTEBOOKS_DIR = Path("notebooks")
-NOTEBOOKS = sorted(NOTEBOOKS_DIR.glob("*.ipynb"))
+_NOTEBOOKS_PRESENT = NOTEBOOKS_DIR.exists() and bool(list(NOTEBOOKS_DIR.glob("*.ipynb")))
+NOTEBOOKS = sorted(NOTEBOOKS_DIR.glob("*.ipynb")) if NOTEBOOKS_DIR.exists() else []
 
 _PRIVATE_PATH_RE = re.compile(r"/home/[a-zA-Z0-9_]+|/Users/[a-zA-Z0-9_]+")
 _SECRET_RE = re.compile(r"(?i)(token\s*=|password\s*=|api_key\s*=)['\"]?\w{8,}")
 
+_skip_if_absent = pytest.mark.skipif(
+    not _NOTEBOOKS_PRESENT,
+    reason="notebooks/ not found locally; generate with: python tools/generate_notebooks.py",
+)
+
 
 @pytest.fixture(scope="module")
 def all_notebooks():
-    assert NOTEBOOKS_DIR.exists(), f"notebooks/ directory not found: {NOTEBOOKS_DIR}"
-    assert len(NOTEBOOKS) > 0, f"No .ipynb files in {NOTEBOOKS_DIR}"
+    if not _NOTEBOOKS_PRESENT:
+        pytest.skip("notebooks/ not found")
     return {nb.name: json.loads(nb.read_text(encoding="utf-8")) for nb in NOTEBOOKS}
 
 
 class TestNotebooksExist:
-    def test_notebooks_dir_exists(self):
+    def test_notebooks_dir_exists_or_skips(self):
+        if not _NOTEBOOKS_PRESENT:
+            pytest.skip("notebooks/ not found locally — OK in CI without local notebooks")
         assert NOTEBOOKS_DIR.exists()
 
+    @_skip_if_absent
     def test_at_least_7_notebooks(self):
         assert len(NOTEBOOKS) >= 7, f"Expected >=7 notebooks, found {len(NOTEBOOKS)}"
 
+    @_skip_if_absent
     @pytest.mark.parametrize("name", [
         "01_easy_tensor_node_classification.ipynb",
         "02_image_patch_tensor_graph.ipynb",
@@ -106,6 +124,7 @@ class TestNotebookContent:
 
 
 class TestNotebookValidationTool:
+    @_skip_if_absent
     def test_validate_notebooks_passes(self):
         import subprocess, sys
         result = subprocess.run(

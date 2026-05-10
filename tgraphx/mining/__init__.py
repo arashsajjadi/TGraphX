@@ -77,6 +77,9 @@ from .motifs import (
     motif_features,
 )
 
+# Alias: motif_profile is the user-facing name for motif_counts (v1.3.4+).
+motif_profile = motif_counts
+
 # ── Level 2: WL kernels ──────────────────────────────────────────────────────
 from .kernels import (
     weisfeiler_lehman_labels,
@@ -85,6 +88,62 @@ from .kernels import (
     wl_kernel_matrix,
     degree_histogram_features,
 )
+
+
+def wl_subtree_kernel(
+    edge_index_a: "torch.Tensor",
+    num_nodes_a: int,
+    edge_index_b: "torch.Tensor",
+    num_nodes_b: int,
+    h: int = 2,
+    node_labels_a=None,
+    node_labels_b=None,
+    normalize: bool = False,
+) -> float:
+    """WL subtree kernel between two graphs.
+
+    Computes the inner product of WL feature histograms across ``h`` refinement
+    rounds.  Unlabelled graphs are initialised by degree (default).
+
+    Args:
+        edge_index_a: ``LongTensor[2, E_a]`` — first graph edges.
+        num_nodes_a:  Node count for the first graph.
+        edge_index_b: ``LongTensor[2, E_b]`` — second graph edges.
+        num_nodes_b:  Node count for the second graph.
+        h: Number of WL refinement iterations (default 2).
+        node_labels_a: Optional initial integer labels for graph A.
+        node_labels_b: Optional initial integer labels for graph B.
+        normalize: If ``True``, normalise by ``sqrt(K(A,A) * K(B,B))``.
+
+    Returns:
+        Float kernel value (higher = more similar).
+
+    Stability: Beta (v1.3.4+).
+
+    Example::
+
+        from tgraphx.mining import wl_subtree_kernel
+        import torch
+        ei_ring5 = torch.tensor([[0,1,2,3,4],[1,2,3,4,0]], dtype=torch.long)
+        ei_ring3 = torch.tensor([[0,1,2],[1,2,0]], dtype=torch.long)
+        k = wl_subtree_kernel(ei_ring5, 5, ei_ring3, 3, h=3)
+    """
+    import torch as _torch
+
+    graphs = [
+        {"edge_index": edge_index_a, "num_nodes": num_nodes_a,
+         **({"node_labels": node_labels_a} if node_labels_a is not None else {})},
+        {"edge_index": edge_index_b, "num_nodes": num_nodes_b,
+         **({"node_labels": node_labels_b} if node_labels_b is not None else {})},
+    ]
+    K = wl_kernel_matrix(graphs, num_iterations=h, normalize=False)
+    k_ab = float(K[0, 1].item())
+    if normalize:
+        k_aa = float(K[0, 0].item())
+        k_bb = float(K[1, 1].item())
+        denom = (k_aa * k_bb) ** 0.5
+        return k_ab / denom if denom > 0.0 else 0.0
+    return k_ab
 
 # ── Level 2: similarity ──────────────────────────────────────────────────────
 from .similarity import (
@@ -167,6 +226,57 @@ from .centrality import (
     eigenvector_centrality,
     k_core_numbers,
 )
+
+
+def centrality_summary(
+    edge_index: "torch.Tensor",
+    num_nodes: int,
+    directed: bool = False,
+    top_k: int = 5,
+) -> dict:
+    """Return a summary of centrality metrics for a graph.
+
+    Args:
+        edge_index: ``LongTensor[2, E]``.
+        num_nodes: Node count.
+        directed: Treat graph as directed (default ``False``).
+        top_k: Number of top nodes to report per metric.
+
+    Returns:
+        JSON-serialisable dict with keys:
+
+        - ``num_nodes`` — node count.
+        - ``num_edges`` — edge count.
+        - ``degree_centrality`` — tensor of per-node degree centrality.
+        - ``top_degree_nodes`` — list of (node, value) for top-k by degree centrality.
+
+    Stability: Beta (v1.3.4+).
+
+    Example::
+
+        from tgraphx.mining import centrality_summary
+        import torch
+        star_ei = torch.tensor([[0,0,0,0,1,2,3,4],[1,2,3,4,0,0,0,0]])
+        s = centrality_summary(star_ei, num_nodes=5)
+        # s["top_degree_nodes"][0][0] == 0  (star center has highest degree)
+    """
+    import torch as _torch
+    from .centrality import degree_centrality as _dc
+
+    dc = _dc(edge_index, num_nodes, directed=directed)
+    num_edges = int(edge_index.size(1))
+
+    # Top-k nodes by degree centrality.
+    top_k_ = min(top_k, num_nodes)
+    vals, idxs = _torch.topk(dc, top_k_)
+    top_nodes = [(int(idxs[i].item()), float(vals[i].item())) for i in range(top_k_)]
+
+    return {
+        "num_nodes": num_nodes,
+        "num_edges": num_edges,
+        "degree_centrality": dc,
+        "top_degree_nodes": top_nodes,
+    }
 
 # ── Graph generators (Beta) ──────────────────────────────────────────────────
 from .generators import (
@@ -397,12 +507,14 @@ __all__ = [
     "local_clustering_coefficient",
     "motif_counts",
     "motif_features",
+    "motif_profile",        # alias for motif_counts (v1.3.4+)
     # Kernels (Beta)
     "weisfeiler_lehman_labels",
     "wl_feature_histogram",
     "wl_graph_features",
     "wl_kernel_matrix",
     "degree_histogram_features",
+    "wl_subtree_kernel",    # two-graph WL kernel (v1.3.4+)
     # Similarity (Beta)
     "degree_histogram_distance",
     "wl_feature_similarity",
@@ -461,6 +573,7 @@ __all__ = [
     "betweenness_centrality",
     "eigenvector_centrality",
     "k_core_numbers",
+    "centrality_summary",   # convenience wrapper (v1.3.4+)
     # Generators (Beta)
     "erdos_renyi_graph",
     "barabasi_albert_graph",
