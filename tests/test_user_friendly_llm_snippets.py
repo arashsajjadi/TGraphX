@@ -94,7 +94,9 @@ class TestGraphAcceptsY:
 
     def test_graph_num_classes(self):
         x = torch.randn(20, 8)
-        y = torch.randint(0, 5, (20,))
+        # Construct deterministic labels covering all 5 classes so the test
+        # is independent of global RNG state.
+        y = torch.tensor([i % 5 for i in range(20)], dtype=torch.long)
         g = Graph(node_features=x, y=y)
         assert g.num_classes == 5
 
@@ -329,6 +331,100 @@ class TestMapGlobalToLocal:
         with pytest.raises(ValueError, match="not found in"):
             map_global_to_local(seeds, sampled)
 
+    def test_sparse_high_id_path(self):
+        """Large/sparse global IDs must use the searchsorted path without
+        allocating a huge dense lookup."""
+        offset = 5_000_000  # Above the dense-path threshold (2M).
+        sampled = torch.tensor([offset + 10, offset + 20, offset + 30, offset + 40])
+        seeds = torch.tensor([offset + 30, offset + 10])
+        local = map_global_to_local(seeds, sampled)
+        assert local.tolist() == [2, 0]
+
+    def test_sparse_high_id_missing_raises(self):
+        """Sparse path must still produce a helpful error for missing IDs."""
+        offset = 5_000_000
+        sampled = torch.tensor([offset + 10, offset + 20])
+        seeds = torch.tensor([offset + 99])
+        with pytest.raises(ValueError, match="not found in"):
+            map_global_to_local(seeds, sampled)
+
+    def test_unsorted_sampled_ids(self):
+        """Sampled IDs do not have to be sorted in the dense path."""
+        sampled = torch.tensor([40, 10, 30, 20])
+        seeds = torch.tensor([30, 10, 20, 40])
+        local = map_global_to_local(seeds, sampled)
+        # 30 → position 2, 10 → position 1, 20 → position 3, 40 → position 0
+        assert local.tolist() == [2, 1, 3, 0]
+
+
+# ── Snippet 5b: graph_features is INPUT features, NOT a label alias ──────────
+
+
+class TestGraphFeaturesSemantics:
+    """graph_features holds graph-level INPUT features, not a target label.
+
+    This test pins the v1.0.2 semantic correction: in v1.0.1 the constructor
+    aliased ``graph_features`` to ``graph_label`` (a target).  v1.0.2 stores
+    ``graph_features`` as a distinct field for graph-level inputs.
+    """
+
+    def test_graph_features_separate_from_graph_label(self):
+        x = torch.randn(8, 4)
+        gf = torch.randn(16)
+        gl = torch.tensor(2)
+        g = Graph(node_features=x, graph_features=gf, graph_label=gl)
+        assert g.graph_features is gf
+        assert g.graph_label is gl
+
+    def test_graph_features_only(self):
+        x = torch.randn(8, 4)
+        gf = torch.randn(16)
+        g = Graph(node_features=x, graph_features=gf)
+        assert g.graph_features is gf
+        assert g.graph_label is None  # not aliased — separate fields
+
+    def test_graph_features_clone_preserves(self):
+        x = torch.randn(8, 4)
+        gf = torch.randn(16)
+        g = Graph(node_features=x, graph_features=gf)
+        g2 = g.clone()
+        assert g2.graph_features is not None
+        assert g2.graph_features.shape == gf.shape
+        # Clone is deep — different underlying tensor.
+        assert g2.graph_features.data_ptr() != gf.data_ptr()
+
+    def test_graph_features_to_device(self):
+        x = torch.randn(8, 4)
+        gf = torch.randn(16)
+        g = Graph(node_features=x, graph_features=gf)
+        g.to("cpu")
+        assert g.graph_features.device.type == "cpu"
+
+    def test_graph_features_repr_contains_shape(self):
+        x = torch.randn(8, 4)
+        gf = torch.randn(16)
+        g = Graph(node_features=x, graph_features=gf)
+        assert "graph_features_shape" in repr(g)
+
+    def test_graph_features_device_mismatch_errors(self):
+        x = torch.randn(8, 4)
+        gf = torch.randn(16)
+        # Move only graph_features; don't move x.
+        with pytest.raises(ValueError, match="graph_features device"):
+            # We deliberately pass mismatched-device tensors.
+            # Skip the test on CUDA-only machines if CUDA is unavailable.
+            if not torch.cuda.is_available():
+                # Simulate a mismatch by putting graph_features on a different
+                # device label via meta. We can't construct a real cross-device
+                # graph without CUDA, so trigger via assignment + validate().
+                g = Graph(node_features=x, graph_features=gf)
+                # Manually create a mismatch using meta device
+                g.graph_features = torch.randn(16, device="meta")
+                g.validate()
+            else:
+                Graph(node_features=x.cpu(),
+                      graph_features=gf.cuda())
+
 
 # ── Snippet 6: run_graph_rl invalid algorithm ─────────────────────────────────
 
@@ -522,6 +618,27 @@ class TestKnowledgeGraphAPI:
         assert kg.num_entities == N_e
         assert kg.num_relations == N_r
         assert kg.num_triples == N_t
+
+    def test_kg_from_hrt(self):
+        """KnowledgeGraph.from_hrt creates a KG from separate h/r/t tensors."""
+        from tgraphx.kg import KnowledgeGraph
+        N_e, N_r, N_t = 10, 3, 50
+        heads = torch.randint(0, N_e, (N_t,))
+        rels  = torch.randint(0, N_r, (N_t,))
+        tails = torch.randint(0, N_e, (N_t,))
+        kg = KnowledgeGraph.from_hrt(heads, rels, tails,
+                                     num_entities=N_e, num_relations=N_r)
+        assert kg.num_entities == N_e
+        assert kg.num_relations == N_r
+        assert kg.num_triples == N_t
+        assert kg.triples.shape == (N_t, 3)
+
+    def test_kg_constructor_wrong_shape_error(self):
+        """A wrong-shape triples tensor should give a helpful error mentioning from_hrt."""
+        from tgraphx.kg import KnowledgeGraph
+        heads = torch.randint(0, 5, (10,))
+        with pytest.raises(ValueError, match="from_hrt"):
+            KnowledgeGraph(heads)  # Wrong: 1-D tensor instead of [N_t, 3]
 
     def test_list_kg_models(self):
         from tgraphx.kg import list_kg_models

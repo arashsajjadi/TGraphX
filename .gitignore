@@ -63,6 +63,13 @@ benchmarks/results/
 *.svg
 *.xml
 
+# TGraphX repository-tracked logo assets.
+# These were added before the above ignore rules and must be explicitly
+# un-ignored so `git check-ignore` and fresh clones don't accidentally
+# exclude them.
+!TGRAPHX.png
+!TGRAPHX_LOGO.svg
+
 # ------------------------------
 # Datasets and annotations (big)
 # ------------------------------

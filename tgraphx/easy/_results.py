@@ -93,7 +93,12 @@ class EasyResult:
         print(f"Report saved to {path}")
 
     def plot_loss(self) -> None:
-        """Plot training loss history (requires matplotlib)."""
+        """Plot training loss history (requires matplotlib).
+
+        Raises:
+            ValueError: If no training history is available (train first).
+            ImportError: Caught internally; prints an actionable install hint.
+        """
         try:
             import matplotlib.pyplot as plt
         except ImportError:
@@ -103,7 +108,20 @@ class EasyResult:
                 "to enable plot_loss()."
             )
             return
+        if not self.history:
+            raise ValueError(
+                "No training history is available — call a training workflow "
+                "first (e.g. tgx.easy.train_node_classifier(...)) before "
+                "calling result.plot_loss()."
+            )
         losses = [e.get("loss", float("nan")) for e in self.history]
+        if all(v != v for v in losses):  # all NaN means 'loss' key not present
+            available = list(self.history[0].keys()) if self.history else []
+            raise ValueError(
+                f"No 'loss' key found in training history.  "
+                f"Available metric keys: {available}.  "
+                f"Use result.plot_metrics() to plot all available metrics."
+            )
         plt.figure()
         plt.plot(losses, marker="o")
         plt.xlabel("Epoch")
@@ -120,8 +138,10 @@ class EasyResult:
             print("matplotlib not available.  Install it to use plot_metrics().")
             return
         if not self.history:
-            print("No history to plot.")
-            return
+            raise ValueError(
+                "No training history is available — call a training workflow "
+                "first before calling result.plot_metrics()."
+            )
         keys = [k for k in self.history[0] if isinstance(self.history[0][k], (int, float))]
         fig, axes = plt.subplots(1, len(keys), figsize=(5 * len(keys), 4))
         if len(keys) == 1:

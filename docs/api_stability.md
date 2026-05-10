@@ -1,4 +1,4 @@
-# API Stability Contract — TGraphX v1.0.1
+# API Stability Contract — TGraphX v1.0.1+
 
 This document defines the stability contract for all public TGraphX APIs.
 
@@ -19,7 +19,8 @@ Breaking changes require a major version bump (v2.x) or explicit deprecation cyc
 ### Core data objects
 - `tgraphx.Graph`, `tgraphx.GraphBatch`
   - All existing constructor parameters remain valid.
-  - New keyword-only aliases added in v1.0.1: `y=`, `labels=`, `edge_attr=`, `graph_features=`, `train_mask=`, `val_mask=`, `test_mask=`.
+  - New keyword-only aliases added in v1.0.1: `y=`, `labels=`, `edge_attr=`, `train_mask=`, `val_mask=`, `test_mask=`.
+  - `graph_features=` added in v1.0.2 as a **distinct** graph-level input feature field (not aliased to `graph_label`).
   - Properties: `.x`, `.y`, `.labels`, `.edge_attr`, `.num_node_features`, `.num_classes`, `.train_mask`, `.val_mask`, `.test_mask`.
   - Methods: `.has_labels()`, `.get_labels()`, `.with_labels()`, `.to()`, `.clone()`, `.validate()`.
 - `tgraphx.core.graph_utils` — all utility functions.
@@ -84,7 +85,7 @@ Breaking changes require a major version bump (v2.x) or explicit deprecation cyc
 
 ---
 
-## Beta (v1.0.1)
+## Beta (v1.0.1+)
 
 Tested and documented. API may expand but not break within the v1.x series.
 
@@ -121,6 +122,7 @@ Tested and documented. API may expand but not break within the v1.x series.
 - `TransEModel`, `DistMultModel`, `ComplExModel`, `RotatEModel`
 - `KGTrainer`, `KGTrainingConfig`
 - `list_kg_models()` *(new in v1.0.1)*
+- `KnowledgeGraph.from_hrt(heads, relations, tails, ...)` *(new in v1.0.3)* — classmethod for users with separate h/r/t tensors (the existing `from_triples` accepts tuple lists or `[N_t, 3]` tensors)
 
 ### Classical graph generation
 - `FeatureAwareERGraph`, `FeatureAwareBAGraph`, `TemporalEvolvingGraph`, `TypedGeneratedGraph`, `AnomalyInjectedGraph`, `MotifInjectedGraph`
@@ -176,7 +178,7 @@ Tested and documented. API may expand but not break within the v1.x series.
 
 ---
 
-## Experimental (v1.0.1)
+## Experimental (v1.0.1+)
 
 Correct foundations. API or semantics may evolve in future minor releases. Documented behavior is preserved.
 

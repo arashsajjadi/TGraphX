@@ -128,7 +128,12 @@ class KnowledgeGraph:
     ) -> None:
         if triples.dim() != 2 or triples.size(1) != 3:
             raise ValueError(
-                f"triples must have shape [N_t, 3]; got {tuple(triples.shape)}"
+                f"triples must have shape [N_t, 3] where each row is "
+                f"(head_id, relation_id, tail_id); got {tuple(triples.shape)}.\n"
+                f"If you have separate heads, relations, tails tensors, use:\n"
+                f"    KnowledgeGraph.from_hrt(heads, relations, tails, ...)\n"
+                f"If you have a list of (h, r, t) tuples, use:\n"
+                f"    KnowledgeGraph.from_triples([(h, r, t), ...])"
             )
         if triples.dtype != torch.long:
             triples = triples.to(torch.long)
@@ -220,6 +225,73 @@ class KnowledgeGraph:
                 self._positive_set.add((int(row[0]), int(row[1]), int(row[2])))
 
         self.metadata: Dict[str, Any] = dict(metadata or {})
+
+    # ── Alternative constructors ────────────────────────────────────────────
+
+    @classmethod
+    def from_hrt(
+        cls,
+        heads: torch.Tensor,
+        relations: torch.Tensor,
+        tails: torch.Tensor,
+        num_entities: Optional[int] = None,
+        num_relations: Optional[int] = None,
+        **kwargs,
+    ) -> "KnowledgeGraph":
+        """Create a KnowledgeGraph from separate head, relation, and tail tensors.
+
+        This is a convenience constructor for users who have three parallel
+        1-D tensors rather than a combined ``[N_t, 3]`` triples matrix.
+
+        Args:
+            heads: ``LongTensor[N_t]`` of head entity IDs.
+            relations: ``LongTensor[N_t]`` of relation IDs.
+            tails: ``LongTensor[N_t]`` of tail entity IDs.
+            num_entities: Vocabulary size for entities.  Inferred from max if None.
+            num_relations: Vocabulary size for relations.  Inferred from max if None.
+            **kwargs: Forwarded to :class:`KnowledgeGraph` (e.g.
+                ``entity_features``, ``metadata``).
+
+        Returns:
+            :class:`KnowledgeGraph` with ``triples`` assembled as
+            ``torch.stack([heads, relations, tails], dim=1)``.
+
+        Example::
+
+            import torch
+            from tgraphx.kg import KnowledgeGraph
+
+            heads     = torch.tensor([0, 1, 2])
+            relations = torch.tensor([0, 0, 1])
+            tails     = torch.tensor([1, 2, 0])
+            kg = KnowledgeGraph.from_hrt(
+                heads, relations, tails,
+                num_entities=3, num_relations=2,
+            )
+
+        See also:
+            :meth:`from_triples` accepts a list of ``(h, r, t)`` tuples or a
+            ``[N_t, 3]`` tensor directly.
+        """
+        for name, t in [("heads", heads), ("relations", relations), ("tails", tails)]:
+            if not isinstance(t, torch.Tensor):
+                raise TypeError(
+                    f"{name} must be a torch.Tensor, got {type(t).__name__}"
+                )
+            if t.dim() != 1:
+                raise ValueError(
+                    f"{name} must be a 1-D tensor; got shape {tuple(t.shape)}"
+                )
+        if not (heads.size(0) == relations.size(0) == tails.size(0)):
+            raise ValueError(
+                f"heads, relations, and tails must have the same length; "
+                f"got {heads.size(0)}, {relations.size(0)}, {tails.size(0)}"
+            )
+        triples = torch.stack(
+            [heads.to(torch.long), relations.to(torch.long), tails.to(torch.long)],
+            dim=1,
+        )
+        return cls(triples, num_entities=num_entities, num_relations=num_relations, **kwargs)
 
     # ── Properties ─────────────────────────────────────────────────────────
 

@@ -1,26 +1,26 @@
 {
-  "timestamp": "2026-05-09T01:12:03.610590",
-  "version": "0.6.0",
-  "total_score": 12.5,
+  "timestamp": "2026-05-09T18:18:55.318563",
+  "version": "1.0.1",
+  "total_score": 12.6,
   "severity": "excellent",
   "category_scores": {
-    "complexity_debt": 33.4,
+    "complexity_debt": 35.3,
     "dead_code_debt": 0.0,
     "test_coverage_debt": 0.0,
-    "docs_api_drift_debt": 24.0,
-    "type_debt": 8.8,
-    "architecture_import_debt": 27.6,
-    "performance_guard_debt": 2.6,
+    "docs_api_drift_debt": 23.1,
+    "type_debt": 8.6,
+    "architecture_import_debt": 27.3,
+    "performance_guard_debt": 2.5,
     "security_debt": 0.0,
     "packaging_release_debt": 0.0,
     "ai_code_smell_debt": 0.6,
-    "total": 12.5
+    "total": 12.6
   },
   "category_raw": {
-    "total_exports": 633,
-    "unreferenced_exports": 90,
-    "total_files": 233,
-    "total_findings": 745,
+    "total_exports": 661,
+    "unreferenced_exports": 79,
+    "total_files": 243,
+    "total_findings": 762,
     "dashboard_writers": []
   },
   "blockers": [],
@@ -39,6 +39,14 @@
       "file": "tgraphx/dashboard/app.py",
       "line": 0,
       "message": "Function '_api_metrics' has 153 lines",
+      "rule": "function-too-long"
+    },
+    {
+      "category": "complexity_debt",
+      "severity": "high",
+      "file": "tgraphx/easy/_workflows.py",
+      "line": 0,
+      "message": "Function 'train_node_classifier' has 188 lines",
       "rule": "function-too-long"
     },
     {
@@ -83,6 +91,22 @@
     }
   ],
   "medium_debt": [
+    {
+      "category": "complexity_debt",
+      "severity": "medium",
+      "file": "tgraphx/core/graph.py",
+      "line": 0,
+      "message": "File has 915 lines (warn at 800)",
+      "rule": "file-long"
+    },
+    {
+      "category": "complexity_debt",
+      "severity": "medium",
+      "file": "tgraphx/core/graph.py",
+      "line": 0,
+      "message": "Function '__init__' has 150 lines",
+      "rule": "function-too-long"
+    },
     {
       "category": "complexity_debt",
       "severity": "medium",
@@ -256,7 +280,15 @@
       "severity": "medium",
       "file": "tgraphx/kg/data.py",
       "line": 0,
-      "message": "Function '__init__' has 112 lines",
+      "message": "File has 812 lines (warn at 800)",
+      "rule": "file-long"
+    },
+    {
+      "category": "complexity_debt",
+      "severity": "medium",
+      "file": "tgraphx/kg/data.py",
+      "line": 0,
+      "message": "Function '__init__' has 115 lines",
       "rule": "function-too-long"
     },
     {
@@ -314,6 +346,14 @@
       "line": 0,
       "message": "Function 'forward' has 111 lines",
       "rule": "function-too-long"
+    },
+    {
+      "category": "complexity_debt",
+      "severity": "medium",
+      "file": "tgraphx/loaders.py",
+      "line": 0,
+      "message": "File has 876 lines (warn at 800)",
+      "rule": "file-long"
     },
     {
       "category": "complexity_debt",
@@ -542,6 +582,22 @@
     {
       "category": "architecture_import_debt",
       "severity": "medium",
+      "file": "tgraphx/core/graph.py",
+      "line": 368,
+      "message": "[E713] Test for membership should be `not in`",
+      "rule": "E713"
+    },
+    {
+      "category": "architecture_import_debt",
+      "severity": "medium",
+      "file": "tgraphx/easy/_discovery.py",
+      "line": 66,
+      "message": "[F821] Undefined name `Any`",
+      "rule": "F821"
+    },
+    {
+      "category": "architecture_import_debt",
+      "severity": "medium",
       "file": "tgraphx/evolutionary/genome.py",
       "line": 128,
       "message": "[F821] Undefined name `tgraphx`",
@@ -766,14 +822,6 @@
     {
       "category": "docs_api_drift_debt",
       "severity": "medium",
-      "file": "tgraphx/__init__.py",
-      "line": 0,
-      "message": "Public export 'LinkNeighborLoader' has no reference in tests/examples/docs",
-      "rule": "unreferenced-export"
-    },
-    {
-      "category": "docs_api_drift_debt",
-      "severity": "medium",
       "file": "tgraphx/kg/__init__.py",
       "line": 0,
       "message": "Public export 'write_kg_model_report' has no reference in tests/examples/docs",
@@ -865,14 +913,6 @@
       "file": "tgraphx/rl/algorithms/__init__.py",
       "line": 0,
       "message": "Public export 'BaseAgent' has no reference in tests/examples/docs",
-      "rule": "unreferenced-export"
-    },
-    {
-      "category": "docs_api_drift_debt",
-      "severity": "medium",
-      "file": "tgraphx/rl/algorithms/__init__.py",
-      "line": 0,
-      "message": "Public export 'A2CAgent' has no reference in tests/examples/docs",
       "rule": "unreferenced-export"
     },
     {
@@ -1001,6 +1041,22 @@
       "file": "tgraphx/rl/__init__.py",
       "line": 0,
       "message": "Public export 'write_graph_rl_env_report' has no reference in tests/examples/docs",
+      "rule": "unreferenced-export"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "medium",
+      "file": "tgraphx/estimators/__init__.py",
+      "line": 0,
+      "message": "Public export 'graph_train_test_split' has no reference in tests/examples/docs",
+      "rule": "unreferenced-export"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "medium",
+      "file": "tgraphx/experiments/__init__.py",
+      "line": 0,
+      "message": "Public export 'discover_runs' has no reference in tests/examples/docs",
       "rule": "unreferenced-export"
     },
     {
@@ -1353,7 +1409,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 175,
+      "line": 178,
       "message": "[F401] `.generation.GeneratedGraph` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1361,7 +1417,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 175,
+      "line": 178,
       "message": "[F401] `.generation.GraphEditState` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1369,7 +1425,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 175,
+      "line": 178,
       "message": "[F401] `.generation.GraphGenerationTrajectory` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1377,7 +1433,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 175,
+      "line": 178,
       "message": "[F401] `.generation.GraphGenerationBatch` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1385,7 +1441,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 176,
+      "line": 179,
       "message": "[F401] `.generation.GraphActionType` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1393,7 +1449,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 176,
+      "line": 179,
       "message": "[F401] `.generation.GraphAction` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1401,7 +1457,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 176,
+      "line": 179,
       "message": "[F401] `.generation.GraphActionSpace` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1409,7 +1465,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 177,
+      "line": 180,
       "message": "[F401] `.generation.graph_to_generation_state` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1417,7 +1473,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 177,
+      "line": 180,
       "message": "[F401] `.generation.generation_state_to_graph` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1425,7 +1481,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 177,
+      "line": 180,
       "message": "[F401] `.generation.validate_generated_graph` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1433,7 +1489,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 178,
+      "line": 181,
       "message": "[F401] `.generation.apply_graph_action` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1441,7 +1497,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 178,
+      "line": 181,
       "message": "[F401] `.generation.sample_valid_action` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1449,7 +1505,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 179,
+      "line": 182,
       "message": "[F401] `.generation.VGAEGraphGenerator` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1457,7 +1513,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 179,
+      "line": 182,
       "message": "[F401] `.generation.AutoregressiveEdgeGenerator` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1465,7 +1521,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 180,
+      "line": 183,
       "message": "[F401] `.generation.VectorNodeProjector` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1473,7 +1529,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 180,
+      "line": 183,
       "message": "[F401] `.generation.ImageNodeEncoder` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1481,7 +1537,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 180,
+      "line": 183,
       "message": "[F401] `.generation.EdgeFeatureProjector` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1489,7 +1545,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 181,
+      "line": 184,
       "message": "[F401] `.generation.validity_score` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1497,7 +1553,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 181,
+      "line": 184,
       "message": "[F401] `.generation.uniqueness_score` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1505,7 +1561,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 181,
+      "line": 184,
       "message": "[F401] `.generation.novelty_score` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1513,7 +1569,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 181,
+      "line": 184,
       "message": "[F401] `.generation.diversity_score` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1521,7 +1577,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 182,
+      "line": 185,
       "message": "[F401] `.generation.GraphGenerationConfig` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1529,7 +1585,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 183,
+      "line": 186,
       "message": "[F401] `.generation.write_graph_generation_report` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1537,7 +1593,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 183,
+      "line": 186,
       "message": "[F401] `.generation.write_generation_metrics_report` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1545,7 +1601,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 184,
+      "line": 187,
       "message": "[F401] `.generation.run_graph_generation` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1553,7 +1609,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 184,
+      "line": 187,
       "message": "[F401] `.generation.list_graph_generation_methods` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1561,7 +1617,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 184,
+      "line": 187,
       "message": "[F401] `.generation.GenerationResult` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1569,7 +1625,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 189,
+      "line": 192,
       "message": "[F401] `.evolutionary.GraphGenome` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1577,7 +1633,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 189,
+      "line": 192,
       "message": "[F401] `.evolutionary.GeneticAlgorithmOptimizer` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1585,7 +1641,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 189,
+      "line": 192,
       "message": "[F401] `.evolutionary.SimulatedAnnealingOptimizer` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1593,7 +1649,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 190,
+      "line": 193,
       "message": "[F401] `.evolutionary.NSGAIIOptimizer` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1601,7 +1657,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 190,
+      "line": 193,
       "message": "[F401] `.evolutionary.HillClimbingOptimizer` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1609,7 +1665,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 191,
+      "line": 194,
       "message": "[F401] `.evolutionary.EvolutionConfig` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1617,7 +1673,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 191,
+      "line": 194,
       "message": "[F401] `.evolutionary.EvolutionResult` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1625,7 +1681,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 191,
+      "line": 194,
       "message": "[F401] `.evolutionary.ParetoFront` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1633,7 +1689,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 192,
+      "line": 195,
       "message": "[F401] `.evolutionary.mutate_add_node` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1641,7 +1697,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 192,
+      "line": 195,
       "message": "[F401] `.evolutionary.mutate_add_edge` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1649,7 +1705,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 192,
+      "line": 195,
       "message": "[F401] `.evolutionary.mutate_node_feature` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1657,7 +1713,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 193,
+      "line": 196,
       "message": "[F401] `.evolutionary.edge_set_crossover` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1665,7 +1721,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 193,
+      "line": 196,
       "message": "[F401] `.evolutionary.composite_fitness` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1673,7 +1729,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 194,
+      "line": 197,
       "message": "[F401] `.evolutionary.write_evolution_report` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1681,7 +1737,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 195,
+      "line": 198,
       "message": "[F401] `.evolutionary.run_evolutionary_optimization` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1689,7 +1745,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 195,
+      "line": 198,
       "message": "[F401] `.evolutionary.list_evolutionary_optimizers` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1697,7 +1753,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 195,
+      "line": 198,
       "message": "[F401] `.evolutionary.OptimizationResult` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1705,7 +1761,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 200,
+      "line": 203,
       "message": "[F401] `.rl.GraphNavigationEnv` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1713,7 +1769,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 200,
+      "line": 203,
       "message": "[F401] `.rl.GraphColoringEnv` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1721,7 +1777,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 200,
+      "line": 203,
       "message": "[F401] `.rl.MaxCutEnv` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1729,7 +1785,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 200,
+      "line": 203,
       "message": "[F401] `.rl.GraphGenerationEnv` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1737,7 +1793,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 201,
+      "line": 204,
       "message": "[F401] `.rl.KGPathReasoningEnv` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1745,7 +1801,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 201,
+      "line": 204,
       "message": "[F401] `.rl.ShortestPathEnv` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1753,7 +1809,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 202,
+      "line": 205,
       "message": "[F401] `.rl.ContinuousNavigationEnv` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1761,7 +1817,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 202,
+      "line": 205,
       "message": "[F401] `.rl.ContinuousGraphEditEnv` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1769,7 +1825,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 202,
+      "line": 205,
       "message": "[F401] `.rl.ContinuousGraphActionSpace` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1777,7 +1833,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 203,
+      "line": 206,
       "message": "[F401] `.rl.GraphPolicyNetwork` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1785,7 +1841,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 203,
+      "line": 206,
       "message": "[F401] `.rl.GraphValueNetwork` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1793,7 +1849,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 203,
+      "line": 206,
       "message": "[F401] `.rl.GraphQNetwork` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1801,7 +1857,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 203,
+      "line": 206,
       "message": "[F401] `.rl.GraphActorCriticNetwork` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1809,7 +1865,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 204,
+      "line": 207,
       "message": "[F401] `.rl.MaskedCategoricalPolicy` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1817,7 +1873,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 205,
+      "line": 208,
       "message": "[F401] `.rl.REINFORCEAgent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1825,7 +1881,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 205,
+      "line": 208,
       "message": "[F401] `.rl.ActorCriticAgent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1833,7 +1889,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 205,
+      "line": 208,
       "message": "[F401] `.rl.A2CAgent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1841,7 +1897,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 205,
+      "line": 208,
       "message": "[F401] `.rl.DQNAgent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1849,7 +1905,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 205,
+      "line": 208,
       "message": "[F401] `.rl.DoubleDQNAgent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1857,7 +1913,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 205,
+      "line": 208,
       "message": "[F401] `.rl.PPOAgent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1865,7 +1921,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 206,
+      "line": 209,
       "message": "[F401] `.rl.GraphDDPGAgent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1873,7 +1929,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 206,
+      "line": 209,
       "message": "[F401] `.rl.GraphTD3Agent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1881,7 +1937,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 206,
+      "line": 209,
       "message": "[F401] `.rl.GraphSACAgent` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1889,7 +1945,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 207,
+      "line": 210,
       "message": "[F401] `.rl.ContinuousGraphActor` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1897,7 +1953,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 207,
+      "line": 210,
       "message": "[F401] `.rl.StochasticGraphActor` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1905,7 +1961,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 207,
+      "line": 210,
       "message": "[F401] `.rl.ContinuousGraphCritic` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1913,7 +1969,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 207,
+      "line": 210,
       "message": "[F401] `.rl.TwinContinuousGraphCritic` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1921,7 +1977,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 208,
+      "line": 211,
       "message": "[F401] `.rl.RandomPolicy` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1929,7 +1985,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 208,
+      "line": 211,
       "message": "[F401] `.rl.GreedyPolicy` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1937,7 +1993,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 209,
+      "line": 212,
       "message": "[F401] `.rl.ReplayBuffer` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1945,7 +2001,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 209,
+      "line": 212,
       "message": "[F401] `.rl.RolloutBuffer` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1953,7 +2009,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 209,
+      "line": 212,
       "message": "[F401] `.rl.EpsilonGreedy` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1961,7 +2017,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 210,
+      "line": 213,
       "message": "[F401] `.rl.soft_update` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1969,7 +2025,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 210,
+      "line": 213,
       "message": "[F401] `.rl.OUNoise` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1977,7 +2033,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 210,
+      "line": 213,
       "message": "[F401] `.rl.GaussianNoise` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1985,7 +2041,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 211,
+      "line": 214,
       "message": "[F401] `.rl.RLTrainingConfig` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -1993,7 +2049,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 211,
+      "line": 214,
       "message": "[F401] `.rl.PolicyConfig` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -2001,7 +2057,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 212,
+      "line": 215,
       "message": "[F401] `.rl.write_graph_rl_training_report` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -2009,7 +2065,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 212,
+      "line": 215,
       "message": "[F401] `.rl.write_graph_rl_env_report` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -2017,7 +2073,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 213,
+      "line": 216,
       "message": "[F401] `.rl.run_graph_rl` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -2025,7 +2081,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 213,
+      "line": 216,
       "message": "[F401] `.rl.list_graph_rl_algorithms` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -2033,7 +2089,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 213,
+      "line": 216,
       "message": "[F401] `.rl.make_graph_env` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -2041,7 +2097,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/__init__.py",
-      "line": 213,
+      "line": 216,
       "message": "[F401] `.rl.RLResult` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
       "rule": "F401"
     },
@@ -2187,6 +2243,30 @@
       "file": "tgraphx/datasets/torchvision_wrappers.py",
       "line": 23,
       "message": "[F401] `.base.BaseGraphDataset` imported but unused",
+      "rule": "F401"
+    },
+    {
+      "category": "architecture_import_debt",
+      "severity": "low",
+      "file": "tgraphx/easy/_models.py",
+      "line": 4,
+      "message": "[F401] `typing.Any` imported but unused",
+      "rule": "F401"
+    },
+    {
+      "category": "architecture_import_debt",
+      "severity": "low",
+      "file": "tgraphx/easy/_models.py",
+      "line": 4,
+      "message": "[F401] `typing.Union` imported but unused",
+      "rule": "F401"
+    },
+    {
+      "category": "architecture_import_debt",
+      "severity": "low",
+      "file": "tgraphx/easy/_workflows.py",
+      "line": 5,
+      "message": "[F401] `typing.Tuple` imported but unused",
       "rule": "F401"
     },
     {
@@ -2388,6 +2468,14 @@
       "line": 33,
       "message": "[F401] `math` imported but unused",
       "rule": "F401"
+    },
+    {
+      "category": "architecture_import_debt",
+      "severity": "low",
+      "file": "tgraphx/kg/data.py",
+      "line": 325,
+      "message": "[F811] Redefinition of unused `from_triples` from line 230: `from_triples` redefined here",
+      "rule": "F811"
     },
     {
       "category": "architecture_import_debt",
@@ -2649,7 +2737,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/loaders.py",
-      "line": 17,
+      "line": 30,
       "message": "[F401] `typing.Sequence` imported but unused",
       "rule": "F401"
     },
@@ -2657,7 +2745,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/loaders.py",
-      "line": 20,
+      "line": 34,
       "message": "[F401] `torch.utils.data.Sampler` imported but unused",
       "rule": "F401"
     },
@@ -2665,7 +2753,7 @@
       "category": "architecture_import_debt",
       "severity": "low",
       "file": "tgraphx/loaders.py",
-      "line": 24,
+      "line": 38,
       "message": "[F401] `.sampling.k_hop_subgraph` imported but unused",
       "rule": "F401"
     },
@@ -4209,7 +4297,15 @@
       "category": "type_debt",
       "severity": "low",
       "file": "tgraphx/kg/data.py",
-      "line": 414,
+      "line": 324,
+      "message": "[no-redef] Name \"from_triples\" already defined on line 229 ",
+      "rule": "no-redef"
+    },
+    {
+      "category": "type_debt",
+      "severity": "low",
+      "file": "tgraphx/kg/data.py",
+      "line": 480,
       "message": "[arg-type] Argument 8 to \"KnowledgeGraph\" has incompatible type \"**dict[str, int | dict[str, int] | Any | dict[str, Any] | None]\"; expected \"int | None\" ",
       "rule": "arg-type"
     },
@@ -4217,7 +4313,7 @@
       "category": "type_debt",
       "severity": "low",
       "file": "tgraphx/kg/data.py",
-      "line": 414,
+      "line": 480,
       "message": "[arg-type] Argument 8 to \"KnowledgeGraph\" has incompatible type \"**dict[str, int | dict[str, int] | Any | dict[str, Any] | None]\"; expected \"dict[str, int] | None\" ",
       "rule": "arg-type"
     },
@@ -4225,7 +4321,7 @@
       "category": "type_debt",
       "severity": "low",
       "file": "tgraphx/kg/data.py",
-      "line": 414,
+      "line": 480,
       "message": "[arg-type] Argument 8 to \"KnowledgeGraph\" has incompatible type \"**dict[str, int | dict[str, int] | Any | dict[str, Any] | None]\"; expected \"dict[str, Any] | None\" ",
       "rule": "arg-type"
     },
@@ -4233,7 +4329,7 @@
       "category": "type_debt",
       "severity": "low",
       "file": "tgraphx/kg/data.py",
-      "line": 733,
+      "line": 799,
       "message": "[arg-type] Argument 9 to \"TemporalKnowledgeGraph\" has incompatible type \"**dict[str, int | dict[str, int] | None]\"; expected \"int | None\" ",
       "rule": "arg-type"
     },
@@ -4348,6 +4444,14 @@
       "line": 472,
       "message": "[assignment] Incompatible types in assignment (expression has type \"tuple[int, int, int]\", variable has type \"tuple[int, int]\") ",
       "rule": "assignment"
+    },
+    {
+      "category": "type_debt",
+      "severity": "low",
+      "file": "tgraphx/easy/_discovery.py",
+      "line": 66,
+      "message": "[name-defined] Name \"Any\" is not defined ",
+      "rule": "name-defined"
     },
     {
       "category": "type_debt",
@@ -5065,7 +5169,7 @@
       "category": "type_debt",
       "severity": "low",
       "file": "tgraphx/loaders.py",
-      "line": 157,
+      "line": 512,
       "message": "[union-attr] Item \"None\" of \"dict[str, Any] | None\" has no attribute \"get\" ",
       "rule": "union-attr"
     },
@@ -5073,7 +5177,7 @@
       "category": "type_debt",
       "severity": "low",
       "file": "tgraphx/loaders.py",
-      "line": 450,
+      "line": 820,
       "message": "[assignment] Incompatible default for parameter \"fanouts\" (default has type \"None\", parameter has type \"list[int]\") ",
       "rule": "assignment"
     },
@@ -5081,7 +5185,7 @@
       "category": "type_debt",
       "severity": "low",
       "file": "tgraphx/loaders.py",
-      "line": 482,
+      "line": 852,
       "message": "[assignment] Incompatible default for parameter \"fanouts\" (default has type \"None\", parameter has type \"list[int]\") ",
       "rule": "assignment"
     },
@@ -5144,9 +5248,25 @@
     {
       "category": "type_debt",
       "severity": "low",
+      "file": "tgraphx/easy/_results.py",
+      "line": 54,
+      "message": "[assignment] Incompatible types in assignment (expression has type \"str\", variable has type \"float\") ",
+      "rule": "assignment"
+    },
+    {
+      "category": "type_debt",
+      "severity": "low",
       "file": "tgraphx/training.py",
       "line": 283,
       "message": "[union-attr] Item \"None\" of \"Any | None\" has no attribute \"to\" ",
+      "rule": "union-attr"
+    },
+    {
+      "category": "type_debt",
+      "severity": "low",
+      "file": "tgraphx/easy/_workflows.py",
+      "line": 108,
+      "message": "[union-attr] Item \"None\" of \"Any | None\" has no attribute \"max\" ",
       "rule": "union-attr"
     },
     {
@@ -5640,6 +5760,22 @@
     {
       "category": "docs_api_drift_debt",
       "severity": "low",
+      "file": "benchmarks/ux/benchmark_easy_vs_manual.py",
+      "line": 0,
+      "message": "Benchmark JSON output missing field: package_version",
+      "rule": "benchmark-missing-package_version"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "low",
+      "file": "benchmarks/ux/benchmark_easy_vs_manual.py",
+      "line": 0,
+      "message": "Benchmark JSON output missing field: limitations",
+      "rule": "benchmark-missing-limitations"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "low",
       "file": "benchmarks/kg/benchmark_kg_negative_sampling.py",
       "line": 0,
       "message": "Benchmark JSON output missing field: status",
@@ -5997,7 +6133,7 @@
     },
     {
       "file": "tgraphx/__init__.py",
-      "risk_score": 89
+      "risk_score": 87
     },
     {
       "file": "tgraphx/dashboard/app.py",
@@ -6026,6 +6162,10 @@
     {
       "file": "tgraphx/kg/__init__.py",
       "risk_score": 12
+    },
+    {
+      "file": "tgraphx/kg/data.py",
+      "risk_score": 11
     },
     {
       "file": "tgraphx/graph_builders.py",
@@ -6060,19 +6200,20 @@
       "risk_score": 9
     },
     {
+      "file": "tgraphx/core/graph.py",
+      "risk_score": 8
+    },
+    {
       "file": "tgraphx/generation/classical.py",
-      "risk_score": 8
-    },
-    {
-      "file": "tgraphx/layers/factory.py",
-      "risk_score": 8
-    },
-    {
-      "file": "tgraphx/mining/prototype.py",
       "risk_score": 8
     }
   ],
   "long_functions": [
+    {
+      "file": "tgraphx/easy/_workflows.py",
+      "function": "train_node_classifier",
+      "lines": 188
+    },
     {
       "file": "tgraphx/hetero_sampling.py",
       "function": "hetero_neighbor_sample",
@@ -6102,6 +6243,11 @@
       "file": "tgraphx/sampling_negative.py",
       "function": "hard_negative_sampling",
       "lines": 152
+    },
+    {
+      "file": "tgraphx/core/graph.py",
+      "function": "__init__",
+      "lines": 150
     },
     {
       "file": "tgraphx/evolutionary/high_level_api.py",
@@ -6149,40 +6295,22 @@
       "lines": 121
     },
     {
+      "file": "tgraphx/kg/data.py",
+      "function": "__init__",
+      "lines": 115
+    },
+    {
       "file": "tgraphx/core/hetero_graph.py",
       "function": "__init__",
       "lines": 113
     },
     {
-      "file": "tgraphx/kg/data.py",
-      "function": "__init__",
-      "lines": 112
-    },
-    {
       "file": "tgraphx/layers/sage.py",
       "function": "forward",
       "lines": 111
-    },
-    {
-      "file": "tgraphx/layers/graph_transformer.py",
-      "function": "forward",
-      "lines": 110
-    },
-    {
-      "file": "tgraphx/graph_builders.py",
-      "function": "build_iou_graph",
-      "lines": 108
     }
   ],
   "docs_drift": [
-    {
-      "category": "docs_api_drift_debt",
-      "severity": "medium",
-      "file": "tgraphx/__init__.py",
-      "line": 0,
-      "message": "Public export 'LinkNeighborLoader' has no reference in tests/examples/docs",
-      "rule": "unreferenced-export"
-    },
     {
       "category": "docs_api_drift_debt",
       "severity": "medium",
@@ -6277,14 +6405,6 @@
       "file": "tgraphx/rl/algorithms/__init__.py",
       "line": 0,
       "message": "Public export 'BaseAgent' has no reference in tests/examples/docs",
-      "rule": "unreferenced-export"
-    },
-    {
-      "category": "docs_api_drift_debt",
-      "severity": "medium",
-      "file": "tgraphx/rl/algorithms/__init__.py",
-      "line": 0,
-      "message": "Public export 'A2CAgent' has no reference in tests/examples/docs",
       "rule": "unreferenced-export"
     },
     {
@@ -6413,6 +6533,22 @@
       "file": "tgraphx/rl/__init__.py",
       "line": 0,
       "message": "Public export 'write_graph_rl_env_report' has no reference in tests/examples/docs",
+      "rule": "unreferenced-export"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "medium",
+      "file": "tgraphx/estimators/__init__.py",
+      "line": 0,
+      "message": "Public export 'graph_train_test_split' has no reference in tests/examples/docs",
+      "rule": "unreferenced-export"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "medium",
+      "file": "tgraphx/experiments/__init__.py",
+      "line": 0,
+      "message": "Public export 'discover_runs' has no reference in tests/examples/docs",
       "rule": "unreferenced-export"
     }
   ],
@@ -6420,14 +6556,6 @@
     {
       "category": "docs_api_drift_debt",
       "severity": "medium",
-      "file": "tgraphx/__init__.py",
-      "line": 0,
-      "message": "Public export 'LinkNeighborLoader' has no reference in tests/examples/docs",
-      "rule": "unreferenced-export"
-    },
-    {
-      "category": "docs_api_drift_debt",
-      "severity": "medium",
       "file": "tgraphx/kg/__init__.py",
       "line": 0,
       "message": "Public export 'write_kg_model_report' has no reference in tests/examples/docs",
@@ -6519,14 +6647,6 @@
       "file": "tgraphx/rl/algorithms/__init__.py",
       "line": 0,
       "message": "Public export 'BaseAgent' has no reference in tests/examples/docs",
-      "rule": "unreferenced-export"
-    },
-    {
-      "category": "docs_api_drift_debt",
-      "severity": "medium",
-      "file": "tgraphx/rl/algorithms/__init__.py",
-      "line": 0,
-      "message": "Public export 'A2CAgent' has no reference in tests/examples/docs",
       "rule": "unreferenced-export"
     },
     {
@@ -6655,6 +6775,22 @@
       "file": "tgraphx/rl/__init__.py",
       "line": 0,
       "message": "Public export 'write_graph_rl_env_report' has no reference in tests/examples/docs",
+      "rule": "unreferenced-export"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "medium",
+      "file": "tgraphx/estimators/__init__.py",
+      "line": 0,
+      "message": "Public export 'graph_train_test_split' has no reference in tests/examples/docs",
+      "rule": "unreferenced-export"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "medium",
+      "file": "tgraphx/experiments/__init__.py",
+      "line": 0,
+      "message": "Public export 'discover_runs' has no reference in tests/examples/docs",
       "rule": "unreferenced-export"
     }
   ],
@@ -7043,6 +7179,22 @@
       "category": "docs_api_drift_debt",
       "severity": "low",
       "file": "benchmarks/benchmark_training_synthetic.py",
+      "line": 0,
+      "message": "Benchmark JSON output missing field: limitations",
+      "rule": "benchmark-missing-limitations"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "low",
+      "file": "benchmarks/ux/benchmark_easy_vs_manual.py",
+      "line": 0,
+      "message": "Benchmark JSON output missing field: package_version",
+      "rule": "benchmark-missing-package_version"
+    },
+    {
+      "category": "docs_api_drift_debt",
+      "severity": "low",
+      "file": "benchmarks/ux/benchmark_easy_vs_manual.py",
       "line": 0,
       "message": "Benchmark JSON output missing field: limitations",
       "rule": "benchmark-missing-limitations"
@@ -7555,15 +7707,16 @@
   "security_findings": [],
   "ruff_summary": {
     "available": true,
-    "total": 374,
+    "total": 380,
     "by_code": {
-      "F401": 345,
+      "F401": 348,
       "F841": 14,
       "E702": 8,
-      "F821": 3,
+      "F821": 4,
+      "F811": 2,
       "E741": 2,
-      "E731": 1,
-      "F811": 1
+      "E713": 1,
+      "E731": 1
     },
     "by_file": {
       "tgraphx/mining/__init__.py": 97,
@@ -7590,25 +7743,25 @@
   },
   "mypy_summary": {
     "available": true,
-    "total": 164,
+    "total": 168,
     "by_module": {
-      "tgraphx": 164
+      "tgraphx": 168
     },
     "error_types": {
       "attr-defined": 35,
-      "union-attr": 27,
+      "union-attr": 28,
+      "assignment": 21,
       "arg-type": 20,
-      "assignment": 20,
       "misc": 19,
       "call-arg": 10,
       "index": 8,
-      "name-defined": 6,
+      "name-defined": 7,
       "var-annotated": 6,
       "import-untyped": 4,
       "return-value": 2,
+      "no-redef": 2,
       "type-var": 2,
       "override": 2,
-      "no-redef": 1,
       "operator": 1
     }
   },
@@ -7624,6 +7777,7 @@
     "P1_high": [
       "File has 1426 lines (max 1200)",
       "Function '_api_metrics' has 153 lines",
+      "Function 'train_node_classifier' has 188 lines",
       "Function 'run_graph_generation' has 158 lines",
       "Function 'hetero_neighbor_sample' has 172 lines",
       "Function 'make_layer' has 166 lines",
@@ -7631,6 +7785,8 @@
       "Function 'hard_negative_sampling' has 152 lines"
     ],
     "P2_medium": [
+      "File has 915 lines (warn at 800)",
+      "Function '__init__' has 150 lines",
       "Function '_batch_graphs' has 130 lines",
       "Function '__init__' has 140 lines",
       "Function '__init__' has 113 lines",
@@ -7643,9 +7799,7 @@
       "Function 'fit' has 81 lines",
       "Function 'AnomalyInjectedGraph' has 105 lines",
       "Function 'MotifInjectedGraph' has 86 lines",
-      "Function 'validate_generated_graph' has 92 lines",
-      "Function '_make_structural_graph' has 106 lines",
-      "File has 1033 lines (warn at 800)"
+      "Function 'validate_generated_graph' has 92 lines"
     ],
     "P3_low": [
       "[F401] `.generation.GeneratedGraph` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",

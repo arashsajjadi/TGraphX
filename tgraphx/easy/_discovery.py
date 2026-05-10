@@ -60,27 +60,39 @@ def list_tasks() -> Dict[str, str]:
     return dict(_TASKS)
 
 
-def list_models(task: Optional[str] = None) -> Dict[str, str]:
+def list_models(
+    task: Optional[str] = None,
+    group_by_task: bool = False,
+) -> "Dict[str, Any]":
     """Return available model names for a given task.
 
     Args:
         task: Task name (e.g. ``"node_classification"``).  When ``None``,
-            return all models for all tasks.
+            returns models for all tasks.
+        group_by_task: When ``True`` and ``task`` is ``None``, returns a nested
+            dict ``{task_name: {model_name: description}}`` instead of a flat
+            dict.  When ``task`` is specified, this parameter has no effect.
 
     Returns:
-        Dict mapping model name to description.
+        When ``task`` is given: flat ``dict[str, str]`` of model→description.
+        When ``task=None, group_by_task=False``: flat merged dict (default,
+        backward-compatible).
+        When ``task=None, group_by_task=True``: nested dict keyed by task.
     """
-    if task is None:
-        result: Dict[str, str] = {}
-        for models in _MODELS.values():
-            result.update(models)
-        return result
-    if task not in _MODELS:
-        available = list(_MODELS)
-        raise TGraphXUnknownNameError(
-            f"Unknown task '{task}'. Available tasks: {available}."
-        )
-    return dict(_MODELS[task])
+    if task is not None:
+        if task not in _MODELS:
+            available = list(_MODELS)
+            raise TGraphXUnknownNameError(
+                f"Unknown task '{task}'. Available tasks: {available}."
+            )
+        return dict(_MODELS[task])
+    if group_by_task:
+        return {t: dict(m) for t, m in _MODELS.items()}
+    # Default: flat merged dict (backward-compatible).
+    result: Dict[str, str] = {}
+    for models in _MODELS.values():
+        result.update(models)
+    return result
 
 
 def list_samplers() -> Dict[str, str]:

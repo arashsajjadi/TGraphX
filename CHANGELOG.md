@@ -5,6 +5,99 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.3] — 2026-05-09
+
+Final cleanup pass before the v1.1 development sprint.
+
+### Fixed
+- Benchmark smoke tests (`test_generation_rl_benchmarks_smoke.py`) no longer
+  produce spurious TIMEOUT failures under concurrent CPU load; subprocess
+  timeouts increased to 120 s / 90 s and the fragile wall-clock assertion
+  removed.
+- `examples/run_all_fast_examples.py` now has a per-example `TIMEOUT_OVERRIDES`
+  dict; the TD3/SAC demo gets 120 s (was sharing the 60 s global default).
+
+### Added
+- `KnowledgeGraph.from_hrt(heads, relations, tails, ...)` — classmethod for
+  users who have separate h/r/t tensors instead of a combined `[N_t, 3]` matrix.
+  The existing `from_triples` classmethod accepts tuple lists and `[N_t, 3]`
+  tensors.  The constructor error message now explicitly points to both helpers.
+- `result.plot_loss()` and `result.plot_metrics()` now raise `ValueError` with
+  an actionable message when no training history is available, and report
+  available metric keys if `"loss"` is absent.
+- `tgx.easy.list_models(group_by_task=True)` — nested dict grouped by task for
+  better discoverability (default flat dict unchanged, backward-compatible).
+- `.gitignore` explicit `!TGRAPHX.png` / `!TGRAPHX_LOGO.svg` exceptions so
+  tracked logo assets are not accidentally re-ignored on fresh clones.
+
+### Changed
+- `docs/index.md` — added "Quick navigation" table and Easy Mode / LLM guide
+  section; added NeighborLoader row in the Sampling table.
+- `docs/neighbor_loader.md` — new section explaining dense vs sparse global-ID
+  mapping paths in `map_global_to_local`.
+- `docs/limitations.md` — added "Resolved in v1.0.1–v1.0.3" table, roadmap
+  items, and explicitly-out-of-scope section.
+- `docs/easy_mode.md` — added dashboard integration guidance, seed-cost note,
+  and `tgraphx-info` alias clarification.
+- `docs/api_stability.md` — version header updated to `v1.0.1+`; added
+  `graph_features` field note and `KnowledgeGraph.from_triples` entry.
+- `tgraphx/__main__.py` — docstring clarifies `tgraphx-info` is an alias for
+  `tgraphx-doctor` (both registered console scripts; same behaviour).
+
+---
+
+## [1.0.2] — 2026-05-09
+
+UX ergonomics cleanup.
+
+### Fixed
+- `float(loss)` in `easy/_workflows.py` replaced with `loss.detach().item()` to
+  silence autograd scalar-conversion warnings.
+- `benchmarks/ux/benchmark_easy_vs_manual.py` fairness: manual and easy branches
+  now use the same two-layer architecture, same device (`--device cpu` default),
+  same `set_seed` call, and median-of-3 timing.  Measured overhead: −0.46%.
+- `map_global_to_local` (`tgraphx/loaders.py`): added `torch.searchsorted`
+  fallback for global node IDs > 2 000 000 to avoid O(max_id) memory.
+- `Graph(graph_features=...)`: now stores a **distinct** graph-level input
+  feature in `self.graph_features` instead of aliasing to `graph_label`.
+
+### Changed
+- `tgraphx/easy/` split from a single 1 009-line file into a modular package.
+  Public API unchanged.
+- `pyproject.toml`: SPDX `license = "MIT"` + `license-files`; deprecated
+  `License` classifier removed.  Build is now warning-free.
+- Added `TestGraphFeaturesSemantics`, sparse-ID tests for
+  `TestMapGlobalToLocal`, and deterministic `test_graph_num_classes`.
+
+---
+
+## [1.0.1] — 2026-05-09
+
+First UX / API ergonomics hardening pass.
+
+### Added
+- `Graph(..., y=y)`, `Graph(..., labels=y)`, `Graph(..., edge_attr=ef)` and
+  related PyG-style properties (`g.x`, `g.y`, `g.edge_attr`, `g.num_classes`,
+  masks).
+- `Graph.has_labels()`, `Graph.get_labels()`, `Graph.with_labels(y)`.
+- `GraphMiniBatch` — ergonomic batch object from `NeighborLoader` with
+  `batch.node_features`, `batch.seed_y`, `batch.seed_logits(logits)`, etc.
+  Legacy tuple unpacking preserved.
+- `map_global_to_local`, `seed_logits` helpers.
+- `tgraphx.easy` package: `train_node_classifier`, `synthetic_*`, `list_tasks`,
+  `list_models`, `list_samplers`, `doctor`, `EasyResult`, `EasyConfig`, and
+  custom exceptions.
+- `python -m tgraphx` CLI; `tgraphx-doctor` / `tgraphx-info` console scripts.
+- Canonical tutorial `tutorials/tensor_node_classification_neighbor_loader.py`.
+- `docs/easy_mode.md`, `docs/neighbor_loader.md`, `docs/llm_usage_guide.md`,
+  `docs/api_cheatsheet.json`, `docs/user_experience_api_contract.md`.
+- 96 new tests (`test_user_friendly_llm_snippets.py`,
+  `test_api_stability_labels.py`).
+- `benchmarks/ux/benchmark_easy_vs_manual.py`.
+- README routing table, Easy Mode section, fixed KG quickstart API.
+
+---
+
 ## [1.0.0] — 2026-05-09
 
 First stable research release of TGraphX.

@@ -85,7 +85,7 @@ def list_kg_models() -> dict:
 
 __all__ = [
     # Data model
-    "KnowledgeGraph",
+    "KnowledgeGraph",   # .from_hrt() and .from_triples() are classmethods
     "TemporalKnowledgeGraph",
     # Multimodal projectors
     "VectorEntityProjector",

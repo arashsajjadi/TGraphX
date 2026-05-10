@@ -6,12 +6,24 @@ networks, scalable samplers (GraphSAINT, Cluster-GCN), knowledge graphs,
 hypergraphs, temporal and heterogeneous graph learning, a local dashboard,
 sklearn-like estimators, and benchmark tooling — all in one package.
 
+## Quick navigation
+
+| I want to… | Go to |
+|------------|-------|
+| Start without boilerplate (Easy Mode) | [easy_mode.md](easy_mode.md) |
+| Generate correct code / use a code assistant | [llm_usage_guide.md](llm_usage_guide.md) · [api_cheatsheet.json](api_cheatsheet.json) |
+| Understand NeighborLoader / GraphMiniBatch | [neighbor_loader.md](neighbor_loader.md) |
+| Check API stability labels | [api_stability.md](api_stability.md) |
+| Open the dashboard | [dashboard.md](dashboard.md) |
+| See known limitations | [limitations.md](limitations.md) |
+
 ## Getting started
 
 | Step | Doc |
 |------|-----|
 | Install + first steps | [getting_started.md](getting_started.md) |
 | 10-minute tutorial path | [tutorials.md](tutorials.md) |
+| Easy Mode (zero-boilerplate workflows) | [easy_mode.md](easy_mode.md) |
 
 ## Core graph data model
 
@@ -38,6 +50,7 @@ sklearn-like estimators, and benchmark tooling — all in one package.
 
 | Topic | Doc |
 |-------|-----|
+| NeighborLoader / GraphMiniBatch (seed-node contract, sparse IDs) | [neighbor_loader.md](neighbor_loader.md) |
 | GraphSAINT samplers | [graphsaint.md](graphsaint.md) |
 | Cluster-GCN | [cluster_gcn.md](cluster_gcn.md) |
 | Negative sampling | [negative_sampling.md](negative_sampling.md) |
@@ -90,6 +103,15 @@ sklearn-like estimators, and benchmark tooling — all in one package.
 | Device validation | [device_validation.md](device_validation.md) |
 | Benchmark protocol | [benchmark_protocol.md](benchmark_protocol.md) |
 | Plotting | [plotting.md](plotting.md) |
+
+## Easy Mode and LLM usage
+
+| Topic | Doc |
+|-------|-----|
+| Easy Mode (zero-boilerplate workflows) | [easy_mode.md](easy_mode.md) |
+| LLM / code-assistant usage guide | [llm_usage_guide.md](llm_usage_guide.md) |
+| Machine-readable API cheatsheet | [api_cheatsheet.json](api_cheatsheet.json) |
+| User experience API contract | [user_experience_api_contract.md](user_experience_api_contract.md) |
 
 ## API reference and policies
 

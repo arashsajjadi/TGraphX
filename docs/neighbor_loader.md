@@ -166,6 +166,42 @@ iteration, so tuple unpacking continues to work without code changes.
 
 ---
 
+## Global node ID mapping internals
+
+`NeighborLoader` records sampling metadata in
+`subgraph.metadata['sampling']['original_node_ids']` — a `LongTensor[N_sub]`
+of the **global** node IDs for every node in the sampled subgraph.
+`seed_node_ids` holds the global IDs of the seed (supervision) nodes;
+`seed_local_indices` holds their **positions** within that subgraph.
+
+### Dense vs sparse ID path
+
+`map_global_to_local` (used internally by `GraphMiniBatch`) uses two strategies:
+
+**Dense path** (IDs ≤ 2 000 000): builds a flat lookup array in
+`O(max_global_id)` memory.  Fast for graphs with compact, 0-based node IDs
+(the common case).
+
+**Sparse/high-ID path** (IDs > 2 000 000): falls back to
+`torch.searchsorted` on sorted sampled IDs.  Memory is `O(N_sub)` independent
+of the largest global ID value.  This is important for graphs where node IDs
+are globally assigned across multiple partitions, or for KG entity IDs that can
+be in the millions.
+
+Both paths produce identical results.  The path is chosen automatically.
+
+```python
+from tgraphx import map_global_to_local
+
+# Works for both compact (1000 IDs) and sparse (5 000 030 IDs) cases.
+sampled = torch.tensor([5_000_010, 5_000_020, 5_000_030])
+seeds   = torch.tensor([5_000_030, 5_000_010])
+local   = map_global_to_local(seeds, sampled)
+# → tensor([2, 0])
+```
+
+---
+
 ## Troubleshooting
 
 | Error | Cause | Fix |
@@ -173,6 +209,7 @@ iteration, so tuple unpacking continues to work without code changes.
 | `ValueError: Batch labels are unavailable` | Source `Graph` has no `y/labels` | `Graph(..., y=labels)` or `g.y = labels` |
 | `ValueError: seed_local_indices could not be computed` | Custom sampler without metadata | Use `NeighborLoader` (sets sampling metadata automatically) |
 | `AttributeError: tuple object has no attribute node_features` | Still using old `for subgraph, seeds` but then calling `.node_features` on the batch | Use `for batch in loader: batch.node_features` |
+| `ValueError: ... not found in the sampled subgraph` | Sparse global IDs not present in subgraph | Verify the sampling actually includes those seeds; use `NeighborLoader`, not a custom sampler |
 
 ---
 
@@ -181,3 +218,4 @@ iteration, so tuple unpacking continues to work without code changes.
 - Tutorial: `tutorials/tensor_node_classification_neighbor_loader.py`
 - Example: `examples/easy_tensor_node_classification_no_torch.py`
 - Tests: `tests/test_user_friendly_llm_snippets.py::TestNeighborLoaderReturnsGraphMiniBatch`
+- Source: `tgraphx/loaders.py::map_global_to_local`

@@ -3,6 +3,30 @@
 This document records known limitations honestly.
 See [Performance](performance.md) for performance-specific constraints.
 
+---
+
+## Resolved in v1.0.1 – v1.0.3
+
+These items were previously open; they are now fixed:
+
+| Item | Fixed in |
+|------|---------|
+| `Graph(..., y=...)` not accepted (node labels must be passed as `node_labels=`) | v1.0.1 |
+| `NeighborLoader` returned an ambiguous tuple; `batch.node_features` etc. not available | v1.0.1 (GraphMiniBatch added) |
+| Unsafe `logits[:batch_size]` pattern encouraged by docs | v1.0.1 (seed_logits API documented) |
+| `easy.py` as a single 1000-line file; no modular structure | v1.0.2 (split into `tgraphx/easy/` package) |
+| `map_global_to_local` allocated O(max_global_id) memory for sparse high-valued IDs | v1.0.2 (searchsorted fallback, O(N_sub log N_sub)) |
+| `graph_features=` constructor kwarg aliased to `graph_label` (wrong semantics) | v1.0.2 (now a distinct input-feature field) |
+| Packaging: `project.license` as TOML table deprecated by setuptools | v1.0.2 (SPDX `license = "MIT"`) |
+| Benchmark fairness: easy-mode benchmark used 1-layer manual vs 2-layer easy model on different devices | v1.0.2 (fixed) |
+| Benchmark smoke tests flaky under CPU saturation (30s / 60s subprocess timeouts too tight) | v1.0.3 (120s / 90s; wall-clock assertion removed) |
+| `docs/index.md` missing Easy Mode and LLM guide links | v1.0.3 |
+| `docs/neighbor_loader.md` missing sparse high-ID path documentation | v1.0.3 |
+
+---
+
+## Remaining known limitations
+
 ## GNN layer constraints
 
 | Limitation | Status | Workaround |
@@ -104,7 +128,30 @@ semantics differ. Data-format converters are available in
 `from_dgl_graph`, and their hetero counterparts); they convert graph
 objects between formats but do not make the two APIs interchangeable.
 
+## Roadmap items (not current limitations)
+
+The following are **planned for future releases** but are not present now.
+They are listed so users know what to expect rather than wonder:
+
+| Item | Target |
+|------|--------|
+| Real-dataset PyG/DGL/OGB parity benchmarks | v1.1+ |
+| Easy Mode dedicated dashboard panel | v1.1+ |
+| Full PyKEEN model zoo parity (30+ KG models) | v1.2+ |
+| Production-scale distributed RL | roadmap |
+| Full NetworkX algorithm breadth | out of scope |
+| Molecular validity metrics for graph generation | research |
+
+## Explicitly out of scope
+
+- TGraphX is not a drop-in replacement for PyG, DGL, NetworkX, PyKEEN, or
+  RLlib. It occupies a different integration point: tensor-aware graph learning
+  in one research-focused package.
+- Per-pixel / per-voxel GAT attention — `[E, K, H, W]` score tensors are
+  memory-prohibitive and will not be added.
+- Full automatic multi-GPU training framework — DDP is the user's
+  responsibility; TGraphX provides only rank-zero / barrier helpers.
+
 ## Version
 
-These limitations apply to the current TGraphX release. Deferred items may
-be addressed in future releases. See [CHANGELOG.md](../CHANGELOG.md).
+These limitations apply to the current TGraphX release. See [CHANGELOG.md](../CHANGELOG.md) for a full history.

@@ -1,18 +1,18 @@
 # TGraphX Technical Debt Report
 
-**Generated:** 2026-05-09T01:12:03.610590  
-**Package version:** 0.6.0  
-**Total Debt Score:** 12.5/100 — **EXCELLENT**
+**Generated:** 2026-05-09T18:18:55.318563  
+**Package version:** 1.0.1  
+**Total Debt Score:** 12.6/100 — **EXCELLENT**
 
 ---
 
 ## 1. Executive Summary
 
 - **Blockers:** 0
-- **High debt:** 7
-- **Medium debt:** 158
-- **Low debt:** 580
-- **Total findings:** 745
+- **High debt:** 8
+- **Medium debt:** 164
+- **Low debt:** 590
+- **Total findings:** 762
 
 > **Verdict:** Release quality is acceptable. No blockers found.
 
@@ -22,17 +22,17 @@
 
 | Category | Score (0–100) | Weight |
 |----------|:---:|:---:|
-| Complexity Debt | 33.4 🟡 | 15% |
+| Complexity Debt | 35.3 🟡 | 15% |
 | Dead Code Debt | 0.0 🟢 | 12% |
 | Test Coverage Debt | 0.0 🟢 | 15% |
-| Docs Api Drift Debt | 24.0 🟡 | 15% |
-| Type Debt | 8.8 🟢 | 10% |
-| Architecture Import Debt | 27.6 🟡 | 10% |
-| Performance Guard Debt | 2.6 🟢 | 10% |
+| Docs Api Drift Debt | 23.1 🟡 | 15% |
+| Type Debt | 8.6 🟢 | 10% |
+| Architecture Import Debt | 27.3 🟡 | 10% |
+| Performance Guard Debt | 2.5 🟢 | 10% |
 | Security Debt | 0.0 🟢 | 5% |
 | Packaging Release Debt | 0.0 🟢 | 3% |
 | Ai Code Smell Debt | 0.6 🟢 | 5% |
-| **Total (weighted)** | **12.5** | 100% |
+| **Total (weighted)** | **12.6** | 100% |
 
 ---
 
@@ -57,7 +57,7 @@ _No blockers found._
 | File | Risk Score |
 |------|:---:|
 | `tgraphx/mining/__init__.py` | 97 |
-| `tgraphx/__init__.py` | 89 |
+| `tgraphx/__init__.py` | 87 |
 | `tgraphx/dashboard/app.py` | 48 |
 | `tgraphx/generation/high_level_api.py` | 34 |
 | `tgraphx/rl/__init__.py` | 24 |
@@ -65,6 +65,7 @@ _No blockers found._
 | `tgraphx/evolutionary/high_level_api.py` | 12 |
 | `tgraphx/evolutionary/operators.py` | 12 |
 | `tgraphx/kg/__init__.py` | 12 |
+| `tgraphx/kg/data.py` | 11 |
 | `tgraphx/graph_builders.py` | 10 |
 | `tgraphx/hetero_sampling.py` | 10 |
 | `tgraphx/layers/gat.py` | 10 |
@@ -73,9 +74,8 @@ _No blockers found._
 | `tgraphx/kg/evaluation.py` | 9 |
 | `tgraphx/rl/algorithms/continuous.py` | 9 |
 | `tgraphx/tracking.py` | 9 |
+| `tgraphx/core/graph.py` | 8 |
 | `tgraphx/generation/classical.py` | 8 |
-| `tgraphx/layers/factory.py` | 8 |
-| `tgraphx/mining/prototype.py` | 8 |
 
 ---
 
@@ -83,12 +83,14 @@ _No blockers found._
 
 | File | Function | Lines |
 |------|----------|:---:|
+| `tgraphx/easy/_workflows.py` | `train_node_classifier` | 188 |
 | `tgraphx/hetero_sampling.py` | `hetero_neighbor_sample` | 172 |
 | `tgraphx/layers/factory.py` | `make_layer` | 166 |
 | `tgraphx/generation/high_level_api.py` | `run_graph_generation` | 158 |
 | `tgraphx/layers/gat.py` | `forward` | 154 |
 | `tgraphx/dashboard/app.py` | `_api_metrics` | 153 |
 | `tgraphx/sampling_negative.py` | `hard_negative_sampling` | 152 |
+| `tgraphx/core/graph.py` | `__init__` | 150 |
 | `tgraphx/evolutionary/high_level_api.py` | `run_evolutionary_optimization` | 148 |
 | `tgraphx/dashboard/app.py` | `_collect_hardware` | 146 |
 | `tgraphx/rl/high_level_api.py` | `_run_continuous` | 146 |
@@ -98,17 +100,14 @@ _No blockers found._
 | `tgraphx/performance.py` | `env_report` | 129 |
 | `tgraphx/hetero_sampling.py` | `hetero_induced_subgraph` | 122 |
 | `tgraphx/sampling.py` | `random_walk_sample` | 121 |
+| `tgraphx/kg/data.py` | `__init__` | 115 |
 | `tgraphx/core/hetero_graph.py` | `__init__` | 113 |
-| `tgraphx/kg/data.py` | `__init__` | 112 |
 | `tgraphx/layers/sage.py` | `forward` | 111 |
-| `tgraphx/layers/graph_transformer.py` | `forward` | 110 |
-| `tgraphx/graph_builders.py` | `build_iou_graph` | 108 |
 
 ---
 
 ## 7. Docs / API Drift
 
-- **[medium]** `tgraphx/__init__.py` — Public export 'LinkNeighborLoader' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/kg/__init__.py` — Public export 'write_kg_model_report' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/kg/__init__.py` — Public export 'write_kg_gnn_report' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/kg/__init__.py` — Public export 'write_temporal_kg_report' has no reference in tests/examples/docs
@@ -121,23 +120,23 @@ _No blockers found._
 - **[medium]** `tgraphx/rl/networks/__init__.py` — Public export 'EdgeActionPolicy' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/rl/networks/__init__.py` — Public export 'GraphEditPolicy' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/rl/algorithms/__init__.py` — Public export 'BaseAgent' has no reference in tests/examples/docs
-- **[medium]** `tgraphx/rl/algorithms/__init__.py` — Public export 'A2CAgent' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/rl/__init__.py` — Public export 'make_graph_policy' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/rl/exploration/__init__.py` — Public export 'LinearEpsilonDecay' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/rl/exploration/__init__.py` — Public export 'BoltzmannExploration' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/rl/exploration/__init__.py` — Public export 'UCBExploration' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/rl/exploration/__init__.py` — Public export 'EntropyRegularizer' has no reference in tests/examples/docs
 - **[medium]** `tgraphx/rl/__init__.py` — Public export 'episode_length_mean' has no reference in tests/examples/docs
+- **[medium]** `tgraphx/rl/__init__.py` — Public export 'policy_entropy' has no reference in tests/examples/docs
+- **[medium]** `tgraphx/rl/__init__.py` — Public export 'approximate_kl' has no reference in tests/examples/docs
 
 ---
 
 ## 8. Public API Coverage
 
-- Total public exports found: 633
-- Exports without test/doc/example reference: 90
+- Total public exports found: 661
+- Exports without test/doc/example reference: 79
 
 **Unreferenced exports (sample):**
-- `Public export 'LinkNeighborLoader' has no reference in tests/examples/docs`
 - `Public export 'write_kg_model_report' has no reference in tests/examples/docs`
 - `Public export 'write_kg_gnn_report' has no reference in tests/examples/docs`
 - `Public export 'write_temporal_kg_report' has no reference in tests/examples/docs`
@@ -150,8 +149,9 @@ _No blockers found._
 - `Public export 'EdgeActionPolicy' has no reference in tests/examples/docs`
 - `Public export 'GraphEditPolicy' has no reference in tests/examples/docs`
 - `Public export 'BaseAgent' has no reference in tests/examples/docs`
-- `Public export 'A2CAgent' has no reference in tests/examples/docs`
 - `Public export 'make_graph_policy' has no reference in tests/examples/docs`
+- `Public export 'LinearEpsilonDecay' has no reference in tests/examples/docs`
+- `Public export 'BoltzmannExploration' has no reference in tests/examples/docs`
 
 ---
 
@@ -208,25 +208,26 @@ _No security patterns detected._
 
 ## 14. Lint Summary (ruff)
 
-Total lint findings: 374
+Total lint findings: 380
 
 **Top rule codes:**
-- `F401`: 345
+- `F401`: 348
 - `F841`: 14
 - `E702`: 8
-- `F821`: 3
+- `F821`: 4
+- `F811`: 2
 - `E741`: 2
+- `E713`: 1
 - `E731`: 1
-- `F811`: 1
 
 ---
 
 ## 15. Type Debt (mypy)
 
-Total mypy errors: 164
+Total mypy errors: 168
 
 **By module:**
-- `tgraphx`: 164
+- `tgraphx`: 168
 
 ---
 
@@ -236,6 +237,7 @@ Total mypy errors: 164
 ### P1 — High Debt (fix in v1.x patch)
 - File has 1426 lines (max 1200)
 - Function '_api_metrics' has 153 lines
+- Function 'train_node_classifier' has 188 lines
 - Function 'run_graph_generation' has 158 lines
 - Function 'hetero_neighbor_sample' has 172 lines
 - Function 'make_layer' has 166 lines
@@ -243,6 +245,8 @@ Total mypy errors: 164
 - Function 'hard_negative_sampling' has 152 lines
 
 ### P2 — Medium Debt (tech debt sprint)
+- File has 915 lines (warn at 800)
+- Function '__init__' has 150 lines
 - Function '_batch_graphs' has 130 lines
 - Function '__init__' has 140 lines
 - Function '__init__' has 113 lines
@@ -251,8 +255,6 @@ Total mypy errors: 164
 - Function '_handle_api' has 106 lines
 - File has 880 lines (warn at 800)
 - Function 'run_evolutionary_optimization' has 148 lines
-- Function '_validate' has 92 lines
-- Function 'fit' has 81 lines
 
 ### P3 — Low (nice-to-have)
 - [F401] `.generation.GeneratedGraph` imported but unused; consider removing, adding to `__all__`, or using a redundant alias

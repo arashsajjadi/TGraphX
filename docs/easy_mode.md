@@ -178,11 +178,73 @@ tgx.easy.doctor()             # Installation health check
 
 ---
 
-## 9. CLI / module access
+## 9. Dashboard integration
+
+Easy Mode does not yet write dedicated dashboard artifacts automatically.
+The standard approach for viewing training metrics in the dashboard is to run
+training via `tgraphx.experiments.Runner` (which writes `metrics.csv`,
+`run_metadata.json`, and related files), then open the dashboard:
+
+```bash
+tgraphx-dashboard --logdir runs/my_run
+```
+
+When using Easy Mode, you can write artifacts manually after training:
+
+```python
+import tgraphx as tgx
+from tgraphx import write_run_metadata, write_metrics_summary
+
+result = tgx.easy.train_node_classifier(data, ...)
+
+# Write dashboard-compatible artifacts.
+import csv, pathlib
+run_dir = pathlib.Path("runs/easy_run")
+run_dir.mkdir(parents=True, exist_ok=True)
+
+with (run_dir / "metrics.csv").open("w", newline="") as f:
+    w = csv.DictWriter(f, fieldnames=["epoch", "loss", "accuracy"])
+    w.writeheader()
+    for i, row in enumerate(result.history):
+        w.writerow({"epoch": i, **row})
+
+write_run_metadata(run_dir / "run_metadata.json",
+                   run_name="easy_run", status="completed",
+                   **result.config)
+```
+
+A dedicated Easy Mode dashboard panel is planned for v1.1.  Until then,
+`result.summary()` and `result.plot_loss()` provide in-process viewing.
+
+---
+
+## 10. Seed cost and reproducibility
+
+When `seed` is not `None`, `train_node_classifier` calls `set_seed(seed)`,
+which sets torch, numpy, random, and cuDNN determinism flags.  This incurs a
+constant ~5-50 ms setup cost (higher when CUDA is available and cuDNN flags must
+be flipped).
+
+If you run many short training calls in a loop, pass `seed=None` for calls
+after the first:
+
+```python
+tgx.easy.train_node_classifier(data, ..., seed=42)   # seeded
+tgx.easy.train_node_classifier(data, ..., seed=None)  # no extra seed setup
+```
+
+The resolved seed is always visible in `result.config["seed"]`.
+
+---
+
+## 11. CLI / module access
 
 ```bash
 # System health check:
 python -m tgraphx doctor
+
+# Alias (same as doctor):
+python -m tgraphx info
 
 # Show all capabilities:
 python -m tgraphx capabilities

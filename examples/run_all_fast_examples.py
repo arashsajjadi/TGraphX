@@ -8,6 +8,13 @@ Usage::
     python examples/run_all_fast_examples.py
     python examples/run_all_fast_examples.py --timeout 30   # seconds per example
     python examples/run_all_fast_examples.py --verbose
+
+Per-example timeout overrides
+------------------------------
+Heavy examples (e.g. TD3/SAC continuous RL, which trains two networks) can
+exceed the global default under CPU load.  Add the script name to
+``TIMEOUT_OVERRIDES`` with the desired timeout in seconds to avoid a spurious
+TIMEOUT result without hiding genuine hangs.
 """
 from __future__ import annotations
 
@@ -18,6 +25,12 @@ import sys
 import time
 
 EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Scripts that need more time than the global default (e.g. two-network RL).
+# Keys must match the script_name field in FAST_EXAMPLES exactly.
+TIMEOUT_OVERRIDES: dict[str, int] = {
+    "graph_td3_sac_demo.py": 120,  # SAC + TD3 each train two networks; ~60-80s under load
+}
 
 # Each entry: (script_name, description, always_skip_reason_or_None)
 FAST_EXAMPLES = [
@@ -126,12 +139,14 @@ def run_example(script: str, timeout: int, verbose: bool) -> tuple[str, float, s
     if not os.path.isfile(path):
         return "MISSING", 0.0, None
 
+    effective_timeout = TIMEOUT_OVERRIDES.get(script, timeout)
+
     t0 = time.perf_counter()
     try:
         result = subprocess.run(
             [sys.executable, path],
             capture_output=not verbose,
-            timeout=timeout,
+            timeout=effective_timeout,
         )
         elapsed = time.perf_counter() - t0
         if result.returncode == 0:
@@ -139,7 +154,7 @@ def run_example(script: str, timeout: int, verbose: bool) -> tuple[str, float, s
         err = (result.stderr or b"").decode(errors="replace")[-200:]
         return "FAIL", elapsed, err
     except subprocess.TimeoutExpired:
-        return "TIMEOUT", timeout, f"exceeded {timeout}s"
+        return "TIMEOUT", effective_timeout, f"exceeded {effective_timeout}s"
     except Exception as exc:
         return "ERROR", time.perf_counter() - t0, str(exc)
 

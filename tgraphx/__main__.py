@@ -2,12 +2,22 @@
 
 Runs the TGraphX doctor check and prints system status.
 
+Console scripts registered in ``pyproject.toml``:
+
+- ``tgraphx-doctor`` — run the installation health check
+- ``tgraphx-info``   — alias for ``tgraphx-doctor`` (same behaviour)
+
+Both scripts delegate to ``main()`` in this module.
+
 Usage::
 
-    python -m tgraphx
+    python -m tgraphx              # same as doctor
     python -m tgraphx doctor
-    python -m tgraphx info
+    python -m tgraphx info         # alias for doctor
     python -m tgraphx capabilities
+    python -m tgraphx tasks
+    python -m tgraphx models
+    python -m tgraphx samplers
 """
 import sys
 
