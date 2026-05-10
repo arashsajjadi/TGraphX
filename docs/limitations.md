@@ -5,6 +5,18 @@ See [Performance](performance.md) for performance-specific constraints.
 
 ---
 
+## Resolved in v1.2 (this branch)
+
+| Item | Fixed in |
+|------|---------|
+| KG model zoo limited to TransE/DistMult/ComplEx/RotatE | v1.2 (`RESCALModel` added with hand-computed bilinear tests) |
+| No graph IO format for round-trip with NetworkX/Gephi | v1.2 (`tgraphx.io.write_graphml` / `read_graphml`, structure + scalar metadata + edge weight + 1-D features) |
+| No RL callback / logger system | v1.2 (`Callback`, `CallbackList`, `EarlyStoppingCallback`, `CSVLoggerCallback` in `tgraphx.rl`) |
+| No real-dataset tutorial pathway | v1.2 (Cora optional-PyG tutorial, image-patch tensor-graph demo, KG benchmark quickstart) |
+| No formal benchmark suite runner | v1.2 (`benchmarks/run_v12_benchmark_suite.py` with stable JSON schema) |
+| No Colab gallery index | v1.2 (`docs/colab_gallery.md`) |
+| No benchmark report doc | v1.2 (`docs/benchmark_report.md` with explicit smoke-vs-performance scope statement) |
+
 ## Resolved in v1.0.1 – v1.0.3
 
 These items were previously open; they are now fixed:

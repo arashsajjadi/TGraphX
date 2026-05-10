@@ -123,6 +123,19 @@ Tested and documented. API may expand but not break within the v1.x series.
 - `KGTrainer`, `KGTrainingConfig`
 - `list_kg_models()` *(new in v1.0.1)*
 - `KnowledgeGraph.from_hrt(heads, relations, tails, ...)` *(new in v1.0.3)* — classmethod for users with separate h/r/t tensors (the existing `from_triples` accepts tuple lists or `[N_t, 3]` tensors)
+- `RESCALModel(num_entities, num_relations, embedding_dim)` *(new in v1.2)* — bilinear KG model `f(h, r, t) = h^T M_r t`.  Hand-computed math tests included.
+
+### Graph IO *(new in v1.2)*
+- `tgraphx.io.write_graphml(graph, path, include_labels=True, include_tensor_features=False)`
+- `tgraphx.io.read_graphml(path, feature_dtype=torch.float32)`
+- Stability: Beta — round-trip tested; multi-dim tensor features rejected with clear error.
+
+### RL callbacks *(new in v1.2)*
+- `tgraphx.rl.Callback`
+- `tgraphx.rl.CallbackList`
+- `tgraphx.rl.EarlyStoppingCallback`
+- `tgraphx.rl.CSVLoggerCallback`
+- Stability: Beta — fully unit-tested. Composes with `run_graph_rl(...)` only when the user wires events explicitly; not auto-invoked yet.
 
 ### Classical graph generation
 - `FeatureAwareERGraph`, `FeatureAwareBAGraph`, `TemporalEvolvingGraph`, `TypedGeneratedGraph`, `AnomalyInjectedGraph`, `MotifInjectedGraph`
@@ -142,7 +155,7 @@ Tested and documented. API may expand but not break within the v1.x series.
 ### Graph RL — baselines
 - `RandomPolicy`, `GreedyPolicy` — no-learn baselines with stable API
 
-### Easy Mode *(new in v1.0.1)*
+### Easy Mode *(new in v1.0.1+)*
 - `tgraphx.easy.synthetic_tensor_node_classification`
 - `tgraphx.easy.synthetic_vector_node_classification`
 - `tgraphx.easy.synthetic_link_prediction`
@@ -150,9 +163,13 @@ Tested and documented. API may expand but not break within the v1.x series.
 - `tgraphx.easy.make_tensor_node_classifier`
 - `tgraphx.easy.make_vector_node_classifier`
 - `tgraphx.easy.train_node_classifier` / `fit_node_classifier`
-- `tgraphx.easy.list_tasks`, `list_models`, `list_samplers`, `list_workflows`, `explain_workflow`
+  - *(v1.1)*: `dashboard_dir=` parameter — automatically writes
+    `metrics.csv`, `run_metadata.json`, and `metrics_summary.json`.
+- `tgraphx.easy.list_tasks`, `list_models` *(v1.1: `group_by_task=True` parameter)*, `list_samplers`, `list_workflows`, `explain_workflow`
 - `tgraphx.easy.doctor`, `check_install`, `show_capabilities`
 - `tgraphx.easy.EasyConfig`, `EasyResult`
+  - *(v1.1)*: `EasyResult.write_dashboard_artifacts(run_dir)` — writes
+    three dashboard-compatible files; raises `ValueError` if no history.
 - `tgraphx.easy.TGraphXError`, `TGraphXConfigError`, `TGraphXLabelError`, `TGraphXShapeError`, `TGraphXUnknownNameError`
 
 ### CLI tools *(v1.0.1)*

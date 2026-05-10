@@ -43,6 +43,7 @@ __all__ = [
     "DistMultModel",
     "ComplExModel",
     "RotatEModel",
+    "RESCALModel",
 ]
 
 
@@ -369,3 +370,73 @@ class RotatEModel(KGScoringModel):
         diff_im = hr_im - t_im
         dist = torch.sqrt(diff_re ** 2 + diff_im ** 2 + 1e-12).sum(dim=-1)
         return self.margin - dist
+
+
+# ── RESCAL ────────────────────────────────────────────────────────────────────
+
+
+class RESCALModel(KGScoringModel):
+    """RESCAL: f(h, r, t) = h^T M_r t  where M_r is a [D, D] matrix per relation.
+
+    Reference: Nickel, Tresp, Kriegel — *A Three-Way Model for Collective
+    Learning on Multi-Relational Data*, ICML 2011.
+
+    Each entity has a vector embedding ``[D]``; each relation has a dense
+    matrix ``[D, D]``.  The score is the bilinear form ``h^T M_r t``.
+
+    Compared with DistMult (which uses a *diagonal* matrix), RESCAL captures
+    asymmetric and non-commutative relations.
+
+    Args:
+        num_entities: N_e.
+        num_relations: N_r.
+        embedding_dim: D.
+
+    Shape contract:
+        ``score_triples([B, 3]) -> FloatTensor[B]``.
+
+    Memory note:
+        Relation matrices use ``O(N_r · D^2)`` parameters.  For large D this
+        can be heavy.  Use modest D (e.g. 16-64) for tensor-native research.
+
+    Stability: Beta — fully tested with hand-computed reference values.
+    """
+
+    def __init__(
+        self,
+        num_entities: int,
+        num_relations: int,
+        embedding_dim: int = 32,
+    ) -> None:
+        super().__init__()
+        self.embedding_dim = int(embedding_dim)
+        D = self.embedding_dim
+        # Entity embeddings: [N_e, D]
+        self.entity_emb = nn.Embedding(num_entities, D)
+        # Relation matrices stored flat as [N_r, D*D]; reshaped on access.
+        self.relation_matrix = nn.Embedding(num_relations, D * D)
+        # Init: small uniform for stability of bilinear form gradients.
+        nn.init.xavier_uniform_(self.entity_emb.weight)
+        nn.init.xavier_uniform_(self.relation_matrix.weight)
+
+    def _M(self, r_idx: torch.Tensor) -> torch.Tensor:
+        """Return relation matrices [B, D, D]."""
+        D = self.embedding_dim
+        return self.relation_matrix(r_idx).view(-1, D, D)
+
+    def score_triples(self, triples: torch.Tensor) -> torch.Tensor:
+        """Compute h^T M_r t for each triple in the batch.
+
+        Args:
+            triples: ``LongTensor[B, 3]``.
+
+        Returns:
+            ``FloatTensor[B]``.
+        """
+        h_idx, r_idx, t_idx = triples[:, 0], triples[:, 1], triples[:, 2]
+        h = self.entity_emb(h_idx)            # [B, D]
+        t = self.entity_emb(t_idx)            # [B, D]
+        M = self._M(r_idx)                     # [B, D, D]
+        # h^T M t = sum_{ij} h_i M_ij t_j
+        # Implemented as einsum for clarity and efficiency.
+        return torch.einsum("bi,bij,bj->b", h, M, t)

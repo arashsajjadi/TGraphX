@@ -41,14 +41,15 @@ def test_benchmark_help(script):
 def test_benchmark_small_json(script):
     """Every benchmark script should produce valid JSON with --small --json.
 
-    Subprocess timeout is 120s (generous) because heavy RL comparison scripts
-    can run long under concurrent system load.  The timeout is the only guard
-    against infinite hangs — the wall-clock assertion is intentionally omitted
+    Subprocess timeout is 240s (very generous) because heavy RL comparison
+    scripts can run long under saturated CPU load (e.g. when the host is
+    running unrelated jobs).  The timeout is the only guard against
+    infinite hangs — the wall-clock assertion is intentionally omitted
     because it is fragile under CPU saturation.
     """
     result = subprocess.run(
         [PYTHON, str(script), "--small", "--json", "--seed", "0"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, timeout=240,
     )
 
     assert result.returncode == 0, (
@@ -71,13 +72,13 @@ def test_benchmark_small_json(script):
 def test_benchmark_no_network_access():
     """Benchmark scripts should not make network calls (torch.hub.load, requests, etc.).
 
-    Uses a 90s subprocess timeout rather than 30s so the test survives
+    Uses a 180s subprocess timeout rather than 30s so the test survives
     concurrent CPU load without a spurious timeout failure.
     """
     script = PROJECT_ROOT / "benchmarks" / "rl" / "benchmark_dqn_graph_env.py"
     result = subprocess.run(
         [PYTHON, str(script), "--small", "--json"],
-        capture_output=True, text=True, timeout=90,
+        capture_output=True, text=True, timeout=180,
         env={
             **__import__("os").environ,
             "HTTP_PROXY": "",

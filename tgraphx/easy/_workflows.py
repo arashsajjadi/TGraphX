@@ -30,6 +30,7 @@ def train_node_classifier(
     mask: Optional[Any] = None,
     verbose: bool = True,
     config: Optional[EasyConfig] = None,
+    dashboard_dir: Optional[str] = None,
 ) -> EasyResult:
     """Train a node classifier on a graph.
 
@@ -193,7 +194,9 @@ def train_node_classifier(
     elapsed = time.time() - t0
     final_metrics = history[-1] if history else {}
 
-    return EasyResult(
+    resolved_config["dashboard_dir"] = dashboard_dir
+
+    result = EasyResult(
         metrics=final_metrics,
         history=history,
         model=net,
@@ -204,6 +207,11 @@ def train_node_classifier(
         optimizer=opt,
         elapsed=elapsed,
     )
+
+    if dashboard_dir is not None and history:
+        result.write_dashboard_artifacts(dashboard_dir)
+
+    return result
 
 
 fit_node_classifier = train_node_classifier

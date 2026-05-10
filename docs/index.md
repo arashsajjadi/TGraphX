@@ -15,6 +15,9 @@ sklearn-like estimators, and benchmark tooling — all in one package.
 | Understand NeighborLoader / GraphMiniBatch | [neighbor_loader.md](neighbor_loader.md) |
 | Check API stability labels | [api_stability.md](api_stability.md) |
 | Open the dashboard | [dashboard.md](dashboard.md) |
+| Read benchmark results | [benchmark_report.md](benchmark_report.md) |
+| Browse Colab-style tutorials | [colab_gallery.md](colab_gallery.md) |
+| Read/write GraphML graphs | [io.md](io.md) |
 | See known limitations | [limitations.md](limitations.md) |
 
 ## Getting started

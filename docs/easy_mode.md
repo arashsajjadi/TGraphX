@@ -178,43 +178,48 @@ tgx.easy.doctor()             # Installation health check
 
 ---
 
-## 9. Dashboard integration
+## 9. Dashboard integration *(v1.1+)*
 
-Easy Mode does not yet write dedicated dashboard artifacts automatically.
-The standard approach for viewing training metrics in the dashboard is to run
-training via `tgraphx.experiments.Runner` (which writes `metrics.csv`,
-`run_metadata.json`, and related files), then open the dashboard:
+Easy Mode now writes dashboard-compatible artifacts directly.
 
-```bash
-tgraphx-dashboard --logdir runs/my_run
-```
+### Auto-write at training time
 
-When using Easy Mode, you can write artifacts manually after training:
+Pass `dashboard_dir=` to `train_node_classifier` and Easy Mode writes the
+artifacts as soon as training finishes:
 
 ```python
 import tgraphx as tgx
-from tgraphx import write_run_metadata, write_metrics_summary
 
-result = tgx.easy.train_node_classifier(data, ...)
-
-# Write dashboard-compatible artifacts.
-import csv, pathlib
-run_dir = pathlib.Path("runs/easy_run")
-run_dir.mkdir(parents=True, exist_ok=True)
-
-with (run_dir / "metrics.csv").open("w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=["epoch", "loss", "accuracy"])
-    w.writeheader()
-    for i, row in enumerate(result.history):
-        w.writerow({"epoch": i, **row})
-
-write_run_metadata(run_dir / "run_metadata.json",
-                   run_name="easy_run", status="completed",
-                   **result.config)
+result = tgx.easy.train_node_classifier(
+    data, model="tensor_gcn", epochs=5, seed=42,
+    dashboard_dir="runs/easy_run",
+)
 ```
 
-A dedicated Easy Mode dashboard panel is planned for v1.1.  Until then,
-`result.summary()` and `result.plot_loss()` provide in-process viewing.
+Then open the dashboard:
+
+```bash
+tgraphx-dashboard --logdir runs/easy_run
+```
+
+### Manual artifact write
+
+If you trained without `dashboard_dir=`, write the artifacts after the fact:
+
+```python
+result.write_dashboard_artifacts("runs/easy_run")
+```
+
+Both paths produce the same three files:
+
+| File | Content |
+|------|---------|
+| `metrics.csv` | One row per epoch with all numeric metrics |
+| `run_metadata.json` | Run name, status, total epochs, device, model, seed, tgraphx version, elapsed |
+| `metrics_summary.json` | Final metrics + `best_loss` + `best_epoch` |
+
+Calling `write_dashboard_artifacts()` with empty `result.history` raises
+`ValueError` so misuse fails loudly instead of writing zero-row files.
 
 ---
 

@@ -5,6 +5,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.0] — 2026-05-10
+
+Ecosystem-quality release with new KG model, graph IO, RL callbacks, tutorials, and benchmark suite.
+
+### Added
+- `RESCALModel` — bilinear KG scoring `f(h, r, t) = h^T M_r t` with hand-computed bilinear tests
+  (zero-matrix → 0, identity → dot product, concrete [[1,2],[3,4]] case → 61, asymmetry capture).
+  Listed in `list_kg_models()` and `docs/api_cheatsheet.json`.
+- `tgraphx.io.write_graphml` / `read_graphml` — pure-stdlib GraphML round-trip for structure,
+  `edge_weight`, node/edge labels, and 1-D tensor features. Multi-dim tensor features rejected
+  with clear error. 14 tests covering round-trip, labels, weights, paths, and error paths.
+- `tgraphx.rl.{Callback, CallbackList, EarlyStoppingCallback, CSVLoggerCallback}` — lightweight
+  RL callback system with fan-out, patience-based early stopping, and lazy-file CSV logging.
+  16 unit tests.
+- `tutorials/real_dataset_cora_node_classification.py` — optional PyG / graceful synthetic fallback.
+- `tutorials/image_patch_tensor_graph_demo.py` — image-patch tensor graph with tensor-vs-flatten comparison.
+- `tutorials/kg_benchmark_quickstart.py` — TransE / DistMult / RESCAL + filtered MRR / Hits@K.
+- `benchmarks/run_v12_benchmark_suite.py` — aggregates 7 representative benchmarks to a single
+  JSON with stable schema (`name`, `status`, `runtime_s`, `device`, `seed`, `metrics`).
+- `docs/benchmark_report.md` — formal benchmark structure with explicit smoke-vs-performance scope.
+- `docs/colab_gallery.md` — script-runnable tutorial index.
+- `docs/io.md` — GraphML usage, limitations, and roadmap.
+- Updated `docs/api_stability.md`, `docs/api_cheatsheet.json`, `docs/index.md`, and
+  `docs/limitations.md` for v1.2 additions.
+- Hand-computed math tests for KG filtered ranking, TransE distance, DQN target, Double DQN,
+  PPO clip (3 cases), GAE, and Polyak averaging (v1.1 additions, now part of stable test suite).
+- Loader robustness tests: NeighborLoader determinism, label/feature preservation, GraphSAINT
+  normalization, Cluster-GCN partition coverage, sparse backend fallback (v1.1 additions).
+
+### Validation
+- Full test suite passed locally: 2633 passed, 12 skipped, 0 failed.
+- Focused v1.2 tests passed locally.
+- Build and twine validation passed locally (zero warnings).
+- CI passed before tag/release.
+
+### Notes
+- This release does not claim parity with PyG/DGL, NetworkX, PyKEEN, SB3, or RLlib.
+- GEXF/Pajek IO, KG HPO, Gymnasium adapter, vectorized RL environments, and deeper graph mining
+  remain roadmap items.
+
+---
+
 ## [1.0.3] — 2026-05-09
 
 Final cleanup pass before the v1.1 development sprint.

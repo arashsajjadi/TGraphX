@@ -1,0 +1,114 @@
+{
+  "suite": "tgraphx_v12_smoke",
+  "package_version": "1.2.0",
+  "device": "cpu",
+  "seed": 42,
+  "small": true,
+  "benchmarks": [
+    {
+      "name": "easy_mode_train",
+      "status": "ok",
+      "device": "cpu",
+      "seed": 42,
+      "small": true,
+      "package_version": "1.2.0",
+      "runtime_s": 0.2213,
+      "metrics": {
+        "metrics": {
+          "loss": 1.1286481857299804,
+          "accuracy": 0.41
+        },
+        "epochs": 2
+      }
+    },
+    {
+      "name": "neighborloader_throughput",
+      "status": "ok",
+      "device": "cpu",
+      "seed": 42,
+      "small": true,
+      "package_version": "1.2.0",
+      "runtime_s": 0.0103,
+      "metrics": {
+        "batches_per_run": 5,
+        "graph_nodes": 200,
+        "graph_edges": 600
+      }
+    },
+    {
+      "name": "kg_train_eval",
+      "status": "ok",
+      "device": "cpu",
+      "seed": 42,
+      "small": true,
+      "package_version": "1.2.0",
+      "runtime_s": 0.0101,
+      "metrics": {
+        "filt_mrr": 0.15019246190786362,
+        "filt_h1": 0.05000000074505806,
+        "filt_h10": 0.375,
+        "num_entities": 30
+      }
+    },
+    {
+      "name": "classical_generation",
+      "status": "ok",
+      "device": "cpu",
+      "seed": 42,
+      "small": true,
+      "package_version": "1.2.0",
+      "runtime_s": 0.0017,
+      "metrics": {
+        "num_graphs": 5,
+        "validity": 1.0,
+        "uniqueness": 1.0
+      }
+    },
+    {
+      "name": "rl_random_baseline",
+      "status": "ok",
+      "device": "cpu",
+      "seed": 42,
+      "small": true,
+      "package_version": "1.2.0",
+      "runtime_s": 0.0008,
+      "metrics": {
+        "mean_return": 9.4,
+        "episodes": 5
+      }
+    },
+    {
+      "name": "graphml_round_trip",
+      "status": "ok",
+      "device": "cpu",
+      "seed": 42,
+      "small": true,
+      "package_version": "1.2.0",
+      "runtime_s": 0.0024,
+      "metrics": {
+        "round_trip_ok": true,
+        "num_nodes": 50,
+        "num_edges": 100
+      }
+    },
+    {
+      "name": "sparse_backend_info",
+      "status": "ok",
+      "device": "cpu",
+      "seed": 42,
+      "small": true,
+      "package_version": "1.2.0",
+      "runtime_s": 0.0352,
+      "metrics": {
+        "active_backend": "auto",
+        "torch_scatter_available": false,
+        "pyg_lib_available": false
+      }
+    }
+  ],
+  "limitations": [
+    "smoke benchmarks: tiny synthetic data, single device",
+    "not a competitive throughput claim vs PyG/DGL/PyKEEN/SB3/RLlib",
+    "use realistic-dataset benchmarks for adoption decisions"
+  ]
+}

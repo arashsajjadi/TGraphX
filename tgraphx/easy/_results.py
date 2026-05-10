@@ -92,6 +92,98 @@ class EasyResult:
         pathlib.Path(path).write_text(self.to_json())
         print(f"Report saved to {path}")
 
+    def write_dashboard_artifacts(self, run_dir: str) -> Dict[str, str]:
+        """Write dashboard-compatible artifacts to ``run_dir``.
+
+        Produces three files under ``run_dir`` that the TGraphX dashboard
+        renders out of the box:
+
+        - ``metrics.csv``         — per-epoch metrics from ``self.history``
+        - ``run_metadata.json``   — run name, status, device, seed, version
+        - ``metrics_summary.json``— final metrics (loss, accuracy, …)
+
+        Args:
+            run_dir: Directory to create.  Existing files are overwritten.
+
+        Returns:
+            Dict mapping artifact name to its absolute path.
+
+        Raises:
+            ValueError: If ``self.history`` is empty (training never ran).
+        """
+        import csv
+        import pathlib
+
+        if not self.history:
+            raise ValueError(
+                "No training history available — cannot write dashboard "
+                "artifacts.  Train via tgx.easy.train_node_classifier(...) "
+                "first."
+            )
+
+        run_path = pathlib.Path(run_dir)
+        run_path.mkdir(parents=True, exist_ok=True)
+
+        # 1. metrics.csv — one row per epoch, dashboard-compatible schema.
+        metrics_csv = run_path / "metrics.csv"
+        # Collect every metric key that ever appears so the CSV header is stable.
+        all_keys: List[str] = []
+        seen = set()
+        for row in self.history:
+            for k in row:
+                if k not in seen:
+                    seen.add(k)
+                    all_keys.append(k)
+        fieldnames = ["epoch"] + all_keys
+        with metrics_csv.open("w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            for i, row in enumerate(self.history):
+                w.writerow({"epoch": i, **row})
+
+        # 2. run_metadata.json
+        try:
+            import tgraphx as _tgx
+            tgx_version = _tgx.__version__
+        except Exception:
+            tgx_version = "unknown"
+
+        run_meta = {
+            "run_name": self.config.get("run_name", "easy_mode_run"),
+            "status": "completed",
+            "total_epochs": len(self.history),
+            "device": str(self.config.get("device", "cpu")),
+            "task": self.config.get("task", "node_classification"),
+            "model": self.config.get("model"),
+            "seed": self.config.get("seed"),
+            "tgraphx_version": tgx_version,
+            "elapsed_s": float(self.elapsed),
+            "source": "tgraphx.easy",
+        }
+        meta_path = run_path / "run_metadata.json"
+        meta_path.write_text(json.dumps(run_meta, indent=2))
+
+        # 3. metrics_summary.json — final metrics + best-loss epoch index.
+        summary = dict(self.metrics)
+        # Add a "best" record for the lowest loss seen, if loss is present.
+        losses = [e.get("loss") for e in self.history if "loss" in e]
+        if losses:
+            best_idx = min(range(len(losses)), key=lambda i: losses[i])
+            summary["best_loss"] = float(losses[best_idx])
+            summary["best_epoch"] = int(best_idx)
+        summary["epochs"] = len(self.history)
+        summary_path = run_path / "metrics_summary.json"
+        summary_path.write_text(json.dumps(summary, indent=2))
+
+        artifacts = {
+            "metrics.csv": str(metrics_csv),
+            "run_metadata.json": str(meta_path),
+            "metrics_summary.json": str(summary_path),
+        }
+        # Track in self.artifacts so subsequent calls / summary() can see them.
+        self.artifacts.update(artifacts)
+        return artifacts
+
     def plot_loss(self) -> None:
         """Plot training loss history (requires matplotlib).
 

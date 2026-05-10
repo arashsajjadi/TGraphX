@@ -86,6 +86,12 @@ from .metrics import (
 )
 from .config import RLTrainingConfig, PolicyConfig, RewardConfig, ConstraintConfig
 from .reports import write_graph_rl_env_report, write_graph_rl_training_report
+from .callbacks import (
+    Callback,
+    CallbackList,
+    EarlyStoppingCallback,
+    CSVLoggerCallback,
+)
 
 __all__ = [
     # Environments
@@ -167,4 +173,9 @@ __all__ = [
     # Reports
     "write_graph_rl_env_report",
     "write_graph_rl_training_report",
+    # Callbacks (v1.2)
+    "Callback",
+    "CallbackList",
+    "EarlyStoppingCallback",
+    "CSVLoggerCallback",
 ]

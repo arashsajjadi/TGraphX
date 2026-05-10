@@ -32,7 +32,8 @@
       "TransE",
       "DistMult",
       "ComplEx",
-      "RotatE"
+      "RotatE",
+      "RESCAL"
     ]
   },
   "samplers": [
@@ -122,15 +123,33 @@
       "show_capabilities"
     ],
     "result_fields": ["metrics", "history", "model", "graph", "config", "artifacts", "loader", "optimizer", "elapsed"],
-    "result_methods": ["summary", "print_summary", "to_dict", "to_json", "to_markdown", "plot_loss", "plot_metrics", "save_report"]
+    "result_methods": ["summary", "print_summary", "to_dict", "to_json", "to_markdown", "plot_loss", "plot_metrics", "save_report", "write_dashboard_artifacts"]
+  },
+  "io": {
+    "graphml_write": "tgraphx.io.write_graphml(graph, path, include_labels=True, include_tensor_features=False)",
+    "graphml_read": "tgraphx.io.read_graphml(path, feature_dtype=torch.float32)",
+    "stability": "Beta (v1.2)",
+    "limitations": [
+      "Multi-dim tensor features (rank > 1) rejected with include_tensor_features=True",
+      "graph_features / graph_label / metadata dict not serialised",
+      "Use torch.save for lossless persistence with tensor features"
+    ]
+  },
+  "rl_callbacks": {
+    "classes": ["Callback", "CallbackList", "EarlyStoppingCallback", "CSVLoggerCallback"],
+    "import": "from tgraphx.rl import Callback, CallbackList, EarlyStoppingCallback, CSVLoggerCallback",
+    "events": ["on_train_start", "on_episode_start", "on_episode_end", "on_update_end", "on_train_end"],
+    "stability": "Beta (v1.2) — composable, lazy-file CSV writes, deterministic"
   },
   "imports": {
     "node_classification": "from tgraphx import Graph, ConvMessagePassing, NeighborLoader, GraphMiniBatch",
     "easy_mode": "import tgraphx as tgx; tgx.easy.train_node_classifier(...)",
-    "kg": "from tgraphx.kg import KnowledgeGraph, TransEModel, KGTrainer",
+    "kg": "from tgraphx.kg import KnowledgeGraph, TransEModel, RESCALModel, KGTrainer",
     "generation": "from tgraphx import run_graph_generation, list_graph_generation_methods",
     "rl": "from tgraphx import run_graph_rl, list_graph_rl_algorithms",
+    "rl_callbacks": "from tgraphx.rl import Callback, CallbackList, EarlyStoppingCallback, CSVLoggerCallback",
     "mining": "from tgraphx.mining import analyze_graph",
-    "reproducibility": "from tgraphx.reproducibility import set_seed"
+    "reproducibility": "from tgraphx.reproducibility import set_seed",
+    "io": "from tgraphx.io import write_graphml, read_graphml"
   }
 }
