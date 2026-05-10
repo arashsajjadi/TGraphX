@@ -49,14 +49,18 @@ class TestStableCoreAPIs:
 
     def test_stable_console_scripts_defined(self):
         """pyproject.toml must define tgraphx-dashboard and tgraphx-train."""
-        import configparser
-        import tomllib
-        content = Path("pyproject.toml").read_bytes()
-        data = tomllib.loads(content.decode())
-        scripts = data.get("project", {}).get("scripts", {})
-        assert "tgraphx-dashboard" in scripts
-        assert "tgraphx-train" in scripts
-        assert "tgraphx-doctor" in scripts
+        # tomllib is Python 3.11+; use regex on the raw text for 3.10 compat.
+        import re
+        text = Path("pyproject.toml").read_text(encoding="utf-8")
+        # Find the [project.scripts] section content.
+        scripts_block = re.search(
+            r'\[project\.scripts\](.*?)(?=\[|\Z)', text, re.DOTALL
+        )
+        assert scripts_block is not None, "[project.scripts] section missing from pyproject.toml"
+        block = scripts_block.group(1)
+        assert "tgraphx-dashboard" in block, "tgraphx-dashboard not in [project.scripts]"
+        assert "tgraphx-train" in block, "tgraphx-train not in [project.scripts]"
+        assert "tgraphx-doctor" in block, "tgraphx-doctor not in [project.scripts]"
 
 
 class TestBetaAPIs:
