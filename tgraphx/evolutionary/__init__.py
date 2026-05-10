@@ -31,6 +31,7 @@ from .selection import (
 from .fitness import (
     connectivity_fitness,
     density_fitness,
+    sparsity_fitness,
     clustering_fitness,
     motif_count_fitness,
     constraint_penalty,
@@ -96,6 +97,7 @@ __all__ = [
     # Fitness
     "connectivity_fitness",
     "density_fitness",
+    "sparsity_fitness",
     "clustering_fitness",
     "motif_count_fitness",
     "constraint_penalty",

@@ -13,6 +13,7 @@ from .genome import GraphGenome
 __all__ = [
     "connectivity_fitness",
     "density_fitness",
+    "sparsity_fitness",
     "clustering_fitness",
     "motif_count_fitness",
     "constraint_penalty",
@@ -78,6 +79,29 @@ def density_fitness(genome: GraphGenome, target_density: float = 0.5) -> float:
     else:
         actual = genome.num_edges / (n * (n - 1))
     return 1.0 - abs(actual - target_density)
+
+
+def sparsity_fitness(genome: GraphGenome) -> float:
+    """Graph sparsity score (fewer edges → higher score).
+
+    f = 1 - density(G)
+
+    where density = |E| / (N * (N-1)).
+
+    Useful as a second objective in multi-objective optimization to balance
+    connectivity against edge economy.
+
+    Args:
+        genome: Input genome.
+
+    Returns:
+        Float in [0, 1]; 1.0 for an empty graph, 0.0 for a complete graph.
+    """
+    n = genome.num_nodes
+    if n <= 1:
+        return 1.0
+    density = genome.num_edges / (n * (n - 1))
+    return 1.0 - min(density, 1.0)
 
 
 def clustering_fitness(genome: GraphGenome) -> float:

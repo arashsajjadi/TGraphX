@@ -5,6 +5,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.5] — 2026-05-10
+
+Public Colab/API regression fix release. No new features.
+
+### Fixed
+- **NSGA-II notebook/API guidance**: `NSGAIIOptimizer` now raises a clear `TypeError`
+  at construction time if `composite_fitness` (or any multi-argument callable) is passed
+  directly. Error message explains the correct usage and points to `GeneticAlgorithmOptimizer`
+  for scalar scalarization.
+- **`sparsity_fitness`**: New fitness function (sparsity score in [0,1]; fewer edges = higher
+  score) exported from `tgraphx.evolutionary`. Serves as a natural second objective for
+  NSGA-II alongside `connectivity_fitness`.
+- **`degree_statistics` aliases**: Added `min_degree`, `max_degree`, `mean_degree` as
+  user-friendly aliases for total-degree statistics. Existing keys (`min_total_degree`,
+  `max_total_degree`, etc.) preserved for backward compatibility.
+- **`ConvMessagePassing` out_shape spatial downsampling**: `ConvMessagePassing` now
+  honours `out_shape` spatial dimensions exactly when they differ from `in_shape`.
+  Adds `nn.AdaptiveAvgPool2d/3d` after the aggregator when spatial dims change.
+  Fixes `RuntimeError: mat1 and mat2 shapes cannot be multiplied` that occurred when
+  building a classifier after `ConvMessagePassing(in_shape=(32,8,8), out_shape=(64,4,4))`.
+- **Benchmark notebook**: `tools/generate_colab_drafts.py` and `tools/generate_notebooks.py`
+  no longer reference `benchmarks/run_v13_benchmark_suite.py` as a local path. Updated to
+  use `from tgraphx.benchmarks import run_v13_benchmark_suite` (package-public API).
+- **Reproducibility**: Confirmed CPU deterministic mode is bitwise-exact; tests preserved.
+
+### Documentation
+- Removed stale "A Colab tutorial walks through every workflow" sentence and old single
+  Colab badge from `README.md`.
+- Added dedicated **Notebook Gallery** section to `README.md` (30 notebooks total).
+- Updated `docs/colab_gallery.md` with all 30 Google Drive notebook links.
+- Updated `docs/tutorials.md` to point to the gallery rather than a stale badge.
+- Updated `docs/evolutionary_graph_optimization.md` to clarify that `composite_fitness`
+  is for scalar scalarization and must not be passed directly to `NSGAIIOptimizer`.
+- Updated `colab_drafts/14_graph_generation_evolutionary_optimization.ipynb` to use
+  `[connectivity_fitness, sparsity_fitness]` as the NSGA-II objective list.
+
+### Validation
+- Added 51 Colab regression tests in `tests/test_colab_regressions_v135.py`.
+- Full test suite (2800+ tests) passes locally.
+- Built wheel passes clean-venv smoke tests.
+
+### Notes
+- This is a public Colab/API regression fix release.
+- No unrelated features were added.
+
+---
+
 ## [1.3.4] — 2026-05-10
 
 Comprehensive Colab-facing regression fix: mining API, benchmark portability, notebook hygiene.

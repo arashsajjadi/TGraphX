@@ -713,7 +713,7 @@ NB07 = notebook([
 results, and understand how to point the local dashboard to the artifact
 directory.
 
-**TGraphX subsystem:** `benchmarks/run_v13_benchmark_suite.py`
+**TGraphX subsystem:** `tgraphx.benchmarks`
 
 **Data:** Synthetic — no download.
 
@@ -722,22 +722,16 @@ directory.
 **Important note:** These are **smoke benchmarks** — tiny synthetic data.
 They are NOT competitive throughput claims against PyG, DGL, PyKEEN, or SB3.
 """),
-    code("""import subprocess, json, sys
-result = subprocess.run(
-    [sys.executable, "benchmarks/run_v13_benchmark_suite.py", "--small", "--json"],
-    capture_output=True, text=True,
-)
-if result.returncode != 0:
-    print("STDERR:", result.stderr[:500])
-else:
-    data = json.loads(result.stdout)
-    print(f"Suite: {data['suite']}")
-    print(f"Version: {data['package_version']}  Device: {data['device']}")
-    print()
-    for row in data['benchmarks']:
-        status = row['status']
-        rt = f"{row['runtime_s']:.3f}s" if row['runtime_s'] else "failed"
-        print(f"  {row['name']:<35} {status:<7} {rt}")"""),
+    code("""from tgraphx.benchmarks import run_v13_benchmark_suite
+
+data = run_v13_benchmark_suite(small=True, return_dict=True)
+print(f"Suite: {data['suite']}")
+print(f"Version: {data['package_version']}  Device: {data['device']}")
+print()
+for row in data['benchmarks']:
+    status = row['status']
+    rt = f"{row['runtime_s']:.3f}s" if row.get('runtime_s') else "failed"
+    print(f"  {row['name']:<35} {status:<7} {rt}")"""),
     md("## 2. Inspect Individual Benchmark Metrics"),
     code("""# Show metrics from successful rows.
 for row in data['benchmarks']:
@@ -766,7 +760,7 @@ with tempfile.TemporaryDirectory() as d:
 The honest scope is in `docs/benchmark_report.md`.
 
 ## 5. Next Steps
-- **Full suite:** `benchmarks/run_v13_benchmark_suite.py`
+- **Full suite:** `python -m tgraphx.benchmarks.run_v13_benchmark_suite`
 - **Report:** `docs/benchmark_report.md`
 - **Dashboard:** `tgraphx-dashboard --logdir <dir>`
 """),

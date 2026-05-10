@@ -415,8 +415,28 @@ class NSGAIIOptimizer:
         fitness_fn_list: Union[Callable[[GraphGenome], float], List[Callable[[GraphGenome], float]]],
     ) -> None:
         self.config = config
-        # Accept a single callable for convenience (wraps it in a one-element list).
         if callable(fitness_fn_list) and not isinstance(fitness_fn_list, list):
+            import inspect
+            try:
+                sig = inspect.signature(fitness_fn_list)
+                params = [
+                    p for p in sig.parameters.values()
+                    if p.default is inspect.Parameter.empty
+                ]
+                if len(params) > 1:
+                    name = getattr(fitness_fn_list, "__name__", repr(fitness_fn_list))
+                    raise TypeError(
+                        f"NSGAIIOptimizer expects a sequence/list of objective functions "
+                        f"(each taking a single GraphGenome argument), but received "
+                        f"{name!r} which requires {len(params)} positional "
+                        f"arguments {[p.name for p in params]}. "
+                        f"For scalar composite fitness, use GeneticAlgorithmOptimizer or wrap "
+                        f"components explicitly. "
+                        f"For multi-objective NSGA-II use a list: "
+                        f"NSGAIIOptimizer(config, [connectivity_fitness, sparsity_fitness])"
+                    )
+            except ValueError:
+                pass
             self.fitness_fn_list = [fitness_fn_list]
         else:
             self.fitness_fn_list = fitness_fn_list

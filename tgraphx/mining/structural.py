@@ -151,6 +151,7 @@ def degree_statistics(
             "min_out_degree": 0, "max_out_degree": 0, "mean_out_degree": 0.0,
             "min_in_degree": 0, "max_in_degree": 0, "mean_in_degree": 0.0,
             "min_total_degree": 0, "max_total_degree": 0, "mean_total_degree": 0.0,
+            "min_degree": 0, "max_degree": 0, "mean_degree": 0.0,
             "isolated_node_count": 0,
             "density": 0.0,
         }
@@ -176,6 +177,10 @@ def degree_statistics(
         "min_total_degree": tot_min,
         "max_total_degree": tot_max,
         "mean_total_degree": round(tot_mean, 6),
+        # User-friendly aliases for total-degree (common in undirected/structural contexts).
+        "min_degree": tot_min,
+        "max_degree": tot_max,
+        "mean_degree": round(tot_mean, 6),
         "isolated_node_count": isolated,
         "density": round(graph_density(edge_index, num_nodes, directed=directed), 8),
     }

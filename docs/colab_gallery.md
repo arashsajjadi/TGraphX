@@ -3,9 +3,9 @@
 A curated index of CPU-runnable, educational TGraphX notebooks focused on
 tensor-native graph intelligence workflows.
 
-> **Note on links.** Notebooks are provided as Google Drive files for download.
-> Open the file in Google Drive and choose "Open with Google Colaboratory", or
-> download and open with local Jupyter.
+> **Note on links.** Notebooks are provided as Google Drive files.
+> Open the link in Google Drive and choose **"Open with Google Colaboratory"**,
+> or download and open locally with Jupyter.
 > All notebooks are CPU-friendly and use synthetic or toy data unless noted.
 
 ---
@@ -17,11 +17,13 @@ tensor-native graph intelligence workflows.
 | # | Notebook | What it demonstrates | Link |
 |---|----------|----------------------|------|
 | 01 | 01_easy_tensor_node_classification | Train on `[C,H,W]` node features with Easy Mode; no boilerplate | [Google Drive](https://drive.google.com/file/d/1C-vydQXnn9LrYhx5hZDQl6H601itnbGp/view?usp=sharing) |
+| 23 | 23_dashboard_easy_mode_artifacts | Write dashboard artifacts from Easy Mode; view locally | [Google Drive](https://drive.google.com/file/d/1LgJ5JJNNmoAzJQUamAkFg8G009sLmS3L/view?usp=sharing) |
+| 25 | 25_reproducibility_and_seed_control | Deterministic training; `set_seed`, CPU strict mode, CUDA caveats | [Google Drive](https://drive.google.com/file/d/1ihdOfq-_z9iH9n7s52mJ2Veyog8jqdoB/view?usp=sharing) |
 | 26 | 26_low_level_pytorch_escape_hatch | From Easy Mode result objects to raw PyTorch control | [Google Drive](https://drive.google.com/file/d/1c8A1-_ZoImnmv4NgIGMDibD-x-Zm9nM_/view?usp=sharing) |
 | 27 | 27_custom_tensor_projector_workflow | Custom GNN with spatial pooling and classifier head | [Google Drive](https://drive.google.com/file/d/1DAVJ-dm6uP4vmExYDOp9hKkrE6SGB7vl/view?usp=sharing) |
 | 28 | 28_colab_install_and_doctor | Install TGraphX in Colab and verify with `tgraphx doctor` | [Google Drive](https://drive.google.com/file/d/1rHuhQKwNkZpH3_gj46xq1vwdvzutQd_9/view?usp=sharing) |
 | 29 | 29_end_to_end_research_workflow | Complete pipeline: data → model → train → metrics → artifacts | [Google Drive](https://drive.google.com/file/d/14y8rxwk8ajepynjSV2wvEbs7QQLLqXjB/view?usp=sharing) |
-| 23 | 23_dashboard_easy_mode_artifacts | Write dashboard artifacts from Easy Mode; view locally | [Google Drive](https://drive.google.com/file/d/1LgJ5JJNNmoAzJQUamAkFg8G009sLmS3L/view?usp=sharing) |
+| 30 | 30_limitations_and_roadmap_honest_demo | Honest capabilities and what is on the roadmap | [Google Drive](https://drive.google.com/file/d/1hfkS1NF--8Q9Lpw26tEveVTCvZpiOIM2/view?usp=sharing) |
 
 ### 2 — Tensor-Native Core Identity
 
@@ -49,11 +51,14 @@ tensor-native graph intelligence workflows.
 | 11 | 11_multimodal_kg_tensor_features | Feature-aware KG scoring with entity embeddings | [Google Drive](https://drive.google.com/file/d/1WVm__OQyWItg3SRozTUWeULs8QaYBUu1/view?usp=sharing) |
 | 12 | 12_kg_filtered_ranking_explained | Hand-checkable MRR / Hits@K on a tiny KG | [Google Drive](https://drive.google.com/file/d/1LgyDOIXb7iH70a5PxMHO8j6bYiHNS1GK/view?usp=sharing) |
 
-### 5 — Graph Generation
+### 5 — Graph Generation and Evolutionary Optimization
 
 | # | Notebook | What it demonstrates | Link |
 |---|----------|----------------------|------|
 | 13 | 13_graph_generation_metrics | ER/BA/SBM generation; validity, uniqueness, structural statistics | [Google Drive](https://drive.google.com/file/d/1Q8358qYmw80SBr-fXFmkTg1tcRhaUg16/view?usp=sharing) |
+| 14 | 14_graph_generation_evolutionary_optimization | Genetic algorithm (GA) and NSGA-II multi-objective optimization | [Google Drive](https://drive.google.com/file/d/Draft) |
+
+> Notebook 14 is available as a local draft (`colab_drafts/14_*.ipynb`). Generate with `python tools/generate_colab_drafts.py`.
 
 ### 6 — Graph Reinforcement Learning
 
@@ -69,11 +74,24 @@ tensor-native graph intelligence workflows.
 |---|----------|----------------------|------|
 | 18 | 18_graphml_io_roundtrip | GraphML read/write round-trip; tensor-feature limitations explained | [Google Drive](https://drive.google.com/file/d/11Ul2v5KVYkrVFOhoeSZkE6Y8HG1qcgu5/view?usp=sharing) |
 
-### 8 — Reproducibility and Workflows
+> Notebook 19 (`19_io_tensor_semantics_warning`) is available as a local draft.
+
+### 8 — Graph Mining
 
 | # | Notebook | What it demonstrates | Link |
 |---|----------|----------------------|------|
-| 30 | 30_limitations_and_roadmap_honest_demo | Honest capabilities and what is on the roadmap | Draft pending link |
+| 20 | 20_graph_mining_motifs_and_cliques | Motif profiles, clique detection, centrality measures | [Google Drive](https://drive.google.com/file/d/1ZbtFGqNuPxfqI8xt3FlxzgPozukzbvua/view?usp=sharing) |
+| 21 | 21_graph_mining_kernels_wl_similarity | WL-subtree kernels, graph similarity scoring | [Google Drive](https://drive.google.com/file/d/1iiOsGb9Tb5bxUQYq0i-anpV4rOiTRlQk/view?usp=sharing) |
+
+> Notebook 22 (`22_structural_roles_concept_demo`) is available as a local draft.
+
+### 9 — Benchmarking
+
+| # | Notebook | What it demonstrates | Link |
+|---|----------|----------------------|------|
+| 24 | 24_benchmark_suite_v13 | Run v1.3 benchmark suite via package API; inspect results | [Google Drive](https://drive.google.com/file/d/Draft) |
+
+> Notebook 24 is available as a local draft (`colab_drafts/24_*.ipynb`). Generate with `python tools/generate_colab_drafts.py`.
 
 ---
 
@@ -83,8 +101,8 @@ Notebook source files are **not** committed to this repository.
 Generate them locally with:
 
 ```bash
-python tools/generate_notebooks.py   # creates notebooks/ (gitignored)
-python tools/validate_notebooks.py   # validates structure
+python tools/generate_notebooks.py      # creates notebooks/ (gitignored)
+python tools/generate_colab_drafts.py   # creates colab_drafts/ (gitignored)
 ```
 
 ## Tutorial Scripts (no Jupyter required)
@@ -106,13 +124,4 @@ python tools/validate_notebooks.py   # validates structure
 ```python
 !pip install -q tgraphx
 !python -m tgraphx doctor
-```
-
----
-
-## Generating Local Notebooks
-
-```bash
-python tools/generate_notebooks.py     # regenerates notebooks/ (tracked in git)
-python tools/generate_colab_drafts.py  # creates colab_drafts/ (gitignored, for review)
 ```

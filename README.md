@@ -140,10 +140,13 @@ out = layer(g.node_features, g.edge_index)   # [6, 32, 8, 8]
 out.sum().backward()
 ```
 
-A Colab tutorial walks through every workflow:
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1agls1xtqE5WxbWthcG0HEa3Gbk3fvoCD?usp=sharing)
+## Notebook Gallery
 
-**Notebook gallery:** 13 scenario-driven notebooks covering Easy Mode, tensor-native image-patch graphs, sampling, knowledge graphs (including KG HPO and multimodal entity features), and graph generation are available in [docs/colab_gallery.md](docs/colab_gallery.md).
+30 scenario-driven notebooks cover Easy Mode, tensor-native image-patch graphs, tensor-vs-flatten comparisons, sampling, knowledge graphs, KG HPO, graph generation, evolutionary optimization, graph IO, graph mining, benchmarking, and reproducibility.
+
+**→ [docs/colab_gallery.md](docs/colab_gallery.md)**
+
+All notebooks are CPU-friendly and use synthetic or toy data. Open any notebook link in Google Drive and choose "Open with Google Colaboratory".
 
 ---
 

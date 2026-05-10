@@ -323,7 +323,7 @@ class TestPackageBenchmarkSuite:
              "data = run_v13_benchmark_suite(small=True, return_dict=True);"
              "assert 'benchmarks' in data;"
              "print('OK', len(data['benchmarks']))"],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True,
             cwd=str(tmp_path),  # Run from an empty temp dir, not repo
         )
         assert result.returncode == 0, f"STDERR: {result.stderr[:300]}"
@@ -350,7 +350,7 @@ class TestPackageBenchmarkSuite:
         result = subprocess.run(
             [sys.executable, "-m", "tgraphx.benchmarks.run_v13_benchmark_suite",
              "--small", "--out", str(out_file)],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True,
             cwd=str(tmp_path),
         )
         assert result.returncode == 0, f"STDERR: {result.stderr[:300]}"

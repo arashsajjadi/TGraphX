@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "1.3.4"
+__version__ = "1.3.5"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -193,7 +193,8 @@ from .evolutionary import (
     NSGAIIOptimizer, HillClimbingOptimizer,
     EvolutionConfig, EvolutionResult, ParetoFront,
     mutate_add_node, mutate_add_edge, mutate_node_feature,
-    edge_set_crossover, composite_fitness,
+    edge_set_crossover, composite_fitness, sparsity_fitness,
+    connectivity_fitness, density_fitness,
     write_evolution_report,
     run_evolutionary_optimization, list_evolutionary_optimizers, OptimizationResult,
 )

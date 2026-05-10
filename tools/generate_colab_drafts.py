@@ -234,7 +234,7 @@ NOTEBOOKS = {
 
 "24_benchmark_suite_v13.ipynb": nb([
     md("# 24 — v1.3 Benchmark Suite\n\n**Goal:** Run the TGraphX v1.3 benchmark suite and inspect results.\n\n**IMPORTANT:** These are smoke benchmarks on tiny synthetic data.\nThey are NOT competitive throughput claims against PyG/DGL/PyKEEN/SB3.\n\n**Runtime:** < 120s on CPU."),
-    code("import subprocess, sys, json\nresult = subprocess.run(\n    [sys.executable, 'benchmarks/run_v13_benchmark_suite.py', '--small', '--json'],\n    capture_output=True, text=True\n)\nif result.returncode != 0:\n    print('STDERR:', result.stderr[:300])\nelse:\n    data = json.loads(result.stdout)\n    print(f'Suite: {data[\"suite\"]}  Version: {data[\"package_version\"]}')\n    for row in data['benchmarks']:\n        rt = f'{row[\"runtime_s\"]:.3f}s' if row['runtime_s'] else 'failed'\n        print(f'  {row[\"name\"]:<35} {row[\"status\"]:<7} {rt}')"),
+    code("from tgraphx.benchmarks import run_v13_benchmark_suite\n\ndata = run_v13_benchmark_suite(small=True, return_dict=True)\nprint(f'Suite: {data[\"suite\"]}  Version: {data[\"package_version\"]}')\nfor row in data['benchmarks']:\n    rt = f'{row[\"runtime_s\"]:.3f}s' if row.get('runtime_s') else 'failed'\n    print(f'  {row[\"name\"]:<35} {row[\"status\"]:<7} {rt}')"),
 ]),
 
 "25_reproducibility_and_seed_control.ipynb": nb([

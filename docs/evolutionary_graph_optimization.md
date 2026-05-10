@@ -48,10 +48,15 @@ Multi-objective optimization:
 
 - `connectivity_fitness`: Fraction of reachable node pairs
 - `density_fitness`: Closeness to target density
+- `sparsity_fitness`: Graph sparsity score (fewer edges = higher score); useful as a second NSGA-II objective
 - `clustering_fitness`: Average clustering coefficient
 - `motif_count_fitness`: Triangle/wedge count
 - `constraint_penalty`: Penalty for constraint violations
-- `composite_fitness`: Weighted sum of components
+- `composite_fitness`: Weighted sum of multiple fitness components for scalar scalarization (use with `GeneticAlgorithmOptimizer`, **not** directly with `NSGAIIOptimizer`)
+
+**NSGA-II multi-objective:** Pass a **list** of objective functions — one per objective.
+`composite_fitness` is a scalar scalarization helper, not a multi-objective function.
+For NSGA-II, use `[connectivity_fitness, sparsity_fitness]` or any list of single-argument callables.
 
 ## Limitations
 

@@ -23,15 +23,15 @@ A suggested 10-minute path to learn TGraphX:
 6. **Dashboard** — `tgraphx-dashboard --logdir runs/` shows live training metrics,
    dataset metadata, and explanation artefacts written by the previous demos.
 
-## Colab tutorial
+## Notebook Gallery
 
-An interactive Colab notebook covers install, dataset loading, 2-D and 3-D spatial
-GNNs, regression, edge prediction, and the dashboard:
+30 scenario-driven notebooks are available via Google Drive, covering Easy Mode,
+tensor-native graphs, sampling, knowledge graphs, evolutionary optimization,
+graph mining, benchmarking, and reproducibility.
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1agls1xtqE5WxbWthcG0HEa3Gbk3fvoCD?usp=sharing)
+**→ [docs/colab_gallery.md](colab_gallery.md)**
 
-All tasks in the notebook use synthetic data designed to verify installation and
-correctness — they are not benchmarks.
+All notebooks are CPU-friendly and use synthetic or toy data unless noted.
 
 ## Full example gallery
 

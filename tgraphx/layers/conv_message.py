@@ -81,6 +81,17 @@ class ConvMessagePassing(TensorMessagePassingLayer):
             **aggregator_params,
         )
 
+        # Adaptive spatial pool when out_shape spatial dims differ from in_shape.
+        in_spatial = tuple(in_shape[1:])
+        out_spatial = tuple(out_shape[1:])
+        if in_spatial != out_spatial:
+            if spatial_rank == 2:
+                self.spatial_pool: nn.Module = nn.AdaptiveAvgPool2d(out_spatial)
+            else:
+                self.spatial_pool = nn.AdaptiveAvgPool3d(out_spatial)
+        else:
+            self.spatial_pool = nn.Identity()
+
     # ------------------------------------------------------------------ #
     # Message / Update                                                     #
     # ------------------------------------------------------------------ #
@@ -206,6 +217,7 @@ class ConvMessagePassing(TensorMessagePassingLayer):
 
     def update(self, node_feature, aggregated_message):
         aggregated_message = self.aggregator(aggregated_message)
+        aggregated_message = self.spatial_pool(aggregated_message)
         if self.residual and node_feature.shape == aggregated_message.shape:
             aggregated_message = node_feature + aggregated_message
         return aggregated_message
