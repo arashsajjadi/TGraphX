@@ -21,7 +21,7 @@ import torch
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--model", default="TransE",
-                   choices=["TransE", "DistMult", "RESCAL"])
+                   choices=["TransE", "DistMult", "RESCAL", "SimplE"])
     p.add_argument("--epochs", type=int, default=20)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
@@ -48,7 +48,7 @@ def main() -> int:
 
     from tgraphx.kg import (
         KnowledgeGraph,
-        TransEModel, DistMultModel, RESCALModel,
+        TransEModel, DistMultModel, RESCALModel, SimplEModel,
         evaluate_filtered_ranking,
     )
 
@@ -69,6 +69,8 @@ def main() -> int:
         model = TransEModel(N_e, N_r, embedding_dim=32).to(device)
     elif args.model == "DistMult":
         model = DistMultModel(N_e, N_r, embedding_dim=32).to(device)
+    elif args.model == "SimplE":
+        model = SimplEModel(N_e, N_r, embedding_dim=32).to(device)
     else:
         model = RESCALModel(N_e, N_r, embedding_dim=16).to(device)
     print(f"Model: {args.model}")

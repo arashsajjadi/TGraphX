@@ -78,6 +78,16 @@ examples/**/Full_Object_Detection_Graph_Modeling_YOLOv11_RetinaNet_TGraphX_files
 examples/Object_Detection/Full_Object_Detection_Graph_Modeling_YOLOv11_RetinaNet_TGraphX.md
 
 # ------------------------------
+# Local Colab notebook drafts (for maintainer review/upload only)
+# Not included in the release; verified Colab links will be added in v1.3.1.
+# ------------------------------
+colab_drafts/
+*.ipynb_checkpoints/
+
+# Generated local benchmark reports (optional; committed manually if desired)
+reports/benchmarks/v*_*.json
+
+# ------------------------------
 # Git submodules or temp git folders
 # ------------------------------
 **/.git

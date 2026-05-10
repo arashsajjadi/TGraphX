@@ -337,6 +337,7 @@ def run_graph_rl(
     lr: float = 1e-3,
     dashboard_dir: Optional[str] = None,
     verbose: bool = False,
+    callbacks=None,
     **env_kwargs,
 ) -> RLResult:
     """Run graph RL training end-to-end.
@@ -403,6 +404,22 @@ def run_graph_rl(
             **{k: v for k, v in env_kwargs.items()},
         )
 
+    # Normalise callbacks into a CallbackList.
+    from tgraphx.rl.callbacks import Callback, CallbackList
+    if callbacks is None:
+        cb_list = CallbackList()
+    elif isinstance(callbacks, CallbackList):
+        cb_list = callbacks
+    elif isinstance(callbacks, list):
+        cb_list = CallbackList(callbacks)
+    elif isinstance(callbacks, Callback):
+        cb_list = CallbackList([callbacks])
+    else:
+        raise ValueError(
+            f"callbacks must be None, a Callback, a list of Callbacks, or a "
+            f"CallbackList; got {type(callbacks).__name__}."
+        )
+
     if is_continuous:
         return _run_continuous(
             env_obj, algorithm, episodes, seed, device, hidden_dim, gamma, lr,
@@ -412,6 +429,7 @@ def run_graph_rl(
         return _run_discrete(
             env_obj, algorithm, episodes, seed, device, hidden_dim, gamma, lr,
             dashboard_dir, verbose, env_name, gen,
+            cb_list=cb_list,
         )
 
 
@@ -594,8 +612,14 @@ def _run_discrete(
     verbose: bool,
     env_name: str,
     gen: torch.Generator,
+    cb_list=None,
 ) -> RLResult:
     """Run discrete action algorithm."""
+    from tgraphx.rl.callbacks import CallbackList
+
+    if cb_list is None:
+        cb_list = CallbackList()
+
     obs = env_obj.reset(seed=seed)
     nf = obs.get("node_features", torch.zeros(1, 4))
     node_in_dim = nf.shape[-1]
@@ -606,7 +630,11 @@ def _run_discrete(
     episode_returns: List[float] = []
     successes: List[bool] = []
 
+    cb_list.on_train_start(algorithm=algorithm, episodes=episodes)
+
     for ep in range(episodes):
+        cb_list.on_episode_start(episode=ep)
+
         if algorithm in _COLLECT_BASED_ALGOS:
             ep_return, info = _run_episode_collect_based(
                 agent, algorithm, env_obj, seed, ep, num_actions, gen
@@ -618,8 +646,17 @@ def _run_discrete(
 
         episode_returns.append(ep_return)
         successes.append(bool(info.get("success", False)))
+        cb_list.on_episode_end(
+            episode=ep, reward=float(ep_return),
+            steps=int(info.get("steps", 0)),
+            success=bool(info.get("success", False)),
+        )
+
         if verbose:
             print(f"Episode {ep+1}/{episodes} | Return: {ep_return:.2f}")
+
+        if cb_list.should_stop():
+            break
 
     success_rate = float(sum(successes)) / max(len(successes), 1)
     mean_return = float(sum(episode_returns)) / max(len(episode_returns), 1)
@@ -646,6 +683,8 @@ def _run_discrete(
         "lr": lr,
     }
 
+    cb_list.on_train_end(metrics=metrics)
+
     report_path = None
     if dashboard_dir:
         os.makedirs(dashboard_dir, exist_ok=True)
@@ -653,7 +692,9 @@ def _run_discrete(
         with open(report_path, "w") as f:
             json.dump({"metrics": metrics, "config": config}, f, indent=2, default=str)
 
-    return RLResult(metrics=metrics, config=config, report_path=report_path)
+    result = RLResult(metrics=metrics, config=config, report_path=report_path)
+    result.stopped_early = cb_list.should_stop()
+    return result
 
 
 def _run_continuous(

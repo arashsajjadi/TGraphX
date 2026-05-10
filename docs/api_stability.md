@@ -124,6 +124,8 @@ Tested and documented. API may expand but not break within the v1.x series.
 - `list_kg_models()` *(new in v1.0.1)*
 - `KnowledgeGraph.from_hrt(heads, relations, tails, ...)` *(new in v1.0.3)* — classmethod for users with separate h/r/t tensors (the existing `from_triples` accepts tuple lists or `[N_t, 3]` tensors)
 - `RESCALModel(num_entities, num_relations, embedding_dim)` *(new in v1.2)* — bilinear KG model `f(h, r, t) = h^T M_r t`.  Hand-computed math tests included.
+- `SimplEModel(num_entities, num_relations, embedding_dim)` *(new in v1.3)* — symmetric bilinear with inverse embeddings, captures asymmetric relations (unlike DistMult). Beta: 12 tests including hand-computed values, CUDA, tiny overfit.
+- `run_kg_hpo(kg, model_names, search_space, metric, strategy, ...)` *(new in v1.3)* — lightweight KG HPO (grid/random). Returns `KGSearchResult` with `summary()`, `to_dict()`, `write_dashboard_artifacts()`. Beta: 12 tests.
 
 ### Graph IO *(new in v1.2)*
 - `tgraphx.io.write_graphml(graph, path, include_labels=True, include_tensor_features=False)`

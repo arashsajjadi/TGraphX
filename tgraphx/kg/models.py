@@ -44,6 +44,7 @@ __all__ = [
     "ComplExModel",
     "RotatEModel",
     "RESCALModel",
+    "SimplEModel",
 ]
 
 
@@ -440,3 +441,85 @@ class RESCALModel(KGScoringModel):
         # h^T M t = sum_{ij} h_i M_ij t_j
         # Implemented as einsum for clarity and efficiency.
         return torch.einsum("bi,bij,bj->b", h, M, t)
+
+
+# ── SimplE ────────────────────────────────────────────────────────────────────
+
+
+class SimplEModel(KGScoringModel):
+    """SimplE: 0.5 * (⟨h, r, t̄⟩ + ⟨h̄, r̄, t⟩).
+
+    Reference: Kazemi & Poole — *SimplE Embedding for Link Prediction in
+    Knowledge Graphs*, NeurIPS 2018.
+
+    Each entity has **two** embeddings: a "head" embedding ``h`` and an
+    "inverse" (tail) embedding ``h̄``.  Each relation also has a "forward"
+    embedding ``r`` and an "inverse" embedding ``r̄``.
+
+    The score for a triple (h, r, t) is:
+
+      f(h, r, t) = 0.5 * ( ⟨h_head, r_fwd, t_tail⟩
+                           + ⟨t_head, r_inv, h_tail⟩ )
+
+    where ⟨a, b, c⟩ = Σ_i a_i · b_i · c_i (element-wise product, then sum).
+
+    Properties vs other models
+    --------------------------
+    - Generalises DistMult (symmetric in h, t) by adding inverse embeddings.
+    - Captures asymmetric relations: f(h, r, t) ≠ f(t, r, h) in general.
+    - Uses **4 × D × num_entities** parameters (two entity + two relation embs).
+    - Fully symmetric scoring function is recovered when h_head ≡ h_tail.
+
+    Args:
+        num_entities: N_e.
+        num_relations: N_r.
+        embedding_dim: D.
+
+    Stability: Beta — fully tested with hand-computed reference values.
+    """
+
+    def __init__(
+        self,
+        num_entities: int,
+        num_relations: int,
+        embedding_dim: int = 64,
+    ) -> None:
+        super().__init__()
+        self.embedding_dim = int(embedding_dim)
+        D = self.embedding_dim
+        # Forward (head) entity embeddings.
+        self.entity_head = nn.Embedding(num_entities, D)
+        # Inverse (tail) entity embeddings.
+        self.entity_tail = nn.Embedding(num_entities, D)
+        # Forward relation embeddings.
+        self.relation_fwd = nn.Embedding(num_relations, D)
+        # Inverse relation embeddings.
+        self.relation_inv = nn.Embedding(num_relations, D)
+        nn.init.xavier_uniform_(self.entity_head.weight)
+        nn.init.xavier_uniform_(self.entity_tail.weight)
+        nn.init.xavier_uniform_(self.relation_fwd.weight)
+        nn.init.xavier_uniform_(self.relation_inv.weight)
+
+    def score_triples(self, triples: torch.Tensor) -> torch.Tensor:
+        """Compute SimplE score for each triple.
+
+        f(h, r, t) = 0.5 * (⟨h_head, r_fwd, t_tail⟩ + ⟨t_head, r_inv, h_tail⟩)
+
+        Args:
+            triples: ``LongTensor[B, 3]`` of (head, relation, tail) indices.
+
+        Returns:
+            ``FloatTensor[B]`` — higher score = more plausible.
+        """
+        h_idx, r_idx, t_idx = triples[:, 0], triples[:, 1], triples[:, 2]
+        # Forward term: ⟨h_head, r_fwd, t_tail⟩
+        h_h = self.entity_head(h_idx)    # [B, D]
+        r_f = self.relation_fwd(r_idx)   # [B, D]
+        t_t = self.entity_tail(t_idx)    # [B, D]
+        fwd = (h_h * r_f * t_t).sum(dim=-1)  # [B]
+        # Inverse term: ⟨t_head, r_inv, h_tail⟩
+        t_h = self.entity_head(t_idx)    # [B, D]
+        r_i = self.relation_inv(r_idx)   # [B, D]
+        h_t = self.entity_tail(h_idx)    # [B, D]
+        inv = (t_h * r_i * h_t).sum(dim=-1)  # [B]
+        return 0.5 * (fwd + inv)

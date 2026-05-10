@@ -46,7 +46,7 @@ from .sampling import (
     TypedNegativeSampler,
 )
 from .evaluation import KGEvaluator, evaluate_filtered_ranking
-from .models import TransEModel, DistMultModel, ComplExModel, RotatEModel, RESCALModel
+from .models import TransEModel, DistMultModel, ComplExModel, RotatEModel, RESCALModel, SimplEModel
 from .losses import MarginRankingLoss, BCEKGLoss, SoftplusKGLoss
 from .trainer import KGTrainer, KGTrainingConfig
 from .gnn import KGRGCNModel, kg_to_edge_index
@@ -58,6 +58,7 @@ from .datasets import (
     MultimodalKG,
     generate_synthetic_kg,
 )
+from .hpo import run_kg_hpo, KGSearchResult, KGTrialResult
 from .reports import (
     write_kg_summary,
     write_kg_evaluation_report,
@@ -76,6 +77,7 @@ _KG_MODELS: dict = {
     "ComplEx": "Complex-valued embeddings (Trouillon et al., 2016).",
     "RotatE": "Rotation-based relational embedding (Sun et al., 2019).",
     "RESCAL": "Bilinear matrix scoring h^T M_r t (Nickel et al., 2011).",
+    "SimplE": "Symmetric bilinear with inverse embeddings (Kazemi & Poole, 2018).",
 }
 
 

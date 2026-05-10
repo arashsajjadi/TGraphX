@@ -33,7 +33,8 @@
       "DistMult",
       "ComplEx",
       "RotatE",
-      "RESCAL"
+      "RESCAL",
+      "SimplE"
     ]
   },
   "samplers": [
@@ -85,9 +86,27 @@
     "random_search"
   ],
   "graph_constructor": {
-    "required": ["node_features"],
-    "optional_positional": ["edge_index", "edge_weight", "edge_features", "node_labels", "edge_labels", "graph_label", "metadata"],
-    "optional_keyword_only": ["y", "labels", "edge_attr", "graph_features", "train_mask", "val_mask", "test_mask"],
+    "required": [
+      "node_features"
+    ],
+    "optional_positional": [
+      "edge_index",
+      "edge_weight",
+      "edge_features",
+      "node_labels",
+      "edge_labels",
+      "graph_label",
+      "metadata"
+    ],
+    "optional_keyword_only": [
+      "y",
+      "labels",
+      "edge_attr",
+      "graph_features",
+      "train_mask",
+      "val_mask",
+      "test_mask"
+    ],
     "aliases": {
       "y": "node_labels",
       "labels": "node_labels",
@@ -96,8 +115,32 @@
     }
   },
   "graph_mini_batch": {
-    "attributes": ["node_features", "x", "edge_index", "edge_features", "edge_attr", "edge_weight", "y", "labels", "seed_y", "seed_labels", "seed_node_ids", "seed_local_indices", "input_nodes", "batch_size", "num_nodes", "num_edges", "metadata"],
-    "methods": ["seed_logits", "all_logits", "loss", "to", "as_tuple"]
+    "attributes": [
+      "node_features",
+      "x",
+      "edge_index",
+      "edge_features",
+      "edge_attr",
+      "edge_weight",
+      "y",
+      "labels",
+      "seed_y",
+      "seed_labels",
+      "seed_node_ids",
+      "seed_local_indices",
+      "input_nodes",
+      "batch_size",
+      "num_nodes",
+      "num_edges",
+      "metadata"
+    ],
+    "methods": [
+      "seed_logits",
+      "all_logits",
+      "loss",
+      "to",
+      "as_tuple"
+    ]
   },
   "easy_mode": {
     "data_creation": [
@@ -122,8 +165,28 @@
       "check_install",
       "show_capabilities"
     ],
-    "result_fields": ["metrics", "history", "model", "graph", "config", "artifacts", "loader", "optimizer", "elapsed"],
-    "result_methods": ["summary", "print_summary", "to_dict", "to_json", "to_markdown", "plot_loss", "plot_metrics", "save_report", "write_dashboard_artifacts"]
+    "result_fields": [
+      "metrics",
+      "history",
+      "model",
+      "graph",
+      "config",
+      "artifacts",
+      "loader",
+      "optimizer",
+      "elapsed"
+    ],
+    "result_methods": [
+      "summary",
+      "print_summary",
+      "to_dict",
+      "to_json",
+      "to_markdown",
+      "plot_loss",
+      "plot_metrics",
+      "save_report",
+      "write_dashboard_artifacts"
+    ]
   },
   "io": {
     "graphml_write": "tgraphx.io.write_graphml(graph, path, include_labels=True, include_tensor_features=False)",
@@ -136,20 +199,56 @@
     ]
   },
   "rl_callbacks": {
-    "classes": ["Callback", "CallbackList", "EarlyStoppingCallback", "CSVLoggerCallback"],
+    "classes": [
+      "Callback",
+      "CallbackList",
+      "EarlyStoppingCallback",
+      "CSVLoggerCallback"
+    ],
     "import": "from tgraphx.rl import Callback, CallbackList, EarlyStoppingCallback, CSVLoggerCallback",
-    "events": ["on_train_start", "on_episode_start", "on_episode_end", "on_update_end", "on_train_end"],
-    "stability": "Beta (v1.2) — composable, lazy-file CSV writes, deterministic"
+    "events": [
+      "on_train_start",
+      "on_episode_start",
+      "on_episode_end",
+      "on_update_end",
+      "on_train_end"
+    ],
+    "stability": "Beta (v1.2) \u2014 composable, lazy-file CSV writes, deterministic"
   },
   "imports": {
     "node_classification": "from tgraphx import Graph, ConvMessagePassing, NeighborLoader, GraphMiniBatch",
     "easy_mode": "import tgraphx as tgx; tgx.easy.train_node_classifier(...)",
-    "kg": "from tgraphx.kg import KnowledgeGraph, TransEModel, RESCALModel, KGTrainer",
+    "kg": "from tgraphx.kg import KnowledgeGraph, TransEModel, RESCALModel, SimplEModel, run_kg_hpo",
     "generation": "from tgraphx import run_graph_generation, list_graph_generation_methods",
     "rl": "from tgraphx import run_graph_rl, list_graph_rl_algorithms",
     "rl_callbacks": "from tgraphx.rl import Callback, CallbackList, EarlyStoppingCallback, CSVLoggerCallback",
     "mining": "from tgraphx.mining import analyze_graph",
     "reproducibility": "from tgraphx.reproducibility import set_seed",
     "io": "from tgraphx.io import write_graphml, read_graphml"
+  },
+  "kg_hpo": {
+    "function": "tgraphx.kg.run_kg_hpo(kg, model_names, search_space, metric, strategy, max_trials, epochs, seed, device, dashboard_dir)",
+    "strategies": [
+      "grid",
+      "random"
+    ],
+    "metrics": [
+      "mrr",
+      "mr",
+      "hits@1",
+      "hits@3",
+      "hits@10"
+    ],
+    "returns": "KGSearchResult with best_config, best_metrics, best_model_name, best_model, trials",
+    "stability": "Beta (v1.3)"
+  },
+  "notebooks": {
+    "01_easy_tensor_node_classification": "Easy Mode tensor node classification",
+    "02_image_patch_tensor_graph": "Image-patch tensor-vs-flatten comparison",
+    "03_kg_completion_rescal_simple_hpo": "KG completion with RESCAL, SimplE, HPO",
+    "04_graph_generation_and_optimization": "Graph generation + evolutionary optimization",
+    "05_graph_rl_coloring_and_navigation": "Graph RL with callbacks",
+    "06_graph_io_roundtrip": "GraphML IO round-trip",
+    "07_benchmark_suite_and_dashboard": "v1.3 benchmark suite + dashboard"
   }
 }

@@ -5,6 +5,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.0] — 2026-05-10
+
+Strategic quality-upgrade release: new KG model, KG HPO, RL callback integration,
+expanded notebook gallery, and v1.3 benchmark suite.
+
+### Added
+- `SimplEModel` — symmetric bilinear KG scoring `0.5*(⟨h_head, r_fwd, t_tail⟩ + ⟨t_head, r_inv, h_tail⟩)`.
+  Captures asymmetric relations unlike DistMult. Beta: 12 tests including hand-computed D=1 values.
+- `run_kg_hpo(kg, model_names, search_space, metric, strategy, max_trials, ...)` — lightweight KG
+  hyperparameter search (grid/random). Returns `KGSearchResult` with `summary()`, `to_dict()`,
+  and `write_dashboard_artifacts()`. Beta: 12 tests.
+- `run_graph_rl(callbacks=...)` — callbacks parameter wired into `run_graph_rl` and `_run_discrete`.
+  `EarlyStoppingCallback`, `CSVLoggerCallback`, and `CallbackList` now fire lifecycle hooks
+  (on_train_start, on_episode_start/end, on_train_end). `result.stopped_early` reflects early stop.
+- 7 educational notebooks in `notebooks/` (validated, CPU-runnable):
+  - Easy Mode tensor node classification
+  - Image-patch tensor graph (tensor-vs-flatten comparison, core TGraphX identity)
+  - KG completion with RESCAL, TransE, SimplE, and HPO
+  - Graph generation and evolutionary optimization
+  - Graph RL with callbacks
+  - GraphML IO round-trip
+  - v1.3 benchmark suite and dashboard artifacts
+- `tools/generate_notebooks.py` — idempotent notebook generator.
+- `tools/validate_notebooks.py` — structural notebook validator.
+- `tools/generate_colab_drafts.py` — generates 30 expanded Colab draft scenarios locally.
+- `tools/validate_colab_drafts.py` — validates local draft notebooks.
+- `benchmarks/run_v13_benchmark_suite.py` — 11-benchmark suite:
+  7 inherited v1.2 + SimplE smoke, KG HPO smoke, RL callbacks smoke, notebook validation.
+- `tests/test_kg_simple_v130.py` — 12 tests (hand-computed, asymmetry, CUDA, overfit, registry).
+- `tests/test_kg_hpo_v130.py` — 12 tests (grid/random, selection, artifacts, errors).
+- `tests/test_notebooks_v130.py` — 22 tests (existence, structure, content, validation tool).
+- Updated `docs/api_stability.md`, `docs/api_cheatsheet.json`, `docs/index.md`,
+  `docs/colab_gallery.md` for v1.3 additions.
+
+### Notes
+- Local Colab draft notebooks (`colab_drafts/`) are intentionally not included in this release.
+  Verified Colab links will be added in v1.3.1 after maintainer upload/testing.
+- `SimplE` added to `list_kg_models()` and `tutorials/kg_benchmark_quickstart.py`.
+- This release does not claim parity with PyG/DGL, PyKEEN, NetworkX, SB3, or RLlib.
+
+---
+
 ## [1.2.0] — 2026-05-10
 
 Ecosystem-quality release with new KG model, graph IO, RL callbacks, tutorials, and benchmark suite.
