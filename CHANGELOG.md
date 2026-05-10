@@ -5,6 +5,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.3] — 2026-05-10
+
+Easy Mode reproducibility improvement and expanded notebook gallery.
+
+### Fixed
+- `train_node_classifier` now accepts a `deterministic=True` parameter that
+  enables `cudnn.deterministic`, disables `cudnn.benchmark`, and requests
+  `torch.use_deterministic_algorithms(True, warn_only=True)`.
+  On CPU with `deterministic=True`, repeated runs with the same seed now
+  produce exactly identical loss values (diff = 0.0).
+- Reproducibility state is recorded in `result.config["reproducibility_state"]`
+  including `seed`, `deterministic`, `torch_version`, `cuda_available`, and
+  backend settings.
+
+### Added
+- `deterministic` parameter to `train_node_classifier` (default `False` —
+  backward-compatible; no overhead unless explicitly enabled).
+- 10 tests in `tests/test_reproducibility_easy_v133.py` covering: synthetic
+  data seeding, NeighborLoader batch order, CPU deterministic exact match,
+  config recording, CUDA smoke, and `set_seed` return value.
+
+### Documentation
+- Expanded notebook gallery (`docs/colab_gallery.md`) with 20+ available
+  Google Drive notebook links organised into 8 themed sections (Easy Mode,
+  tensor-native identity, sampling, KG, graph generation, RL, IO,
+  reproducibility/workflows).
+
+### Notes
+- CUDA exact bitwise reproducibility is not guaranteed by PyTorch across
+  all hardware/versions even with `deterministic=True`; the strict CPU test
+  passes, the CUDA test asserts finite results only.
+- The default `deterministic=False` is preserved for backward compatibility
+  and speed; for demonstrations use `device="cpu", deterministic=True`.
+
+---
+
 ## [1.3.2] — 2026-05-10
 
 Evolutionary result API bugfix and expanded notebook gallery.

@@ -31,6 +31,7 @@ def train_node_classifier(
     verbose: bool = True,
     config: Optional[EasyConfig] = None,
     dashboard_dir: Optional[str] = None,
+    deterministic: bool = False,
 ) -> EasyResult:
     """Train a node classifier on a graph.
 
@@ -97,9 +98,10 @@ def train_node_classifier(
         )
 
     if seed is not None:
-        torch.manual_seed(seed)
         from tgraphx.reproducibility import set_seed
-        set_seed(seed)
+        reproducibility_state = set_seed(seed, deterministic=deterministic)
+    else:
+        reproducibility_state = {"seed": None, "deterministic": deterministic}
 
     dev = _resolve_device(device)
     if fanouts is None:
@@ -133,10 +135,12 @@ def train_node_classifier(
         "batch_size": batch_size,
         "device": str(dev),
         "seed": seed,
+        "deterministic": deterministic,
         "fanouts": fanouts,
         "hidden_channels": hidden_channels,
         "num_classes": num_classes,
         "node_shape": list(node_shape),
+        "reproducibility_state": reproducibility_state,
     }
 
     history: List[Dict[str, float]] = []
