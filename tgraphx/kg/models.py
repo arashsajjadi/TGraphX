@@ -151,7 +151,7 @@ class TransEModel(KGScoringModel):
     ) -> torch.Tensor:
         emb = F.normalize(self.entity_emb(idx), p=2, dim=-1)
         if feat is not None and self.entity_proj is not None:
-            emb = emb + self.entity_proj(feat.float())
+            emb = self.entity_proj(emb, feat.float())
         return emb
 
     def _embed_relations(
@@ -159,7 +159,7 @@ class TransEModel(KGScoringModel):
     ) -> torch.Tensor:
         emb = self.relation_emb(idx)
         if feat is not None and self.relation_proj is not None:
-            emb = emb + self.relation_proj(feat.float())
+            emb = self.relation_proj(emb, feat.float())
         return emb
 
     def score_triples(

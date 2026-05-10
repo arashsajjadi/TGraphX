@@ -9,18 +9,17 @@ A curated index of CPU-runnable, deterministic TGraphX notebooks and scripts.
 The following 7 notebooks are part of the v1.3 release and included in the repository.
 Run them with local Jupyter or open in Google Colab.
 
-> **Colab URLs will be added** by the maintainer after uploading to Google Drive and testing.
-> Until then, upload or paste the notebook file directly into Colab.
+> Colab links for notebooks 01–07 verified by maintainer (v1.3.1). Additional expanded notebooks (08–30) are available locally via `tools/generate_colab_drafts.py`; their Colab links will be added as they are tested and uploaded.
 
-| # | File | Scenario | Subsystem |
-|---|------|----------|-----------|
-| 01 | [notebooks/01_easy_tensor_node_classification.ipynb](../notebooks/01_easy_tensor_node_classification.ipynb) | Classify nodes with `[C,H,W]` features via Easy Mode | `tgraphx.easy` |
-| 02 | [notebooks/02_image_patch_tensor_graph.ipynb](../notebooks/02_image_patch_tensor_graph.ipynb) | **Core identity** — image-patch graph, tensor-vs-flatten comparison | `ConvMessagePassing` |
-| 03 | [notebooks/03_kg_completion_rescal_simple_hpo.ipynb](../notebooks/03_kg_completion_rescal_simple_hpo.ipynb) | KG completion with RESCAL, TransE, SimplE + HPO | `tgraphx.kg` |
-| 04 | [notebooks/04_graph_generation_and_optimization.ipynb](../notebooks/04_graph_generation_and_optimization.ipynb) | Graph generation metrics + evolutionary optimization | `tgraphx.generation`, `tgraphx.evolutionary` |
-| 05 | [notebooks/05_graph_rl_coloring_and_navigation.ipynb](../notebooks/05_graph_rl_coloring_and_navigation.ipynb) | Graph RL with callbacks and CSV logging | `tgraphx.rl` |
-| 06 | [notebooks/06_graph_io_roundtrip.ipynb](../notebooks/06_graph_io_roundtrip.ipynb) | GraphML write/read round-trip and tensor-feature limitations | `tgraphx.io` |
-| 07 | [notebooks/07_benchmark_suite_and_dashboard.ipynb](../notebooks/07_benchmark_suite_and_dashboard.ipynb) | Run v1.3 benchmark suite and inspect dashboard artifacts | `benchmarks/` |
+| # | File | Scenario | Subsystem | Colab |
+|---|------|----------|-----------|-------|
+| 01 | [notebooks/01_easy_tensor_node_classification.ipynb](../notebooks/01_easy_tensor_node_classification.ipynb) | Classify nodes with `[C,H,W]` features via Easy Mode | `tgraphx.easy` | [Open in Colab](https://drive.google.com/file/d/1C-vydQXnn9LrYhx5hZDQl6H601itnbGp/view?usp=sharing) |
+| 02 | [notebooks/02_image_patch_tensor_graph.ipynb](../notebooks/02_image_patch_tensor_graph.ipynb) | **Core identity** — image-patch graph, tensor-vs-flatten comparison | `ConvMessagePassing` | [Open in Colab](https://drive.google.com/file/d/1uPXV1Ybmw0iR8-5A57Ig6HM_Y10vpXM5/view?usp=sharing) |
+| 03 | [notebooks/03_kg_completion_rescal_simple_hpo.ipynb](../notebooks/03_kg_completion_rescal_simple_hpo.ipynb) | KG completion with RESCAL, TransE, SimplE + HPO | `tgraphx.kg` | [Open in Colab](https://drive.google.com/file/d/1XsHLO1ktivQuKlr0uZFBA5l9wK9KjU9Y/view?usp=sharing) |
+| 04 | [notebooks/04_graph_generation_and_optimization.ipynb](../notebooks/04_graph_generation_and_optimization.ipynb) | Graph generation metrics + evolutionary optimization | `tgraphx.generation`, `tgraphx.evolutionary` | [Open in Colab](https://drive.google.com/file/d/1hfsFMNu891m22SLjZK3xCPDfp2AlG8mU/view?usp=sharing) |
+| 05 | [notebooks/05_graph_rl_coloring_and_navigation.ipynb](../notebooks/05_graph_rl_coloring_and_navigation.ipynb) | Graph RL with callbacks and CSV logging | `tgraphx.rl` | [Open in Colab](https://drive.google.com/file/d/1zbVydvlb3mFjRQ2iVjrYLPb6QMwRQ1It/view?usp=sharing) |
+| 06 | [notebooks/06_graph_io_roundtrip.ipynb](../notebooks/06_graph_io_roundtrip.ipynb) | GraphML write/read round-trip and tensor-feature limitations | `tgraphx.io` | [Open in Colab](https://drive.google.com/file/d/16h2S_6tOJW_Z51wX167rARhgk8BaVBWQ/view?usp=sharing) |
+| 07 | [notebooks/07_benchmark_suite_and_dashboard.ipynb](../notebooks/07_benchmark_suite_and_dashboard.ipynb) | Run v1.3 benchmark suite and inspect dashboard artifacts | `benchmarks/` | [Open in Colab](https://drive.google.com/file/d/1CPviNy3vx_lqjHQR-y6n4nyLLqc61nb7/view?usp=sharing) |
 
 To regenerate notebooks locally: `python tools/generate_notebooks.py`
 
@@ -32,7 +31,7 @@ An expanded gallery of **30 scenario-driven draft notebooks** has been prepared 
 covering a wider range of TGraphX capabilities.
 
 **Status:** Notebooks are under maintainer review and will be uploaded to Google Colab.
-Verified Colab links will be added in **v1.3.1** after testing.
+Verified Colab links for notebooks 01–07 are in this file. Additional notebooks (08–30) will be added as they are uploaded and tested.
 
 Planned scenarios include:
 

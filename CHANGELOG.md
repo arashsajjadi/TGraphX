@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.1] — 2026-05-10
+
+Emergency bugfix: feature-aware KG scoring crash in v1.3.0.
+
+### Fixed
+- `TransEModel._embed_entities` and `_embed_relations` called `_FeatureProjector`
+  with only `feat` instead of `(emb, feat)`, raising
+  `TypeError: _FeatureProjector.forward() missing 1 required positional argument: 'feat'`
+  when `entity_feature_dim` or `relation_feature_dim` was set.
+  Fixed both call sites to pass `(emb, feat.float())`.
+
+### Tests
+- Added `tests/test_kg_feature_aware_v131.py` (8 regression tests covering
+  entity features, relation features, both together, gradient flow, and the
+  exact Colab reproduction case).
+
+### Notes
+- Only `TransEModel` was affected; `DistMultModel` was already correct.
+- No public API changes; the fix restores the documented behaviour.
+
+---
+
 ## [1.3.0] — 2026-05-10
 
 Strategic quality-upgrade release: new KG model, KG HPO, RL callback integration,
