@@ -143,6 +143,8 @@ out.sum().backward()
 A Colab tutorial walks through every workflow:
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1agls1xtqE5WxbWthcG0HEa3Gbk3fvoCD?usp=sharing)
 
+**Notebook gallery:** 13 scenario-driven notebooks covering Easy Mode, tensor-native image-patch graphs, sampling, knowledge graphs (including KG HPO and multimodal entity features), and graph generation are available in [docs/colab_gallery.md](docs/colab_gallery.md).
+
 ---
 
 ## Capability map

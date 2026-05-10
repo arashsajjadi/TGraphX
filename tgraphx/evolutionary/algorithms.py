@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 
@@ -49,14 +49,24 @@ class GeneticAlgorithmConfig:
 class EvolutionResult:
     """Result of an evolutionary optimization run.
 
-    Args:
+    Attributes:
         best_genome: Best genome found.
-        best_fitness: Best fitness value.
-        fitness_history: Best fitness per generation.
+        best_fitness: Best fitness value (scalar).
+        fitness_history: Best fitness value per generation ``[float, ...]``.
         diversity_history: WL uniqueness fraction per generation.
-        pareto_front: Pareto front (for multi-objective only).
+        pareto_front: Pareto front (multi-objective only; ``None`` otherwise).
         config: Configuration used.
         extra: Additional metadata.
+
+    Derived properties:
+        history: Per-generation list of dicts::
+
+            [{"generation": 0, "best_fitness": ..., "diversity": ...,
+              "pareto_front_size": ..., "population_size": ...}, ...]
+
+    Methods:
+        summary(): Return a human-readable string.
+        to_dict(): Return a JSON-serialisable dict.
     """
 
     best_genome: Optional[GraphGenome]
@@ -66,6 +76,75 @@ class EvolutionResult:
     pareto_front: Optional[ParetoFront] = None
     config: Optional[Any] = None
     extra: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def history(self) -> List[Dict[str, Any]]:
+        """Per-generation evolution history.
+
+        Returns a list of dicts, one entry per completed generation::
+
+            [
+              {"generation": 0, "best_fitness": 0.82, "diversity": 0.9,
+               "pareto_front_size": None, "population_size": None},
+              ...
+            ]
+
+        Fields present in every entry:
+            generation (int): 0-based generation index.
+            best_fitness (float or None): Best fitness seen at that generation.
+            diversity (float or None): Population diversity (WL uniqueness).
+            pareto_front_size (int or None): Pareto-front size for
+                multi-objective runs; ``None`` for single-objective.
+            population_size (int or None): Population size if stored in
+                ``extra["population_sizes"]``; else ``None``.
+        """
+        n = max(len(self.fitness_history), len(self.diversity_history))
+        # Pareto-front sizes per generation if available.
+        pf_sizes: List[Optional[int]] = self.extra.get("pareto_front_sizes", [])
+        pop_sizes: List[Optional[int]] = self.extra.get("population_sizes", [])
+        result = []
+        for i in range(n):
+            entry: Dict[str, Any] = {
+                "generation": i,
+                "best_fitness": self.fitness_history[i] if i < len(self.fitness_history) else None,
+                "diversity": self.diversity_history[i] if i < len(self.diversity_history) else None,
+                "pareto_front_size": pf_sizes[i] if i < len(pf_sizes) else None,
+                "population_size": pop_sizes[i] if i < len(pop_sizes) else None,
+            }
+            result.append(entry)
+        return result
+
+    def summary(self) -> str:
+        """Return a human-readable summary string (also prints it)."""
+        lines = [
+            "=" * 50,
+            "TGraphX Evolutionary Optimization Result",
+            "=" * 50,
+            f"Best fitness:  {self.best_fitness:.6f}",
+            f"Generations:   {len(self.fitness_history)}",
+        ]
+        if self.pareto_front:
+            lines.append(f"Pareto front:  {len(self.pareto_front)} solutions")
+        if self.fitness_history:
+            lines.append(f"Initial best:  {self.fitness_history[0]:.6f}")
+            lines.append(f"Final best:    {self.fitness_history[-1]:.6f}")
+        text = "\n".join(lines)
+        print(text)
+        return text
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-serialisable dict (excludes non-serialisable genome)."""
+        return {
+            "best_fitness": float(self.best_fitness),
+            "n_generations": len(self.fitness_history),
+            "fitness_history": [float(f) for f in self.fitness_history],
+            "diversity_history": [float(d) for d in self.diversity_history],
+            "pareto_front_size": len(self.pareto_front) if self.pareto_front else None,
+            "extra": {
+                k: v for k, v in self.extra.items()
+                if isinstance(v, (str, int, float, bool, list, dict, type(None)))
+            },
+        }
 
 
 def _compute_diversity(population: List[GraphGenome]) -> float:
@@ -333,10 +412,14 @@ class NSGAIIOptimizer:
     def __init__(
         self,
         config: EvolutionConfig,
-        fitness_fn_list: List[Callable[[GraphGenome], float]],
+        fitness_fn_list: Union[Callable[[GraphGenome], float], List[Callable[[GraphGenome], float]]],
     ) -> None:
         self.config = config
-        self.fitness_fn_list = fitness_fn_list
+        # Accept a single callable for convenience (wraps it in a one-element list).
+        if callable(fitness_fn_list) and not isinstance(fitness_fn_list, list):
+            self.fitness_fn_list = [fitness_fn_list]
+        else:
+            self.fitness_fn_list = fitness_fn_list
         self._generator: Optional[torch.Generator] = None
         if config.seed is not None:
             self._generator = torch.Generator()
@@ -357,6 +440,10 @@ class NSGAIIOptimizer:
             EvolutionResult with ParetoFront.
         """
         population = [g.clone() for g in initial_population]
+
+        fitness_history: List[float] = []
+        diversity_history: List[float] = []
+        pareto_front_sizes: List[int] = []
 
         for gen in range(self.config.n_generations):
             # Generate offspring
@@ -380,6 +467,13 @@ class NSGAIIOptimizer:
                 population, offspring, self.fitness_fn_list,
                 n_select=self.config.population_size,
             )
+
+            # Track per-generation history.
+            gen_fitness = [fn(g) for fn in self.fitness_fn_list for g in population]
+            best_f1 = max(self.fitness_fn_list[0](g) for g in population)
+            fitness_history.append(best_f1)
+            diversity_history.append(_compute_diversity(population))
+            pareto_front_sizes.append(len(population))
 
             if progress_callback:
                 progress_callback(gen, len(population))
@@ -411,8 +505,11 @@ class NSGAIIOptimizer:
         return EvolutionResult(
             best_genome=best_genome,
             best_fitness=best_fitness,
+            fitness_history=fitness_history,
+            diversity_history=diversity_history,
             pareto_front=pareto_front,
             config=self.config,
+            extra={"pareto_front_sizes": pareto_front_sizes},
         )
 
 

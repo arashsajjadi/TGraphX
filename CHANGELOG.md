@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.2] — 2026-05-10
+
+Evolutionary result API bugfix and expanded notebook gallery.
+
+### Fixed
+- `EvolutionResult` had no `history` attribute, raising `AttributeError` when users
+  accessed `result.history` after `GeneticAlgorithmOptimizer.optimize()`.
+  Added a `history` property returning a list of per-generation dicts
+  `[{"generation": i, "best_fitness": ..., "diversity": ..., ...}]`.
+- `NSGAIIOptimizer` did not populate `fitness_history` (so `result.history` was empty).
+  Now tracks best-by-first-objective, diversity, and Pareto-front size per generation.
+- `NSGAIIOptimizer.__init__` now accepts a single callable (wraps it in a list)
+  in addition to the existing list-of-callables form.
+
+### Added
+- `EvolutionResult.summary()` — prints and returns a human-readable summary.
+- `EvolutionResult.to_dict()` — returns a JSON-serialisable dict.
+- 16 regression tests in `tests/test_evolutionary_history_v132.py`.
+
+### Documentation
+- Expanded notebook gallery in `docs/colab_gallery.md` with 13 available notebooks
+  organised by category (Easy Mode, tensor-native identity, sampling, KG, graph generation).
+- Notebooks are linked as Google Drive notebook files.
+  Verified one-click Colab links will be added after maintainer-side Colab testing.
+- README concise notebook gallery cross-link added.
+
+---
+
 ## [1.3.1] — 2026-05-10
 
 Emergency bugfix: feature-aware KG scoring crash in v1.3.0.
