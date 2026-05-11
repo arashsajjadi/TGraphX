@@ -130,7 +130,16 @@ def from_pyg_data(data: Any) -> "Graph":
         if y.dim() >= 1 and y.size(0) == node_features.size(0):
             node_labels = y
         else:
-            graph_label = y
+            # Normalize singleton graph_label tensors like tensor([c]) → tensor(c)
+            # so downstream `F.cross_entropy(logits, batch.graph_labels)` works
+            # for both PyG (which wraps as [1]) and torchvision (which stores scalar).
+            try:
+                if hasattr(y, "dim") and y.dim() == 1 and y.numel() == 1:
+                    graph_label = y.squeeze(0)
+                else:
+                    graph_label = y
+            except Exception:
+                graph_label = y
 
     return Graph(
         node_features=node_features,

@@ -297,9 +297,11 @@ print(f"TensorMNISTGNN parameters: {count_parameters(model):,}")
 # Shape trace (no grad)
 with torch.no_grad():
     tiny_x = all_images[:4].to(device)
-    tiny_ei = all_edges[:, all_edges[0] < 4].to(device)
+    # Filter both src AND dst to be inside the tiny subset so indexing stays valid
+    _mask = (all_edges[0] < 4) & (all_edges[1] < 4)
+    tiny_ei = all_edges[:, _mask].to(device)
     if tiny_ei.shape[1] == 0:
-        tiny_ei = torch.zeros(2, 1, dtype=torch.long, device=device)
+        tiny_ei = torch.tensor([[0], [1]], dtype=torch.long, device=device)
     out = model(tiny_x, tiny_ei)
 print(f"Shape trace: input={tiny_x.shape}  output={out.shape}")
 assert out.shape == (4, NUM_CLASSES)
@@ -522,6 +524,27 @@ print(f"Epochs: {EPOCHS}  |  FAST_MODE: {FAST_MODE}  |  Device: {device}")
 """),
 
 ("markdown", """
+## Scientific and methodological notes
+
+- **Learning setting:** Transductive node classification — image and prototype
+  nodes are all structurally present in the graph during training; only train-mask
+  labels enter the loss.
+- **Split policy:** Deterministic random 70/15/15 train/val/test split over the
+  image-node subset; prototype nodes use label `-1` (ignored in loss).
+- **Leakage policy:** Class prototypes are computed from train-mask labels ONLY.
+  Validation and test nodes are connected to prototypes via visual similarity, not
+  via their (held-out) labels.
+- **Baseline:** `FlattenMLP` operates on flattened pixels without using graph
+  structure. It quantifies the cost of early flattening relative to tensor-native
+  message passing.
+- **Metrics:** Validation and test accuracy on seed nodes only; parameter counts
+  and runtime are reported for honest comparison.
+- **Why FAST_MODE metrics are not benchmark claims:** With 1000 training images
+  and 3 epochs, results are illustrative, not competitive. No SOTA claim is made.
+- **TGraphX capability demonstrated:** Tensor-valued `[N, 1, 28, 28]` nodes;
+  multi-type `edge_attr` (visual_similarity vs prototype_membership); seed-node
+  mini-batch loss via `batch.seed_logits` / `batch.seed_y`; dashboard artifacts.
+
 ## What this demonstrates
 
 - **Tensor-native nodes:** MNIST images flow as `[N, 1, 28, 28]` tensors through
@@ -932,6 +955,25 @@ print(f"FAST_MODE: {FAST_MODE}  Device: {device}")
 """),
 
 ("markdown", """
+## Scientific and methodological notes
+
+- **Learning setting:** Inductive graph classification — each CIFAR-10 image
+  becomes one self-contained graph; the model never sees test graphs during training.
+- **Split policy:** Train, val, and test graphs are disjoint sets of images.
+- **Leakage policy:** Per-graph labels are attached to graph objects and only
+  used in the training loop on training graphs; test graph labels are withheld.
+- **Baseline:** `FlattenMLP` operates on concatenated patch tensors without using
+  graph structure or spatial adjacency. It is actually trained, not just counted.
+- **Metrics:** Val/test accuracy on graph classification; runtime; parameter count;
+  gradient sanity.
+- **Why FAST_MODE metrics are not benchmark claims:** CIFAR-10 in 500-image
+  FAST_MODE with 3 epochs is far below convergence. We do NOT claim parity with
+  any CIFAR-10 vision model.
+- **TGraphX capability demonstrated:** True patch-graph node tensors
+  `[num_patches, 3, pH, pW]`; spatial-adjacency edges; graph-level mean+max
+  readout via `global_mean_pool` + `global_max_pool`; `GraphDataLoader` batching;
+  dashboard artifacts; `CIFAR10PatchGraphDataset` bridge.
+
 ## What this demonstrates
 
 - **True patch-graph structure:** Each CIFAR-10 image becomes a graph where nodes
@@ -1152,9 +1194,10 @@ print(f"CoraGCN parameters: {count_parameters(model):,}")
 # Shape trace
 with torch.no_grad():
     tiny_x = g.node_features[:5].to(device)
-    tiny_ei = g.edge_index[:, g.edge_index[0] < 5].to(device)
+    _mask = (g.edge_index[0] < 5) & (g.edge_index[1] < 5)
+    tiny_ei = g.edge_index[:, _mask].to(device)
     if tiny_ei.shape[1] == 0:
-        tiny_ei = torch.zeros(2, 1, dtype=torch.long, device=device)
+        tiny_ei = torch.tensor([[0], [1]], dtype=torch.long, device=device)
     out = model(tiny_x, tiny_ei)
 print(f"Shape trace: {tiny_x.shape} → {out.shape}")
 assert out.shape == (5, NUM_CLASSES)
@@ -1330,6 +1373,27 @@ print(f"FAST_MODE: {FAST_MODE}  Device: {device}")
 """),
 
 ("markdown", """
+## Scientific and methodological notes
+
+- **Learning setting:** Transductive semi-supervised node classification — all
+  Cora nodes are structurally present in the graph during training; only train-mask
+  node labels contribute to the loss; val/test labels are withheld.
+- **Split policy:** Standard Planetoid split when PyG is available; deterministic
+  60/20/20 custom split for the synthetic SBM fallback.
+- **Leakage policy:** Labels for val/test nodes are never used in loss computation
+  or graph construction. Graph structure is identical for all nodes; only label
+  visibility differs across splits.
+- **Baseline:** `FlattenMLP` is a 2-layer MLP on the same node feature vectors
+  but ignores all citation edges. It is actually trained.
+- **Metrics:** Val/test accuracy on seed nodes; sampling metadata; runtime;
+  parameter count.
+- **Why FAST_MODE metrics are not benchmark claims:** 5 epochs and a small
+  batch are far from convergence. Reference Kipf & Welling (2017) report ~81%
+  test accuracy on Cora; this notebook makes NO claim of that level.
+- **TGraphX capability demonstrated:** TGraphX dataset bridge (`PyGPlanetoidDataset`),
+  `NeighborLoader` seed-node mini-batch loss, sampling metadata, full dashboard
+  artifact suite, transductive setting handling.
+
 ## What this demonstrates
 
 - **TGraphX dataset bridge:** `PyGPlanetoidDataset` wraps `torch_geometric` and
@@ -1658,12 +1722,14 @@ print(f"Config: {config}")
 
 ("code", """
 # ── Gradient sanity check ──────────────────────────────────────────────────
+# Move model to device before manual forward to keep tensors on the same device.
+model = model.to(device)
 model.train()
 opt = torch.optim.Adam(model.parameters(), lr=1e-3)
 sample_triples = train_triples[:16].to(device)
 scores = model.score_triples(sample_triples)
 neg = sample_triples.clone()
-neg[:, 2] = torch.randint(0, NUM_ENTITIES, (16,))
+neg[:, 2] = torch.randint(0, NUM_ENTITIES, (16,), device=device)
 neg_scores = model.score_triples(neg)
 from tgraphx.kg.losses import SoftplusKGLoss
 loss_fn = SoftplusKGLoss()
@@ -1685,9 +1751,15 @@ train_time = time.time() - t0
 print(f"Final loss: {history['final_loss']:.4f}  Runtime: {train_time:.1f}s")
 write_kg_training_report(
     str(RUN_DIR / "kg_training_report.json"),
-    loss_history=history["loss_history"],
-    final_loss=history["final_loss"],
-    runtime_s=round(train_time, 2),
+    {
+        "loss_history": history["loss_history"],
+        "final_loss": history["final_loss"],
+        "runtime_s": round(train_time, 2),
+        "num_epochs": EPOCHS,
+        "model": "TransE",
+        "seed": SEED,
+        "device": str(device),
+    },
 )
 """),
 
@@ -1726,8 +1798,8 @@ print("representative of full MovieLens performance.")
 
 write_kg_evaluation_report(
     str(RUN_DIR / "kg_eval_report.json"),
-    mrr=mrr, hits_at_1=h1, hits_at_3=h3, hits_at_10=h10,
-    eval_set="validation",
+    {"mrr": mrr, "hits_at_1": h1, "hits_at_3": h3, "hits_at_10": h10,
+     "eval_set": "validation", "filtered": True},
 )
 """),
 
@@ -1806,11 +1878,31 @@ with torch.no_grad():
         ], dim=1).to(device)
         scores = model.score_triples(queries).cpu()
         top5 = scores.argsort(descending=True)[:5]
-        print(f"\\nUser {user_idx + 1} top-5 recommendations:")
+        print(f"\\nUser {user_idx + 1} top-5 TransE recommendations:")
         for rank, j in enumerate(top5.tolist(), 1):
             ent_id = candidate_movies[j].item()
             title = title_map.get(ent_id, f"Entity_{ent_id}")
             print(f"  {rank}. {title}  (score={scores[j]:.3f})")
+
+# ── Popularity baseline ─────────────────────────────────────────────────
+# Rank movies by training-set count of rated_high relations (no learning).
+print("\\n=== Top-5 Popularity Baseline (no learning) ===")
+popularity = torch.zeros(NUM_ENTITIES)
+for h, r, t in train_triples.tolist():
+    if r == REL_RATED_HIGH:
+        popularity[t] += 1.0
+for user_idx in range(NUM_SAMPLE_USERS):
+    already_rated = user_rated.get(user_idx, set())
+    pop_scores = popularity.clone()
+    for m in already_rated:
+        pop_scores[m] = -1.0
+    movie_scores = pop_scores[movie_entity_ids]
+    top5_pop = movie_scores.argsort(descending=True)[:5]
+    print(f"\\nUser {user_idx + 1} top-5 popularity baseline:")
+    for rank, j in enumerate(top5_pop.tolist(), 1):
+        ent_id = movie_entity_ids[j].item()
+        title = title_map.get(ent_id, f"Entity_{ent_id}")
+        print(f"  {rank}. {title}  (count={int(movie_scores[j].item())})")
 """),
 
 ("markdown", """## 6. Dashboard artifacts"""),
@@ -1864,6 +1956,26 @@ print(f"FAST_MODE: {FAST_MODE}  Device: {device}")
 """),
 
 ("markdown", """
+## Scientific and methodological notes
+
+- **Learning setting:** Transductive KG link prediction — entity IDs are shared
+  across train/val/test splits, but the triples (relation labels) are disjoint.
+- **Split policy:** 80/10/10 edge-wise split of all triples (ratings + metadata).
+- **Leakage policy:** Validation triples never enter training; test triples never
+  enter training or HPO. Filtered ranking evaluation correctly excludes ALL
+  training triples from candidate rankings, preventing inflated metrics.
+- **Baseline meaning:** The popularity baseline ranks movies by frequency of
+  `rated_high` interactions in training data (no learning). It is the minimum
+  bar a learning model must beat to claim usefulness.
+- **Metrics:** Filtered MRR, Hits@1/3/10 over validation triples; HPO best MRR;
+  top-K recommendations with movie titles.
+- **Why FAST_MODE metrics are not benchmark claims:** 150 users × 300 movies × 5
+  epochs is illustrative. We do NOT claim TransE parity with feature-aware
+  recommendation models.
+- **TGraphX capability demonstrated:** Multi-relational `KnowledgeGraph` with
+  `entity_features`; `KGTrainer` + `KGTrainingConfig`; filtered `KGEvaluator`;
+  `run_kg_hpo`; structured dashboard artifacts including KG-specific reports.
+
 ## What this demonstrates
 
 - **Multi-relational KG:** Users, movies, genres, and occupations are modelled
@@ -2063,7 +2175,13 @@ print(f"  Node count: min={min(all_sizes)}  max={max(all_sizes)}  "
 write_graph_stats(sample, str(RUN_DIR / "sample_graph_stats.json"))
 """),
 
-("markdown", """## 2. Data split"""),
+("markdown", """## 2. Data split
+
+**Leakage policy:** This is an inductive graph-classification setting. Train,
+validation, and test graphs are disjoint sets. Each graph is self-contained:
+its `graph_label` is attached to the graph object and never appears as a
+node feature. Bond `edge_attr` (`edge_type` indicator) is an input, not a target.
+"""),
 
 ("code", """
 # ── Train/val/test split ───────────────────────────────────────────────────
@@ -2077,7 +2195,8 @@ graphs_test = [graphs[i] for i in perm[n_train + n_val:]]
 print(f"Split: train={len(graphs_train)}  val={len(graphs_val)}  "
       f"test={len(graphs_test)}")
 print("Inductive split: train/val/test graphs are disjoint.")
-print("No label leakage: splits performed before model construction.")
+print("Leakage policy: no label leakage; splits performed before model construction.")
+print("Bond features (edge_attr / edge_type) are inputs, not targets.")
 """),
 
 ("markdown", """## 3. Model definition"""),
@@ -2350,11 +2469,35 @@ print("NOTE: MUTAG is small (188 graphs). Results may be unstable.")
 """),
 
 ("markdown", """
+## Scientific and methodological notes
+
+- **Learning setting:** Inductive graph classification — molecular graphs in
+  train, val, and test sets are disjoint; the model never sees test graphs.
+- **Split policy:** Deterministic 70/15/15 random split over the graph collection
+  using a seeded `torch.randperm`.
+- **Leakage policy:** Each molecular graph is fully self-contained; graph-level
+  labels are attached to graph objects and only used in the training loop on
+  training graphs. Bond `edge_attr` (`edge_type` features) is part of the input,
+  not the target.
+- **Baseline:** `DegreeFeatureBaseline` uses only structural features (mean
+  degree, triangle count, node count) — no atom or bond identities. It is
+  actually trained, not just counted.
+- **Metrics:** Val/test accuracy on graph classification; runtime; parameter
+  count; gradient sanity.
+- **Why FAST_MODE metrics are not benchmark claims:** MUTAG has only 188 graphs
+  and 10 epochs gives high variance. Reference GNN results on MUTAG reach
+  ~85–89%; this notebook makes NO claim of that level. Repeated splits would
+  be needed for stable estimates.
+- **TGraphX capability demonstrated:** `Graph` with `edge_attr` (bond features);
+  `GraphDataLoader` batching; `global_mean_pool + global_max_pool` readout;
+  structural mining via `graph_summary`, `motif_profile`, `triangle_count`,
+  `degree_statistics`; PyG dataset bridge.
+
 ## What this demonstrates
 
 - **Molecular graphs as first-class TGraphX objects:** Atom features and bond
-  features are stored in `Graph.node_features` and `Graph.edge_features` without
-  flattening.
+  features (edge_attr / `edge_type`) are stored in `Graph.node_features` and
+  `Graph.edge_features` without flattening.
 - **Edge-feature incorporation:** Bond-type features are projected and added to
   atom representations before message passing.
 - **Mean+max readout:** `global_mean_pool` + `global_max_pool` provides a richer

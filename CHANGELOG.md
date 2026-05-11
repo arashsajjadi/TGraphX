@@ -5,6 +5,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.8] — 2026-05-11
+
+Executed-and-validated advanced Colab notebooks. The previous v1.3.7 release
+claimed the advanced notebooks were "ready", but they had never been actually
+executed and contained latent CUDA / device / API-signature bugs. This release
+fixes all of them and runs the five notebooks end-to-end in FAST_MODE with
+outputs preserved.
+
+### Fixed
+- **NB31 shape-trace CUDA index out-of-bounds:** Filter both source AND
+  destination indices when slicing `edge_index` to a tiny subgraph, otherwise
+  `node_features[src_idx]` can dereference prototype indices that exceed
+  `tiny_x.size(0)`. Same bug fixed in NB33.
+- **NB34 CUDA device mismatch:** `model = model.to(device)` must run before
+  the manual `score_triples` call in the gradient sanity check; `torch.randint`
+  for negative samples must also be on `device`.
+- **NB34 KG report writer signatures:** `write_kg_training_report` and
+  `write_kg_evaluation_report` take `(path, dict)`, not kwargs. Notebook updated
+  to pass a dict.
+- **NB35 PyG `MUTAG` singleton label normalization (package fix):**
+  `tgraphx.interop.from_pyg_data` now normalizes `tensor([c])`-shaped graph
+  labels to scalar `tensor(c)` so that `F.cross_entropy(logits, batch.graph_labels)`
+  works after `GraphDataLoader` batching for PyG-sourced datasets.
+
+### Added
+- `tools/execute_advanced_colab_drafts.py` — executes notebooks 31–35 in place
+  using `nbclient`, keeps minimal outputs, fails on any cell error.
+- `tools/validate_executed_advanced_notebooks.py` — checks that shipped
+  notebooks have non-empty `execution_count`, outputs, and a final completion
+  message.
+- `tests/test_advanced_notebook_execution_v138.py` (40 tests) — verifies the
+  shipped notebooks have been executed (execution_count set, outputs present,
+  no error outputs, completion message in outputs).
+- `tests/test_advanced_notebook_report_consistency_v138.py` (70 tests) —
+  strict consistency between source and report claims.
+- `tests/test_advanced_notebook_workflows_v138.py` (6 tests) — runs each
+  notebook's core workflow as a regression test.
+- "Scientific and methodological notes" Markdown section in every notebook,
+  with explicit learning setting, split policy, leakage policy, baseline
+  meaning, metric interpretation, FAST_MODE disclaimer, and TGraphX-specific
+  capability demonstrated.
+- "Leakage policy" Markdown header in NB35 (previously implicit).
+- Popularity baseline implemented in NB34 (previously only mentioned).
+- Stronger test-isolation in `test_v024_features.py::TestInteropMissingDeps`
+  and `test_dataset_docs_claims.py::TestLazyImports`: snapshot/restore
+  optional `sys.modules` entries so earlier PyG imports do not break these tests.
+
+### Validation
+- All 5 advanced notebooks execute cleanly in FAST_MODE (`nbclient`, no
+  network), with outputs preserved.
+- 258 advanced-notebook tests pass (47 + 70 + 23 + 72 + 6 + 40).
+- All 5 smoke scripts pass with `--fast --no-download`.
+- Full test suite: **3172 passed, 25 skipped, 0 failed**.
+- Build and `twine check` pass.
+
+### Notes
+- Notebook files are still NOT tracked in git (per .gitignore policy;
+  they live in Google Drive / Colab links). The generator
+  `tools/build_advanced_notebooks.py` is the source of truth.
+- This release does NOT claim SOTA on MNIST, CIFAR-10, Cora, MovieLens, or
+  MUTAG. Every notebook has an explicit FAST_MODE disclaimer.
+
+---
+
 ## [1.3.7] — 2026-05-11
 
 Advanced real-dataset notebook upgrades (31–35) and regression-test hardening.

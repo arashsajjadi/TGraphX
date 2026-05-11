@@ -262,8 +262,12 @@ class TestPatchPadding:
 class TestInteropMissingDeps:
     def test_to_pyg_missing_dep(self):
         import sys
+        # Snapshot and clear all torch_geometric* submodules so the lazy import
+        # inside to_pyg_data fails like in a fresh environment.
+        snapshot = {k: v for k, v in sys.modules.items() if k.startswith("torch_geometric")}
+        for k in list(snapshot):
+            del sys.modules[k]
         sys.modules["torch_geometric"] = None  # type: ignore
-        sys.modules.get("torch_geometric.data", None)
         try:
             from tgraphx.interop import to_pyg_data
             g = Graph(torch.randn(4, 8), None)
@@ -271,9 +275,14 @@ class TestInteropMissingDeps:
                 to_pyg_data(g)
         finally:
             del sys.modules["torch_geometric"]
+            # Restore the snapshot so later tests are not affected.
+            sys.modules.update(snapshot)
 
     def test_to_dgl_missing_dep(self):
         import sys
+        snapshot = {k: v for k, v in sys.modules.items() if k.startswith("dgl")}
+        for k in list(snapshot):
+            del sys.modules[k]
         sys.modules["dgl"] = None  # type: ignore
         try:
             from tgraphx.interop import to_dgl_graph
@@ -282,6 +291,7 @@ class TestInteropMissingDeps:
                 to_dgl_graph(g)
         finally:
             del sys.modules["dgl"]
+            sys.modules.update(snapshot)
 
     def test_interop_not_imported_at_tgraphx_import(self):
         """tgraphx.interop must not import PyG or DGL at import time."""

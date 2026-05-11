@@ -72,12 +72,23 @@ class TestLazyImports:
 
     def test_dataset_info_does_not_import_optionals(self):
         # Running list_datasets() / dataset_info() must not import optional deps.
-        before = {m for m in sys.modules}
-        from tgraphx.datasets import list_datasets, dataset_info
-        list_datasets()
-        dataset_info("synthetic:patch_graph")
-        for m in ("torch_geometric", "dgl", "ogb"):
-            assert m not in sys.modules
+        # Snapshot/clear pre-imported optional modules so the test is independent
+        # of any earlier test that imported torch_geometric, dgl, or ogb.
+        snapshot = {k: v for k, v in sys.modules.items()
+                    if any(k == m or k.startswith(m + ".")
+                           for m in ("torch_geometric", "dgl", "ogb"))}
+        for k in list(snapshot):
+            del sys.modules[k]
+        try:
+            from tgraphx.datasets import list_datasets, dataset_info
+            list_datasets()
+            dataset_info("synthetic:patch_graph")
+            for m in ("torch_geometric", "dgl", "ogb"):
+                assert m not in sys.modules, (
+                    f"Optional module {m!r} was imported by list/dataset_info"
+                )
+        finally:
+            sys.modules.update(snapshot)
 
 
 # ── Docs files exist ────────────────────────────────────────────────────────
