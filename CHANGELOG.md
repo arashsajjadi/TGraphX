@@ -5,6 +5,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.7] — 2026-05-11
+
+Advanced real-dataset notebook upgrades (31–35) and regression-test hardening.
+
+### Fixed
+- **MNIST class-graph notebook (31):** Added `edge_attr` tensor encoding
+  `edge_type` (0=visual_similarity, 1=prototype_membership, 2=prototype_self_loop)
+  on the TGraphX `Graph`; added explicit edge-type counts and leakage policy cell.
+- **CIFAR-10 patch-graph notebook (32):** Added inductive task declaration and
+  leakage policy in the opening markdown. The notebook correctly uses
+  `CIFAR10PatchGraphDataset` (true patch graphs, not image-as-node graphs).
+- **Cora notebook (33):** Renamed baseline class from `MLPBaseline` to
+  `FlattenMLP` for consistency with the project report and acceptance tests.
+- **MovieLens KG notebook (34):** Added explicit leakage policy section
+  documenting the edge-wise split policy for link prediction.
+- **MUTAG notebook (35):** Changed `edge_features=` to `edge_attr=` in
+  `Graph` constructor to align with canonical parameter name.
+- **KGTrainer CUDA-generator bug:** `torch.randperm(T, generator=cpu_gen,
+  device='cuda')` raised `RuntimeError`; fixed by doing randperm on CPU then
+  moving to device with `.to(dev)`.
+- **`write_kg_summary` call in notebook 34:** Corrected argument from `kg`
+  object to a plain dict (matches the function signature).
+
+### Added
+- `tests/test_advanced_notebook_report_consistency_v137.py` — 72 tests verifying
+  that notebook source content matches report claims for all 5 notebooks.
+- `tests/test_advanced_notebook_workflows_v137.py` — 23 workflow regression tests
+  running the core code path of each notebook in FAST_MODE with no network access.
+
+### Validation
+- All 5 advanced notebook structural validations pass.
+- 142 advanced notebook tests pass (47 + 72 + 23).
+- All 5 smoke scripts pass with `--fast --no-download`.
+- Full test suite: 3054 passed, 27 skipped, 1 warning.
+- Build and `twine check` pass.
+
+### Notes
+- No SOTA claims are made in any notebook.
+- No notebook requires private paths or repository-local files.
+- Maintainer still needs to run full notebooks in Google Colab and upload them.
+
+---
+
 ## [1.3.6] — 2026-05-10
 
 Public Colab notebook regression fix + LLM-predictability sprint. No new

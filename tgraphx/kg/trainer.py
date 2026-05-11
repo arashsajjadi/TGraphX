@@ -202,7 +202,8 @@ class KGTrainer:
             epoch_loss = 0.0
             n_batches = 0
             # Shuffle.
-            perm = torch.randperm(T, generator=self._gen, device=dev)
+            # Generator must be on CPU; randperm on CPU then move to dev.
+            perm = torch.randperm(T, generator=self._gen).to(dev)
             shuffled = triples[perm]
 
             for start in range(0, T, cfg.batch_size):
