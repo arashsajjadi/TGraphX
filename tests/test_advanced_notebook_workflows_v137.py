@@ -557,7 +557,10 @@ NB_DIR = REPO / "colab_drafts" / "advanced_real_datasets"
 
 
 def _nb_text(filename: str) -> str:
-    nb = json.loads((NB_DIR / filename).read_text(encoding="utf-8"))
+    p = NB_DIR / filename
+    if not p.exists():
+        pytest.skip(f"Notebook {filename} not present (gitignored).")
+    nb = json.loads(p.read_text(encoding="utf-8"))
     return "\n".join("".join(c.get("source", [])) for c in nb["cells"])
 
 

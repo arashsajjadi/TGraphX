@@ -26,7 +26,14 @@ NB = {
 
 
 def _text(nbid: str) -> str:
-    nb = json.loads(NB[nbid].read_text(encoding="utf-8"))
+    """Load notebook source; skip if file is absent (gitignored)."""
+    p = NB[nbid]
+    if not p.exists():
+        pytest.skip(
+            f"Notebook {p.name} not present (gitignored). "
+            "Run tools/build_advanced_notebooks.py to generate locally."
+        )
+    nb = json.loads(p.read_text(encoding="utf-8"))
     return "\n".join("".join(c.get("source", [])) for c in nb["cells"])
 
 

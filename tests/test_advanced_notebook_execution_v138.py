@@ -27,7 +27,22 @@ NB_FILES = [
 
 
 def _load(name: str) -> dict:
-    return json.loads((NB_DIR / name).read_text(encoding="utf-8"))
+    """Load a shipped notebook. Skips test if file is absent.
+
+    Per repo policy, .ipynb files in colab_drafts/ are NOT tracked in git
+    (they live in Google Drive/Colab). These execution tests run against
+    locally-generated notebooks; CI environments that have not run
+    `tools/build_advanced_notebooks.py` + `tools/execute_advanced_colab_drafts.py`
+    should skip these tests cleanly.
+    """
+    p = NB_DIR / name
+    if not p.exists():
+        pytest.skip(
+            f"Notebook {name} not present (gitignored). "
+            "Run tools/build_advanced_notebooks.py and "
+            "tools/execute_advanced_colab_drafts.py locally to generate and execute."
+        )
+    return json.loads(p.read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize("nb_name", NB_FILES)
