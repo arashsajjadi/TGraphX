@@ -124,7 +124,7 @@ class Graph:
 
     def __init__(
         self,
-        node_features: torch.Tensor,
+        node_features: Optional[torch.Tensor] = None,
         edge_index: Optional[torch.Tensor] = None,
         edge_weight: Optional[torch.Tensor] = None,
         edge_features: Optional[torch.Tensor] = None,
@@ -133,6 +133,7 @@ class Graph:
         graph_label: Optional[torch.Tensor] = None,
         metadata: Optional[Dict[str, Any]] = None,
         *,
+        x: Optional[torch.Tensor] = None,
         y: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
         edge_attr: Optional[torch.Tensor] = None,
@@ -141,7 +142,19 @@ class Graph:
         val_mask: Optional[torch.Tensor] = None,
         test_mask: Optional[torch.Tensor] = None,
     ) -> None:
-        # --- alias resolution ---
+        # --- alias resolution (v1.4.0+: x=, edge_attr=, y=, labels=) ---
+        # x → node_features
+        if x is not None:
+            if node_features is not None and x is not node_features:
+                raise ValueError(
+                    "Provide node_features or x, not both. "
+                    "They are aliases for the same field."
+                )
+            node_features = x
+        if node_features is None:
+            raise TypeError(
+                "Graph requires `node_features` (or PyG-style alias `x`)."
+            )
         # edge_attr → edge_features
         if edge_attr is not None:
             if edge_features is not None and edge_attr is not edge_features:
@@ -371,6 +384,25 @@ class Graph:
             return None
         return int(self.node_labels.max().item()) + 1
 
+    # ----- NetworkX-style read-only methods (v1.4.0+) -------------------- #
+
+    def number_of_nodes(self) -> int:
+        """NetworkX-style alias for :attr:`num_nodes`."""
+        return self.num_nodes
+
+    def number_of_edges(self) -> int:
+        """NetworkX-style alias for :attr:`num_edges`."""
+        return self.num_edges
+
+    def summary(self) -> Dict[str, Any]:
+        """JSON-serializable summary of this graph (v1.4.0+).
+
+        Equivalent to :func:`tgraphx.describe`. Returns shapes, dtypes, devices,
+        mask counts, and label info.
+        """
+        from ..ux.describe import describe as _describe
+        return _describe(self)
+
     @property
     def train_mask(self) -> Optional[torch.Tensor]:
         """Training mask stored in ``metadata['masks']['train']``."""
@@ -591,6 +623,202 @@ class Graph:
         self.edge_weight = new_w
         self.edge_features = new_ef
         return self
+
+    # ----- classmethod constructors (v1.4.0+) ---------------------------- #
+
+    @classmethod
+    def from_edges(
+        cls,
+        edge_list: Any,
+        num_nodes: Optional[int] = None,
+        node_features: Optional[torch.Tensor] = None,
+        **kwargs: Any,
+    ) -> "Graph":
+        """Build a Graph from a Python edge list, list of tuples, or [E, 2] tensor.
+
+        Args:
+            edge_list: One of:
+              - list of (src, dst) tuples / lists,
+              - numpy array of shape [E, 2],
+              - torch.Tensor of shape [E, 2] or [2, E].
+            num_nodes: Required if ``node_features`` is None. Inferred from max ID otherwise.
+            node_features: Optional `[N, ...]` node features. If None, identity features
+              of shape `[N, 1]` are created (zero-initialized).
+            **kwargs: Forwarded to :class:`Graph` constructor.
+
+        Returns:
+            A new :class:`Graph`.
+        """
+        # Normalize to [2, E] LongTensor
+        if isinstance(edge_list, torch.Tensor):
+            if edge_list.dim() != 2 or edge_list.shape[0] not in (2,) and edge_list.shape[1] not in (2,):
+                raise ValueError(
+                    f"edge_list tensor must have shape [E, 2] or [2, E]; got {tuple(edge_list.shape)}"
+                )
+            ei = edge_list if edge_list.shape[0] == 2 else edge_list.t().contiguous()
+            ei = ei.long()
+        else:
+            try:
+                pairs = list(edge_list)
+                if len(pairs) == 0:
+                    ei = torch.zeros(2, 0, dtype=torch.long)
+                else:
+                    arr = torch.as_tensor(pairs, dtype=torch.long)
+                    if arr.dim() != 2 or arr.size(1) != 2:
+                        raise ValueError(
+                            f"edge_list must be iterable of (src, dst) pairs; "
+                            f"got tensor shape {tuple(arr.shape)}"
+                        )
+                    ei = arr.t().contiguous()
+            except Exception as exc:
+                raise ValueError(
+                    f"Could not parse edge_list: {type(exc).__name__}: {exc}. "
+                    "Pass a list of (src, dst) tuples or a [E, 2] / [2, E] tensor."
+                ) from exc
+
+        if node_features is None:
+            if num_nodes is None:
+                if ei.numel() == 0:
+                    raise ValueError(
+                        "Graph.from_edges: provide num_nodes or node_features "
+                        "when edge_list is empty."
+                    )
+                num_nodes = int(ei.max().item()) + 1
+            node_features = torch.zeros(num_nodes, 1)
+        elif num_nodes is None:
+            num_nodes = int(node_features.size(0))
+        return cls(node_features=node_features, edge_index=ei, **kwargs)
+
+    @classmethod
+    def from_adjacency(
+        cls,
+        adj: Any,
+        node_features: Optional[torch.Tensor] = None,
+        directed: bool = True,
+        **kwargs: Any,
+    ) -> "Graph":
+        """Build a Graph from a dense or sparse adjacency.
+
+        Args:
+            adj: One of:
+              - torch.Tensor of shape [N, N] (dense),
+              - scipy.sparse matrix [N, N] (if scipy installed).
+            node_features: Optional `[N, ...]` node features.
+            directed: If False and adj is non-symmetric, raise a warning.
+            **kwargs: Forwarded to :class:`Graph`.
+        """
+        if isinstance(adj, torch.Tensor):
+            if adj.dim() != 2 or adj.size(0) != adj.size(1):
+                raise ValueError(
+                    f"Dense adjacency must be square [N, N]; got {tuple(adj.shape)}"
+                )
+            N = adj.size(0)
+            src, dst = torch.nonzero(adj, as_tuple=True)
+            ei = torch.stack([src, dst], dim=0).long()
+        else:
+            # Try scipy sparse
+            try:
+                import scipy.sparse as _sp
+            except ImportError as exc:
+                raise ImportError(
+                    "Sparse adjacency requires scipy. Install with: pip install scipy"
+                ) from exc
+            if not _sp.issparse(adj):
+                raise TypeError(
+                    f"Graph.from_adjacency expects torch.Tensor or scipy.sparse; "
+                    f"got {type(adj).__name__}"
+                )
+            coo = adj.tocoo()
+            N = coo.shape[0]
+            ei = torch.tensor([coo.row.tolist(), coo.col.tolist()], dtype=torch.long)
+        if node_features is None:
+            node_features = torch.zeros(N, 1)
+        return cls(node_features=node_features, edge_index=ei, **kwargs)
+
+    @classmethod
+    def from_networkx(
+        cls,
+        G: Any,
+        node_feature_key: Optional[str] = None,
+        **kwargs: Any,
+    ) -> "Graph":
+        """Build a Graph from a NetworkX graph.
+
+        Node attributes named ``node_feature_key`` are stacked as node features
+        when provided. Edge attributes are NOT carried by default; use
+        ``edge_features=`` after construction if needed.
+        """
+        try:
+            import networkx as nx
+        except ImportError as exc:
+            raise ImportError(
+                "Graph.from_networkx requires networkx. Install with: pip install networkx"
+            ) from exc
+        if not isinstance(G, (nx.Graph, nx.DiGraph)):
+            raise TypeError(
+                f"Graph.from_networkx expects a networkx.Graph/DiGraph; "
+                f"got {type(G).__name__}"
+            )
+        # Relabel nodes to 0..N-1
+        mapping = {node: i for i, node in enumerate(G.nodes())}
+        N = len(mapping)
+        # Edges
+        if G.number_of_edges() > 0:
+            src = [mapping[u] for u, v in G.edges()]
+            dst = [mapping[v] for u, v in G.edges()]
+            ei = torch.tensor([src, dst], dtype=torch.long)
+            if not isinstance(G, nx.DiGraph):
+                # Make undirected explicit
+                ei = torch.cat([ei, ei.flip(0)], dim=1)
+        else:
+            ei = torch.zeros(2, 0, dtype=torch.long)
+        # Node features
+        if node_feature_key is not None:
+            feats = []
+            for node in G.nodes():
+                v = G.nodes[node].get(node_feature_key)
+                if v is None:
+                    raise ValueError(
+                        f"Node {node!r} missing attribute {node_feature_key!r}"
+                    )
+                feats.append(v)
+            node_features = torch.as_tensor(feats).float()
+            if node_features.dim() == 1:
+                node_features = node_features.unsqueeze(-1)
+        else:
+            node_features = torch.zeros(N, 1)
+        return cls(node_features=node_features, edge_index=ei, **kwargs)
+
+    def to_networkx(self, directed: bool = True) -> Any:
+        """Convert this Graph to a NetworkX graph (optional dependency)."""
+        try:
+            import networkx as nx
+        except ImportError as exc:
+            raise ImportError(
+                "Graph.to_networkx requires networkx. Install with: pip install networkx"
+            ) from exc
+        G = nx.DiGraph() if directed else nx.Graph()
+        G.add_nodes_from(range(self.num_nodes))
+        if self.edge_index is not None and self.edge_index.numel() > 0:
+            edges = self.edge_index.t().tolist()
+            G.add_edges_from(edges)
+        return G
+
+    def save(self, path: Any) -> str:
+        """Save this graph to a `.tgx` native bundle (preserves tensor features)."""
+        from ..ux.serialization import save_tgraphx
+        return save_tgraphx(self, path)
+
+    @classmethod
+    def load(cls, path: Any) -> "Graph":
+        """Load a Graph from a `.tgx` native bundle."""
+        from ..ux.serialization import load_tgraphx
+        obj = load_tgraphx(path)
+        if not isinstance(obj, cls):
+            raise TypeError(
+                f"File {path} contains a {type(obj).__name__}, not a Graph."
+            )
+        return obj
 
     # ----- repr ---------------------------------------------------------- #
 

@@ -102,6 +102,27 @@ under two minutes on a modest CPU.
 
 > Notebook 24 uses the package-level API (`from tgraphx.benchmarks import run_v13_benchmark_suite`) and requires no repository checkout. Regenerate with `python tools/generate_colab_drafts.py`.
 
+### Advanced real-dataset projects (v1.3.8+)
+
+End-to-end project notebooks that combine real datasets, scientific framing,
+TGraphX-native APIs, an explicit leakage policy, baselines, dashboard
+artifacts, and a "Scientific and methodological notes" section. Each one was
+executed in FAST_MODE before publication.
+
+| # | Notebook | What you learn |
+|---|----------|----------------|
+| 31 | [MNIST class-graph membership with tensor nodes](https://drive.google.com/file/d/1WrD3kS8T83rlclytUP7r7kIzgLTsjpF8/view?usp=sharing) | Tensor-valued image nodes `[N, 1, 28, 28]`, two-edge-type `edge_attr` (visual + prototype), train-only prototypes, seed-node loss, `FlattenMLP` baseline |
+| 32 | [CIFAR-10 patch-graph classification](https://drive.google.com/file/d/1oDolpqZHpM5jEfFJDZj_rl2_CYJZ7mRj/view?usp=sharing) | True per-image patch graphs `[16, 3, 8, 8]`, grid-adjacency edges, `global_mean_pool + global_max_pool`, `GraphDataLoader` batching |
+| 33 | [Cora citation network: sampling and dashboard](https://drive.google.com/file/d/19MnreOV41RgSLMyYb_9E2fSzaFQUMepT/view?usp=sharing) | Transductive setting, `PyGPlanetoidDataset` bridge, `NeighborLoader` seed-node loss, `FlattenMLP` baseline, sampling metadata |
+| 34 | [MovieLens user–item KG recommendation](https://drive.google.com/file/d/1ulg9wr4w4foW397KSSJJvHo9WJVbTGS0/view?usp=sharing) | Multi-relational KG (`rated_high`, `rated_low`, `has_genre`, `has_occupation`), `entity_features`, `KGTrainer`, filtered MRR/Hits@K, `run_kg_hpo`, top-K titles, popularity baseline |
+| 35 | [Molecular graph classification on MUTAG](https://drive.google.com/file/d/1HBPu52cnH60LVkYwIvaBzImU_psvavs5/view?usp=sharing) | Atom + bond features (`edge_attr`), edge-aware GNN, mean+max readout, motif/structural mining, degree-feature baseline |
+
+> Notebooks 31–35 are Google Drive `.ipynb` files. Open the link, then choose
+> **Open with → Google Colaboratory** at the top of Drive. They run in FAST_MODE
+> in under five minutes; full-mode requires a GPU. No SOTA / parity claims are
+> made; every notebook ships with a "Scientific and methodological notes"
+> section, a leakage policy, baselines, and a FAST_MODE disclaimer.
+
 ---
 
 ## Running on Colab

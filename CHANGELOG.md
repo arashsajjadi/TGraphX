@@ -5,6 +5,76 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.4.0] — 2026-05-11
+
+Major user-experience release: a new `tgraphx.ux` layer brings
+LLM-predictable APIs, PyG / NetworkX / PyKEEN-style aliases, native tensor
+graph save/load, reproducible run contexts, dataset registry aliases,
+graph-construction helpers, leakage guards, and a dashboard audit utility —
+**without** breaking any existing v1.3.x syntax.
+
+### Added
+- `tgraphx.ux` module (new) with:
+  - `validate_graph`, `assert_tensor_native`, `check_graph_invariants`
+  - `describe`, `summary` (object-aware)
+  - `reproducible`, `seeded`, `reproducibility_state` (context manager)
+  - `check_leakage`, `leakage_report`, `validate_split_policy`
+  - `save`, `load`, `save_tgraphx`, `load_tgraphx` (native `.tgx` bundles —
+    GraphML cannot store rank-4 tensors)
+  - `knn_graph`, `build_class_prototypes`, `build_prototype_graph`,
+    `image_to_patch_graph` (tensor-native, leakage-aware)
+  - `audit_run_dir`, `dashboard_audit` (run-directory schema validation)
+  - `workflow`, `run_workflow`, `list_workflow_tasks` (one-line task dispatcher)
+  - `compare` (functionality, not throughput, comparison)
+  - `public_api`, `api_status`, `list_aliases` (stability registry)
+- `Graph.x=` PyG-style constructor alias (in addition to existing
+  `node_features=`, `y=`, `labels=`, `edge_attr=`).
+- `Graph.number_of_nodes()`, `Graph.number_of_edges()` NetworkX-style methods.
+- `Graph.from_edges`, `Graph.from_adjacency`, `Graph.from_networkx`,
+  `Graph.to_networkx`, `Graph.save`, `Graph.load` classmethods/methods.
+- `Graph.summary()` instance method (alias for `tgraphx.describe(graph)`).
+- `tgraphx.datasets.load_dataset(name, ...)` with friendly aliases
+  (`mnist_graph`, `cifar10_patch`, `cora`, `mutag`, `proteins`, ...).
+- `tgraphx.datasets.list_dataset_aliases()`.
+- Top-level exports of all UX functions for LLM predictability
+  (`tgx.validate_graph`, `tgx.workflow`, `tgx.save`, `tgx.load`,
+  `tgx.knn_graph`, `tgx.reproducible`, `tgx.audit_run_dir`, ...).
+
+### Fixed
+- Improved helpful errors for unsupported shortcuts: unknown task names,
+  unknown API names, unknown dataset names, bad metric, oversized k in
+  `knn_graph`, non-square adjacency, unsupported save object types, corrupted
+  `.tgx` bundles.
+- All errors include closest-match suggestions via `difflib`.
+
+### Documentation
+- New `docs/user_friendly_syntax_audit.md` classifying groups 71–100 with
+  status, canonical name, aliases, rejected forms, and tests.
+- README updated with a concise "v1.4.0: user-friendly tensor-native workflows"
+  section showing before/after examples (graph construction, dataset loading,
+  reproducibility context, dashboard audit, save/load, migration aliases,
+  public API registry).
+- `docs/colab_gallery.md` now lists advanced notebooks 31–35 as Google Drive
+  notebook files.
+
+### Validation
+- 90 new v1.4.0 group-71-to-100 tests pass.
+- Full test suite: **3262 passed, 25 skipped, 0 failed.**
+- All v1.3.x syntax still valid; advanced notebook tests (137 incl.
+  consistency + execution + workflow) still green.
+- Clean wheel smoke and PyPI smoke verified.
+
+### Notes
+- No SOTA / parity claims. TGraphX does not claim to replace PyG, DGL,
+  NetworkX, PyKEEN, SB3, or RLlib.
+- New aliases are **beta** in `docs/api_stability.md`; canonical APIs remain
+  stable.
+- Notebooks are stored on Google Drive (per `.gitignore` policy);
+  `tools/build_advanced_notebooks.py` + `tools/execute_advanced_colab_drafts.py`
+  are the source of truth.
+
+---
+
 ## [1.3.8] — 2026-05-11
 
 Executed-and-validated advanced Colab notebooks. The previous v1.3.7 release

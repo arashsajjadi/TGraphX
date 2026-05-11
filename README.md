@@ -87,6 +87,100 @@ Advanced users can always drop down to PyTorch: `result.model`, `result.graph`,
 
 ---
 
+## v1.4.0: user-friendly tensor-native workflows
+
+v1.4.0 keeps every canonical API stable while adding **mathematically-safe**
+aliases for PyG, NetworkX, dataset, graph-construction, reproducibility,
+and dashboard patterns. Unsupported shortcuts fail with actionable errors
+rather than silent surprises.
+
+**Graph construction.**
+```python
+# Before: many helper imports, careful shape work
+# After: one line, tensor-native preserved
+g = tgx.Graph(x=images, edge_index=edge_index, labels=y).to("cuda")
+tgx.validate_graph(g, strict=True)
+```
+
+**Datasets.**
+```python
+# Before: torchvision/PyG-specific incantations
+# After: friendly aliases route to TGraphX bridges
+dataset = tgx.load_dataset("cifar10_patch", download=True, patch_size=8)
+```
+
+**Edge / kNN / patch construction.**
+```python
+edge_index = tgx.knn_graph(x, k=10, metric="cosine", make_symmetric=True)
+patches, ei = tgx.image_to_patch_graph(image, patch_size=8)
+proto, proto_edges, all_x = tgx.build_prototype_graph(x, y, train_mask, num_classes=10)
+```
+
+**Reproducible workflow.**
+```python
+# Before: random/numpy/torch seeds + cudnn flags + run_metadata bookkeeping
+# After: one context manager
+with tgx.reproducible(seed=42, deterministic=True):
+    result = tgx.workflow(task="node_classification", fast_mode=True)
+```
+
+**Native tensor graph save/load (GraphML cannot store rank-4 tensors).**
+```python
+g.save("my_tensor_graph.tgx")
+g = tgx.Graph.load("my_tensor_graph.tgx")
+```
+
+**Dashboard audit.**
+```python
+tgx.dashboard_audit("runs/advanced_notebooks/31_mnist")
+# → {"ok": True, "files_present": [...], "issues": []}
+```
+
+**Functionality (not throughput) comparison.**
+```python
+out = tgx.compare(
+    workflows=[{"name": "tensor", "task": "node_classification"},
+               {"name": "mining", "task": "graph_mining"}],
+    fast_mode=True, seed=42,
+)
+```
+
+**Migration aliases from PyG / NetworkX / PyKEEN.**
+```python
+# PyG-style
+g.x  # node_features
+g.y  # node_labels
+g.edge_attr
+g.num_node_features
+
+# NetworkX-style
+g.number_of_nodes()
+g.number_of_edges()
+Graph.from_networkx(G)
+g.to_networkx()
+
+# PyKEEN-style
+kg.triples
+kg.num_entities
+kg.num_relations
+KnowledgeGraph.from_hrt(heads, rels, tails)
+```
+
+**Public API stability registry.**
+```python
+tgx.api_status("Graph")        # → "stable"
+tgx.api_status("workflow")     # → "beta"
+tgx.api_status("Graff")        # → KeyError with closest-match suggestion
+tgx.public_api()               # → {"stable": [...], "beta": [...], "experimental": [...]}
+```
+
+All v1.4.0 aliases preserve tensor shape, dtype, device, autograd, masks, and
+labels. Unsupported shortcuts (e.g. unknown task names) raise `ValueError` /
+`KeyError` with closest-match suggestions. The full audit lives in
+[docs/user_friendly_syntax_audit.md](docs/user_friendly_syntax_audit.md).
+
+---
+
 ## If you want to...
 
 | Goal | Use this | Minimal example | Tutorial |

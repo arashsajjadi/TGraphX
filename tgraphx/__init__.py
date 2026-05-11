@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "1.3.8"
+__version__ = "1.4.0"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -223,9 +223,71 @@ from .rl import (
 # Imported here as a module so users can do `tgx.easy.xxx`.
 from . import easy
 
+# ── UX layer (user-friendly, LLM-predictable APIs, v1.4.0+) ──────────────────
+# `import tgraphx as tgx; tgx.validate_graph(g); tgx.knn_graph(x); ...`
+from . import ux
+# Expose tgx.load_dataset for friendly name resolution
+from .datasets import load_dataset, list_dataset_aliases
+from .ux import (
+    validate_graph,
+    assert_tensor_native,
+    describe,
+    summary,
+    reproducible,
+    seeded,
+    reproducibility_state,
+    check_leakage,
+    leakage_report,
+    save,
+    load,
+    save_tgraphx,
+    load_tgraphx,
+    knn_graph,
+    build_class_prototypes,
+    build_prototype_graph,
+    image_to_patch_graph,
+    audit_run_dir,
+    dashboard_audit,
+    workflow,
+    run_workflow,
+    list_workflow_tasks,
+    compare,
+    public_api,
+    api_status,
+    list_aliases,
+)
+
 __all__ = [
     "__version__",
     "easy",
+    "ux",
+    # v1.4.0 UX layer (top-level for LLM predictability)
+    "validate_graph",
+    "assert_tensor_native",
+    "describe",
+    "summary",
+    "reproducible",
+    "seeded",
+    "reproducibility_state",
+    "check_leakage",
+    "leakage_report",
+    "save",
+    "load",
+    "save_tgraphx",
+    "load_tgraphx",
+    "knn_graph",
+    "build_class_prototypes",
+    "build_prototype_graph",
+    "image_to_patch_graph",
+    "audit_run_dir",
+    "dashboard_audit",
+    "workflow",
+    "run_workflow",
+    "list_workflow_tasks",
+    "compare",
+    "public_api",
+    "api_status",
+    "list_aliases",
     # Core
     "Graph",
     "GraphBatch",

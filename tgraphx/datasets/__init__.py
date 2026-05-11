@@ -71,6 +71,8 @@ from .registry import (
     get_dataset,
     has_dataset,
     list_datasets,
+    list_dataset_aliases,
+    load_dataset,
     normalize_dataset_name,
     register_dataset,
 )
@@ -373,6 +375,8 @@ __all__ = [
     "register_dataset",
     "get_dataset",
     "list_datasets",
+    "list_dataset_aliases",
+    "load_dataset",
     "dataset_info",
     "available_dataset_groups",
     "normalize_dataset_name",
