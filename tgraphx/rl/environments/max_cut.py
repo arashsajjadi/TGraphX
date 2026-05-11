@@ -11,7 +11,7 @@ import torch
 from tgraphx.generation.data_model import GeneratedGraph
 from .base import GraphEnv, GraphEnvConfig
 
-__all__ = ["MaxCutEnv"]
+__all__ = ["MaxCutEnv", "GraphMaxCutEnv"]
 
 
 class MaxCutEnv(GraphEnv):
@@ -147,3 +147,63 @@ class MaxCutEnv(GraphEnv):
     @property
     def action_space(self) -> int:
         return 2
+
+
+class GraphMaxCutEnv(MaxCutEnv):
+    """LLM-friendly wrapper around :class:`MaxCutEnv`.
+
+    Builds a random Erdos-Renyi graph from ``num_nodes`` and ``edge_density``
+    and constructs the underlying :class:`MaxCutEnv`.  Equivalent to passing a
+    pre-built ``edge_index`` to ``MaxCutEnv`` directly.
+
+    Args:
+        num_nodes: Number of nodes.
+        edge_density: Edge probability for the underlying ER graph (in [0, 1]).
+        seed: RNG seed for graph construction.
+        node_features: Optional pre-computed node features [N, F].
+        config: Optional :class:`GraphEnvConfig` for the environment runtime.
+
+    Stability: Experimental (v1.3.6+, thin wrapper for predictable imports).
+    """
+
+    def __init__(
+        self,
+        num_nodes: int,
+        edge_density: float = 0.1,
+        seed: Optional[int] = None,
+        node_features: Optional[torch.Tensor] = None,
+        config: Optional[GraphEnvConfig] = None,
+    ) -> None:
+        if num_nodes < 2:
+            raise ValueError(f"num_nodes must be >= 2; got {num_nodes}")
+        if not (0.0 <= edge_density <= 1.0):
+            raise ValueError(f"edge_density must be in [0, 1]; got {edge_density}")
+
+        gen = torch.Generator()
+        if seed is not None:
+            gen.manual_seed(int(seed))
+        # Build undirected ER graph as edge_index (each undirected edge appears twice).
+        edges_src: List[int] = []
+        edges_dst: List[int] = []
+        for u in range(num_nodes):
+            for v in range(u + 1, num_nodes):
+                if torch.rand(1, generator=gen).item() < edge_density:
+                    edges_src.append(u); edges_dst.append(v)
+                    edges_src.append(v); edges_dst.append(u)
+        if edges_src:
+            edge_index = torch.tensor([edges_src, edges_dst], dtype=torch.long)
+        else:
+            edge_index = torch.zeros(2, 0, dtype=torch.long)
+
+        # Pass seed through to GraphEnvConfig so reset() is deterministic by default.
+        if config is None:
+            config = GraphEnvConfig(seed=seed)
+
+        super().__init__(
+            edge_index=edge_index,
+            num_nodes=num_nodes,
+            node_features=node_features,
+            config=config,
+        )
+        self.edge_density = edge_density
+        self.seed = seed

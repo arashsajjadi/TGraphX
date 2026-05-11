@@ -316,10 +316,29 @@ class RLResult:
         metrics: Dict with episode_returns, success_rate, mean_return, algorithm, environment.
         config: Serializable config dict.
         report_path: Path to JSON report if dashboard_dir was set.
+        stopped_early: Whether training stopped early via a callback.
     """
     metrics: Dict[str, Any]
     config: Dict[str, Any]
     report_path: Optional[str] = None
+    stopped_early: bool = False
+
+    @property
+    def final_reward(self) -> float:
+        """Final-episode return — convenience for LLM-generated snippets.
+
+        Returns the last entry of ``metrics['episode_returns']`` when present,
+        otherwise ``metrics['mean_return']``.
+        """
+        returns = self.metrics.get("episode_returns")
+        if returns:
+            return float(returns[-1])
+        return float(self.metrics.get("mean_return", 0.0))
+
+    @property
+    def mean_return(self) -> float:
+        """Mean episode return — convenience alias for ``metrics['mean_return']``."""
+        return float(self.metrics.get("mean_return", 0.0))
 
 
 # ---------------------------------------------------------------------------

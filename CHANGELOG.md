@@ -5,6 +5,84 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.6] — 2026-05-10
+
+Public Colab notebook regression fix + LLM-predictability sprint. No new
+features; aliases and helpful errors only.
+
+### Fixed
+- **Colab draft notebooks regenerated.** `tools/generate_colab_drafts.py` and
+  the corresponding `colab_drafts/*.ipynb` files for notebooks 14, 19, 22, and
+  24 were stale; they now contain the corrected v1.3.5/v1.3.6 snippets:
+  - Notebook 14 (evolutionary): uses `[connectivity_fitness, sparsity_fitness]`
+    for NSGA-II; no longer passes `composite_fitness` directly.
+  - Notebook 19 (GraphML): formats exceptions with `str(e)[:120]`.
+  - Notebook 22 (structural roles): asserts on `max_total_degree` / `min_total_degree`
+    (correct for a bidirectional edge_index) and explains the doubling.
+  - Notebook 24 (benchmark suite): calls
+    `from tgraphx.benchmarks import run_v13_benchmark_suite` instead of
+    `subprocess.run` against a repo-local script path.
+
+### Added — LLM-predictability aliases
+- `from tgraphx import KnowledgeGraph, KGTrainer, KGTrainingConfig` — top-level
+  re-exports of the canonical `tgraphx.kg.*` symbols, because that is the
+  natural form LLM-generated code uses.
+- `tgraphx.models.knowledge_graph` — compatibility shim that re-exports
+  `TransEModel`, `DistMultModel`, `ComplExModel`, `RotatEModel`, `RESCALModel`,
+  `SimplEModel`, `KnowledgeGraph`, `KGTrainer`.
+- `KGTrainer` now accepts an LLM-friendly call form:
+  `KGTrainer(model, kg_or_triples, lr=..., num_epochs=..., batch_size=..., ...)`
+  in addition to the canonical `KGTrainer(model, config, train_triples)`.
+- `KGTrainer.fit(epochs=..., batch_size=...)` is an alias for `train()` that
+  can optionally override config fields.
+- `KGTrainer.evaluate(triples=None)` returns the evaluator's metric dict, or
+  a small training-summary dict when no evaluator is configured.
+- `tgraphx.rl.GraphMaxCutEnv(num_nodes=..., edge_density=..., seed=...)` —
+  LLM-friendly wrapper around `MaxCutEnv` that builds a random Erdos-Renyi
+  graph under the hood. The canonical `MaxCutEnv(edge_index, num_nodes, ...)`
+  form is unchanged.
+- `RLResult.final_reward` and `RLResult.mean_return` — convenience properties
+  that complement `RLResult.metrics`.
+
+### Improved
+- `run_graph_generation(method=...)` now raises a **helpful** `ValueError`
+  for known neural-generator names (`"vgae"`, `"gae"`, `"autoregressive"`,
+  `"transformer"`). The message lists the correct class
+  (`VGAEGraphGenerator`, `AutoregressiveEdgeGenerator`,
+  `GraphTransformerGenerator`) and explains that classical-vs-neural
+  generators have different contracts.
+
+### Documentation
+- `docs/colab_gallery.md` — full visual redesign: themed sections, compact
+  tables, reader-friendly display names (no raw filenames in the body),
+  consistent “Google Drive notebook” labelling, mobile-readable formatting.
+- `README.md` — “Notebook gallery” section rewritten with concise wording and
+  a clean link to `docs/colab_gallery.md`. No long lists in the README.
+- `docs/llm_usage_guide.md` — added KG (LLM-friendly form), RL
+  (`GraphMaxCutEnv`), and graph-generation (classical vs neural) sections;
+  expanded `ConvMessagePassing` shape contract with the v1.3.5+
+  spatial-downsampling path.
+- `docs/knowledge_graphs.md` — added LLM-friendly KG quickstart.
+- `docs/graph_reinforcement_learning.md` — added high-level `run_graph_rl`
+  + `GraphMaxCutEnv` quickstart.
+- `docs/graph_generation.md` — added a classical-vs-neural explanation.
+- `docs/api_cheatsheet.json` — added KG top-level alias, models compat path,
+  benchmarks package import, and clarified generation/RL entries.
+
+### Validation
+- Added `tests/test_colab_notebook_regressions_v136.py` (27 tests) and
+  `tests/test_llm_predictability_v136.py` (30 tests) — 57 new tests total.
+- Full local suite: every targeted regression and predictability test passes.
+- Built wheel passed clean-venv smoke tests outside the repository.
+- Build and twine validation passed locally.
+
+### Notes
+- All v1.3.5 canonical APIs continue to work unchanged.
+- This is a public Colab/notebook regression and LLM-predictability fix
+  release. No unrelated features were added.
+
+---
+
 ## [1.3.5] — 2026-05-10
 
 Public Colab/API regression fix release. No new features.

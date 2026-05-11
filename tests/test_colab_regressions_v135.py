@@ -169,17 +169,23 @@ class TestReadmeGalleryConsolidation:
         assert "drive.google.com" in text
 
     def test_colab_gallery_covers_key_notebooks(self):
-        """Gallery must list the key notebooks added in v1.3.5."""
+        """Gallery must reference the Google Drive file IDs for the key notebooks.
+
+        (v1.3.6 visual polish replaced raw notebook filenames in the gallery
+        with reader-friendly display names. The Drive file IDs are stable and
+        we check those instead.)
+        """
         text = Path("docs/colab_gallery.md").read_text()
-        required = [
-            "01_easy_tensor_node_classification",
-            "09_kg_completion_transe_rescal_simple",
-            "13_graph_generation_metrics",
-            "18_graphml_io_roundtrip",
-            "20_graph_mining_motifs_and_cliques",
-            "25_reproducibility_and_seed_control",
-        ]
-        missing = [nb for nb in required if nb not in text]
+        # Google Drive file IDs (stable identifiers) for the key notebooks.
+        required_file_ids = {
+            "01_easy_tensor_node_classification": "1C-vydQXnn9LrYhx5hZDQl6H601itnbGp",
+            "09_kg_completion_transe_rescal_simple": "1QlCNZg2U0HJ6I6M4V8qXArKEwweZOjqn",
+            "13_graph_generation_metrics": "1Q8358qYmw80SBr-fXFmkTg1tcRhaUg16",
+            "18_graphml_io_roundtrip": "11Ul2v5KVYkrVFOhoeSZkE6Y8HG1qcgu5",
+            "20_graph_mining_motifs_and_cliques": "1ZbtFGqNuPxfqI8xt3FlxzgPozukzbvua",
+            "25_reproducibility_and_seed_control": "1ihdOfq-_z9iH9n7s52mJ2Veyog8jqdoB",
+        }
+        missing = [nb for nb, fid in required_file_ids.items() if fid not in text]
         assert not missing, f"Gallery missing notebooks: {missing}"
 
     def test_docs_index_links_colab_gallery(self):

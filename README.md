@@ -140,13 +140,19 @@ out = layer(g.node_features, g.edge_index)   # [6, 32, 8, 8]
 out.sum().backward()
 ```
 
-## Notebook Gallery
+## Notebook gallery
 
-30 scenario-driven notebooks cover Easy Mode, tensor-native image-patch graphs, tensor-vs-flatten comparisons, sampling, knowledge graphs, KG HPO, graph generation, evolutionary optimization, graph IO, graph mining, benchmarking, and reproducibility.
+A curated set of 30 CPU-runnable notebooks covers Easy Mode, tensor-native
+message passing, sampling, knowledge graphs, classical graph generation,
+evolutionary optimization, graph reinforcement learning, graph IO, graph
+mining, benchmarking, and reproducibility.
 
-**→ [docs/colab_gallery.md](docs/colab_gallery.md)**
+Browse the full index → **[docs/colab_gallery.md](docs/colab_gallery.md)**
 
-All notebooks are CPU-friendly and use synthetic or toy data. Open any notebook link in Google Drive and choose "Open with Google Colaboratory".
+Each notebook focuses on one concept, uses synthetic or toy data, and runs in
+under two minutes on CPU. Notebooks are hosted on Google Drive; open the file
+in Drive and choose **Open with → Google Colaboratory**, or download and run
+locally in Jupyter.
 
 ---
 

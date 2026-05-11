@@ -140,6 +140,13 @@ class TestColabGallery:
         assert Path("docs/colab_gallery.md").exists()
 
     def test_colab_gallery_lists_notebooks(self):
+        """Gallery must list the first 7 notebooks by number.
+
+        (v1.3.6 visual polish replaced raw `0N_*.ipynb` filenames in the body
+        with reader-friendly display names. The notebook *number* still
+        appears as a leading column entry ``| 01 |`` etc.)
+        """
         text = Path("docs/colab_gallery.md").read_text()
         for i in range(1, 8):
-            assert f"0{i}_" in text, f"Notebook {i} not in colab_gallery.md"
+            tag = f"| 0{i} |"
+            assert tag in text, f"Notebook {i} marker {tag!r} not in colab_gallery.md"

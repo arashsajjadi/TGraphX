@@ -96,6 +96,46 @@ _GENERATION_METHODS: Dict[str, Dict[str, str]] = {
 }
 
 
+# Methods that LLMs commonly request but are NOT classical generators.
+# Documented redirects so users get a helpful pointer instead of a bare error.
+_NEURAL_GENERATOR_REDIRECTS: Dict[str, str] = {
+    "vgae": (
+        "method='vgae' is not a classical graph generator. "
+        "VGAE (Variational Graph Autoencoder) is a representation-learning / "
+        "link-prediction model, not a classical generator usable through "
+        "run_graph_generation. "
+        "Use `from tgraphx.generation import VGAEGraphGenerator` to fit a VGAE "
+        "on an existing graph, or pick one of the classical methods."
+    ),
+    "gae": (
+        "method='gae' is not a classical graph generator. "
+        "GAE (Graph Autoencoder) is a representation-learning / link-prediction "
+        "model. Use `from tgraphx.generation import VGAEGraphGenerator` for the "
+        "neural variant, or pick one of the classical methods."
+    ),
+    "autoregressive": (
+        "method='autoregressive' is not a classical graph generator. "
+        "Use `from tgraphx.generation import AutoregressiveEdgeGenerator` "
+        "directly, or pick one of the classical methods."
+    ),
+    "transformer": (
+        "method='transformer' is not a classical graph generator. "
+        "Use `from tgraphx.generation import GraphTransformerGenerator` "
+        "directly, or pick one of the classical methods."
+    ),
+}
+
+
+def _unknown_method_error(method: str) -> ValueError:
+    """Build a helpful ValueError for an unknown generation method."""
+    known = sorted(_GENERATION_METHODS.keys())
+    extra = _NEURAL_GENERATOR_REDIRECTS.get(method.lower())
+    base = f"Unknown generation method {method!r}. Choose from: {known}"
+    if extra is not None:
+        return ValueError(f"{base}\n\n{extra}")
+    return ValueError(base)
+
+
 def list_graph_generation_methods() -> Dict[str, Dict[str, str]]:
     """Return dict: method_name -> info dict with stability, description.
 
@@ -119,10 +159,7 @@ def make_graph_generator(method: str, **kwargs) -> Any:
         ValueError: If method not recognized.
     """
     if method not in _GENERATION_METHODS:
-        known = sorted(_GENERATION_METHODS.keys())
-        raise ValueError(
-            f"Unknown generation method '{method}'. Choose from: {known}"
-        )
+        raise _unknown_method_error(method)
 
     from tgraphx.generation.classical import (
         FeatureAwareERGraph, FeatureAwareBAGraph,
@@ -320,10 +357,7 @@ def run_graph_generation(
         ValueError: If method not recognized.
     """
     if method not in _GENERATION_METHODS:
-        known = sorted(_GENERATION_METHODS.keys())
-        raise ValueError(
-            f"Unknown generation method '{method}'. Choose from: {known}"
-        )
+        raise _unknown_method_error(method)
 
     from tgraphx.generation.metrics import (
         validity_score, uniqueness_score, novelty_score, diversity_score,

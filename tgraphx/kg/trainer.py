@@ -68,14 +68,34 @@ class KGTrainingConfig:
 class KGTrainer:
     """Reproducible KG embedding trainer.
 
+    Canonical form (v0.6+):
+        ``KGTrainer(model, config: KGTrainingConfig, train_triples: Tensor[T, 3])``
+
+    LLM-friendly form (v1.3.6+):
+        ``KGTrainer(model, kg_or_triples, lr=..., num_epochs=..., batch_size=..., ...)``
+        where ``kg_or_triples`` may be a ``KnowledgeGraph`` (its ``.triples`` is used)
+        or a ``LongTensor[T, 3]``. Extra kwargs are forwarded to ``KGTrainingConfig``.
+
     Args:
         model: A :class:`KGScoringModel` implementing ``score_triples``.
-        config: :class:`KGTrainingConfig`.
-        train_triples: ``LongTensor[T, 3]``.
+        config: :class:`KGTrainingConfig` **or** a :class:`KnowledgeGraph`/tensor
+            (LLM-friendly form). When a KG/tensor is passed here, a default
+            :class:`KGTrainingConfig` is built from ``**kwargs``.
+        train_triples: ``LongTensor[T, 3]`` (canonical form). Omit when using
+            the LLM-friendly form (the KG/tensor is taken from ``config``).
         sampler: Negative sampler.  When None, uses
             :class:`UniformNegativeSampler`.
         evaluator: Optional :class:`KGEvaluator` for validation.
         on_epoch_end: Optional callback ``(epoch, loss, metrics) -> None``.
+        **kwargs: When using the LLM-friendly form, forwarded to
+            :class:`KGTrainingConfig` (e.g. ``lr``, ``num_epochs``, ``batch_size``).
+
+    Methods:
+        - ``train()`` — full canonical training loop (returns history dict).
+        - ``fit(epochs=None, batch_size=None)`` — LLM-friendly alias; optionally
+          overrides config fields then runs ``train()``.
+        - ``evaluate(triples=None)`` — returns evaluator metrics dict, or a
+          simple final-loss dict when no evaluator is configured.
 
     Stability: Experimental.
     """
@@ -83,12 +103,51 @@ class KGTrainer:
     def __init__(
         self,
         model: nn.Module,
-        config: KGTrainingConfig,
-        train_triples: torch.Tensor,
+        config: Union[KGTrainingConfig, "KnowledgeGraph", torch.Tensor, None] = None,
+        train_triples: Optional[torch.Tensor] = None,
         sampler: Optional[_BaseNegativeSampler] = None,
         evaluator: Optional[KGEvaluator] = None,
         on_epoch_end: Optional[Callable] = None,
+        **kwargs: Any,
     ) -> None:
+        # LLM-friendly form: detect when ``config`` is actually a KG/tensor.
+        if not isinstance(config, KGTrainingConfig):
+            kg_or_triples = config
+            if hasattr(kg_or_triples, "triples"):
+                triples_from_kg = kg_or_triples.triples
+            elif isinstance(kg_or_triples, torch.Tensor):
+                triples_from_kg = kg_or_triples
+            elif kg_or_triples is None and train_triples is not None:
+                triples_from_kg = None
+            else:
+                raise TypeError(
+                    "KGTrainer expects `config` to be a KGTrainingConfig, a "
+                    "KnowledgeGraph, or a LongTensor[T, 3] of triples. "
+                    f"Got {type(config).__name__!r}."
+                )
+            if triples_from_kg is not None:
+                if train_triples is None:
+                    train_triples = triples_from_kg
+                else:
+                    raise TypeError(
+                        "KGTrainer received both a KG/tensor in `config` and a "
+                        "separate `train_triples`; pass only one."
+                    )
+            # Build a default KGTrainingConfig from kwargs.
+            config = KGTrainingConfig(**kwargs)
+        elif kwargs:
+            raise TypeError(
+                f"KGTrainer received both a KGTrainingConfig and extra kwargs "
+                f"{list(kwargs)}; pass config fields either through KGTrainingConfig "
+                f"or through kwargs, not both."
+            )
+
+        if train_triples is None:
+            raise TypeError(
+                "KGTrainer requires `train_triples` (canonical form) or a "
+                "KnowledgeGraph/tensor in `config` (LLM-friendly form)."
+            )
+
         self.model = model
         self.config = config
         self.train_triples = train_triples
@@ -194,4 +253,66 @@ class KGTrainer:
             "num_epochs": cfg.num_epochs,
             "seed": cfg.seed,
             "device": str(dev),
+        }
+
+    # ------------------------------------------------------------------ #
+    # LLM-friendly aliases (v1.3.6+).                                     #
+    # ------------------------------------------------------------------ #
+
+    def fit(
+        self,
+        epochs: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """LLM-friendly alias for :meth:`train`.
+
+        Optionally overrides ``num_epochs`` / ``batch_size`` (and any other
+        :class:`KGTrainingConfig` field via kwargs) before running the canonical
+        training loop.
+
+        Args:
+            epochs: Override ``num_epochs`` if not None.
+            batch_size: Override ``batch_size`` if not None.
+            **kwargs: Any other KGTrainingConfig field override.
+
+        Returns:
+            Same dict as :meth:`train`.
+        """
+        if epochs is not None:
+            self.config.num_epochs = int(epochs)
+        if batch_size is not None:
+            self.config.batch_size = int(batch_size)
+        for k, v in kwargs.items():
+            if not hasattr(self.config, k):
+                raise TypeError(f"Unknown KGTrainingConfig field: {k!r}")
+            setattr(self.config, k, v)
+        return self.train()
+
+    def evaluate(
+        self,
+        triples: Optional[torch.Tensor] = None,
+    ) -> Dict[str, Any]:
+        """LLM-friendly evaluation entrypoint.
+
+        When an evaluator is configured, runs it on ``triples`` (or the
+        evaluator's ``valid_triples`` by default) and returns its metric dict.
+        When no evaluator is configured, returns the most-recent training
+        summary (``{"final_loss": ..., "num_epochs": ..., "seed": ...}``).
+
+        Args:
+            triples: Optional override for the triples to evaluate on.
+
+        Returns:
+            Metric dict (evaluator format) or a small training-summary dict.
+        """
+        if self.evaluator is not None:
+            eval_triples = triples if triples is not None else self.evaluator.valid_triples
+            result = self.evaluator.evaluate(self.model, triples=eval_triples, device=self.device)
+            return result.to_dict()
+        return {
+            "final_loss": self.loss_history[-1] if self.loss_history else None,
+            "num_epochs": self.config.num_epochs,
+            "seed": self.config.seed,
+            "note": "No evaluator configured; pass `evaluator=KGEvaluator(...)` for ranking metrics.",
         }

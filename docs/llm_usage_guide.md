@@ -116,28 +116,112 @@ for subgraph, seed_ids in loader:
 ## ConvMessagePassing shape contract
 
 ```python
-# Input: [N, C_in, H, W] → Output: [N, C_out, H, W]
-# Spatial dimensions H, W are PRESERVED. Only channels change.
+# Same-spatial path:  [N, C_in, H, W] -> [N, C_out, H, W]
 conv = ConvMessagePassing(in_shape=(C_in, H, W), out_shape=(C_out, H, W))
 
-# To change spatial dims, use explicit pooling:
-pool = nn.AdaptiveAvgPool2d((1, 1))
-head = nn.Linear(C_out, num_classes)
+# Spatial-downsampling path (v1.3.5+): exact out_shape is honored via
+# adaptive average pooling after aggregation.
+conv = ConvMessagePassing(in_shape=(32, 8, 8), out_shape=(64, 4, 4))
+# -> output shape [N, 64, 4, 4]
 
-# Typical two-layer classifier:
+# Typical two-layer classifier with explicit spatial downsampling:
 class Model(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = ConvMessagePassing((C, H, W), (16, H, W))
-        self.conv2 = ConvMessagePassing((16, H, W), (16, H, W))
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.head = nn.Linear(16, num_classes)
+        self.conv1 = ConvMessagePassing((C, H, W), (32, H, W))
+        self.conv2 = ConvMessagePassing((32, H, W), (64, 4, 4))
+        self.head = nn.Linear(64 * 4 * 4, num_classes)
 
     def forward(self, x, edge_index):
         z = self.conv1(x, edge_index).relu()
-        z = self.conv2(z, edge_index).relu()
-        return self.head(self.pool(z).flatten(1))
+        z = self.conv2(z, edge_index)
+        return self.head(z.reshape(z.size(0), -1))
 ```
+
+---
+
+## Knowledge graphs (v1.3.6 LLM-friendly form)
+
+Both canonical and LLM-friendly forms are supported. The top-level
+`from tgraphx import KnowledgeGraph, KGTrainer` aliases are equivalent to
+the canonical `from tgraphx.kg import KnowledgeGraph, KGTrainer`.
+
+```python
+import torch
+from tgraphx import KnowledgeGraph, KGTrainer
+from tgraphx.kg import TransEModel  # or: from tgraphx.models.knowledge_graph import TransEModel
+
+N_e, N_r = 500, 20
+triples = torch.randint(0, N_e, (3000, 3))
+triples[:, 1] = torch.randint(0, N_r, (3000,))
+
+kg = KnowledgeGraph(triples, num_entities=N_e, num_relations=N_r)
+model = TransEModel(N_e, N_r, embedding_dim=64)
+
+# LLM-friendly form: pass the KG (or triples tensor) and trainer kwargs.
+trainer = KGTrainer(model, kg, lr=0.005)
+history = trainer.fit(epochs=6, batch_size=512)
+metrics = trainer.evaluate()
+```
+
+The canonical form is also supported and is preferred when you want explicit
+control over the training config:
+
+```python
+from tgraphx.kg import KGTrainingConfig
+config = KGTrainingConfig(num_epochs=6, batch_size=512, lr=0.005, seed=42)
+trainer = KGTrainer(model, config, kg.triples)
+trainer.train()
+```
+
+---
+
+## Graph RL (v1.3.6 LLM-friendly form)
+
+```python
+from tgraphx.rl import run_graph_rl, GraphMaxCutEnv
+
+env = GraphMaxCutEnv(num_nodes=40, edge_density=0.1, seed=42)
+
+result = run_graph_rl(
+    algorithm="ppo",      # or "dqn", "random", "actor_critic", "a2c", ...
+    env=env,
+    episodes=30,
+    seed=42,
+)
+
+print("Final reward:", result.final_reward)
+print("Mean return:", result.mean_return)
+```
+
+List supported algorithms with `tgraphx.rl.list_graph_rl_algorithms()`.
+Unknown algorithm names raise a `ValueError` that lists valid choices.
+
+---
+
+## Graph generation: classical vs neural
+
+`run_graph_generation` supports **classical** generators only (ER, BA, SBM,
+WS, grid, cycle, path, star, complete, motif/anomaly/typed/temporal, random
+geometric). Neural generators (VGAE, autoregressive, transformer) are
+available as separate classes:
+
+```python
+# Classical:
+from tgraphx.generation import run_graph_generation
+g = run_graph_generation(method="barabasi_albert", num_nodes=300, m=4, seed=42)
+
+# Neural (must be used directly, not via run_graph_generation):
+from tgraphx.generation import (
+    VGAEGraphGenerator,
+    AutoregressiveEdgeGenerator,
+    GraphTransformerGenerator,
+)
+```
+
+Passing `method="vgae"` (or `"gae"`, `"autoregressive"`, `"transformer"`) to
+`run_graph_generation` raises a helpful `ValueError` that points to the
+correct class.
 
 ---
 

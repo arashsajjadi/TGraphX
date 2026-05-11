@@ -2,7 +2,7 @@
 from .base import GraphEnvConfig, GraphEnv
 from .navigation import GraphNavigationEnv
 from .coloring import GraphColoringEnv
-from .max_cut import MaxCutEnv
+from .max_cut import MaxCutEnv, GraphMaxCutEnv
 from .vertex_cover import VertexCoverEnv
 from .generation import GraphGenerationEnv
 from .kg_reasoning import KGPathReasoningEnv
@@ -15,6 +15,7 @@ __all__ = [
     "GraphNavigationEnv",
     "GraphColoringEnv",
     "MaxCutEnv",
+    "GraphMaxCutEnv",
     "VertexCoverEnv",
     "GraphGenerationEnv",
     "KGPathReasoningEnv",

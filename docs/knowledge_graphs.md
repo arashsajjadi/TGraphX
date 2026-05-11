@@ -22,6 +22,30 @@ subsystem extends this with:
 
 ## Quick start
 
+### LLM-friendly form (v1.3.6+)
+
+`KnowledgeGraph` and `KGTrainer` are re-exported at the top level so the
+natural LLM-generated form works out of the box:
+
+```python
+import torch
+from tgraphx import KnowledgeGraph, KGTrainer
+from tgraphx.kg import TransEModel  # or: from tgraphx.models.knowledge_graph import TransEModel
+
+N_e, N_r = 500, 20
+triples = torch.randint(0, N_e, (3000, 3))
+triples[:, 1] = torch.randint(0, N_r, (3000,))
+
+kg = KnowledgeGraph(triples, num_entities=N_e, num_relations=N_r)
+model = TransEModel(N_e, N_r, embedding_dim=64)
+
+trainer = KGTrainer(model, kg, lr=0.005)        # pass KG + kwargs
+history = trainer.fit(epochs=6, batch_size=512) # alias for .train()
+metrics = trainer.evaluate()                     # returns evaluator dict, or summary
+```
+
+### Canonical form (preferred for explicit configs)
+
 ```python
 from tgraphx.kg import (
     KnowledgeGraph, FamilyKG,

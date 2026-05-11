@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "1.3.5"
+__version__ = "1.3.6"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -133,9 +133,10 @@ from .sampling_negative import (
     hard_negative_sampling,
 )
 
-# ── KG subsystem (v0.6.0) — imported lazily from tgraphx.kg ─────────────────
-# tgraphx.kg is available as `from tgraphx.kg import KnowledgeGraph, ...`
-# It is NOT re-exported at the top level to avoid heavy namespace pollution.
+# ── KG subsystem (v0.6.0) — top-level aliases for LLM-predictability (v1.3.6+) ─
+# Canonical path: `from tgraphx.kg import KnowledgeGraph, KGTrainer, TransEModel`.
+# Top-level aliases are provided because they are the natural LLM-generated form.
+from .kg import KnowledgeGraph, KGTrainer, KGTrainingConfig
 
 # ── Production-scale loaders + feature store (v0.5.0 Beta) ───────────────────
 from .loaders import (

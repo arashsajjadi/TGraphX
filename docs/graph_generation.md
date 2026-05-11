@@ -31,6 +31,30 @@ print("Uniqueness:", uniqueness_score(graphs))
 print("Validity:", validity_score(graphs, lambda g: g.num_nodes >= 5))
 ```
 
+## Classical vs neural generators
+
+`run_graph_generation(method=..., ...)` is a high-level entry point for
+**classical** generators only. Supported methods include `erdos_renyi`,
+`barabasi_albert`, `watts_strogatz`, `stochastic_block_model`, `grid`,
+`cycle`, `path`, `star`, `complete`, `motif_injected`, `anomaly_injected`,
+`temporal`, `typed`, and `random_geometric`.
+
+**Neural generators** (VGAE, autoregressive, transformer) are *not* exposed
+through `run_graph_generation` because they have very different training and
+inference contracts. Use them directly:
+
+```python
+from tgraphx.generation import (
+    VGAEGraphGenerator,
+    AutoregressiveEdgeGenerator,
+    GraphTransformerGenerator,
+)
+```
+
+Passing `method="vgae"` (or `"gae"`, `"autoregressive"`, `"transformer"`)
+to `run_graph_generation` raises a helpful `ValueError` that points to the
+correct class.
+
 ## Submodules
 
 - `data_model.py` — `GeneratedGraph`, `GraphEditState`, `GraphGenerationBatch`
