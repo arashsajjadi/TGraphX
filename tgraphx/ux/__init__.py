@@ -1,4 +1,4 @@
-"""TGraphX user-experience layer (v1.4.0).
+"""TGraphX user-experience layer (v1.4.0+, enhanced v1.4.1).
 
 High-impact, mathematically-safe utilities that reduce boilerplate without
 weakening tensor-native semantics. Every function in this module is:
@@ -61,44 +61,84 @@ from .public_api import (
     api_status,
     list_aliases,
 )
+# v1.4.1 helpers
+from .helpers import (
+    classify_nodes,
+    node_classification,
+    fit_node_classifier,
+    train_node_classifier,
+    kg_completion,
+    fit_kg,
+    train_kg,
+    make_graph,
+    build_graph,
+    explain_error,
+    troubleshoot_error,
+    debug_batch,
+    batch_summary,
+    assert_batch_consistent,
+    dataset_card,
+    model_card,
+    benchmark_card,
+    audit_package_readiness,
+    WorkflowResult,
+)
+# v1.4.1 generation/RL/evolution wrappers
+from .generation_wrappers import (
+    generate_graph,
+    graph_generator,
+    generate,
+    evaluate_generated_graphs,
+    graph_generation_report,
+    compare_generated_graphs,
+    generation_metrics,
+    optimize_graph,
+    evolve_graph,
+    graph_evolution,
+    run_evolution,
+    train_graph_rl,
+    graph_rl,
+    run_rl,
+    audit_generation_run,
+    audit_evolution_run,
+    audit_rl_run,
+)
 
 __all__ = [
-    # Validation
-    "validate_graph",
-    "assert_tensor_native",
-    "check_graph_invariants",
+    # v1.4.0 Validation
+    "validate_graph", "assert_tensor_native", "check_graph_invariants",
     # Describe / summary
-    "describe",
-    "summary",
+    "describe", "summary",
     # Reproducibility
-    "reproducible",
-    "seeded",
-    "reproducibility_state",
+    "reproducible", "seeded", "reproducibility_state",
     # Leakage
-    "check_leakage",
-    "leakage_report",
-    "validate_split_policy",
+    "check_leakage", "leakage_report", "validate_split_policy",
     # Serialization
-    "save",
-    "load",
-    "save_tgraphx",
-    "load_tgraphx",
+    "save", "load", "save_tgraphx", "load_tgraphx",
     # Graph construction
-    "knn_graph",
-    "build_class_prototypes",
-    "build_prototype_graph",
-    "image_to_patch_graph",
+    "knn_graph", "build_class_prototypes", "build_prototype_graph", "image_to_patch_graph",
     # Dashboard
-    "audit_run_dir",
-    "dashboard_audit",
+    "audit_run_dir", "dashboard_audit",
     # Workflow
-    "workflow",
-    "run_workflow",
-    "list_workflow_tasks",
+    "workflow", "run_workflow", "list_workflow_tasks",
     # Compare
     "compare",
     # Public API registry
-    "public_api",
-    "api_status",
-    "list_aliases",
+    "public_api", "api_status", "list_aliases",
+    # v1.4.1 one-call helpers
+    "classify_nodes", "node_classification", "fit_node_classifier", "train_node_classifier",
+    "kg_completion", "fit_kg", "train_kg",
+    "make_graph", "build_graph",
+    "explain_error", "troubleshoot_error",
+    "debug_batch", "batch_summary", "assert_batch_consistent",
+    "dataset_card", "model_card", "benchmark_card",
+    "audit_package_readiness",
+    "WorkflowResult",
+    # v1.4.1 generation/RL/evolution
+    "generate_graph", "graph_generator", "generate",
+    "evaluate_generated_graphs", "graph_generation_report",
+    "compare_generated_graphs", "generation_metrics",
+    "optimize_graph", "evolve_graph", "graph_evolution", "run_evolution",
+    "train_graph_rl", "graph_rl", "run_rl",
+    "audit_generation_run", "audit_evolution_run", "audit_rl_run",
 ]

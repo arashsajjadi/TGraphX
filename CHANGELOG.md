@@ -5,6 +5,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.4.1] — 2026-05-11
+
+Final usability hardening release. All v1.3.x and v1.4.0 syntax preserved.
+
+### Added — Groups 101–115
+
+- **GROUP 101** `tgx.classify_nodes(x, edge_index, labels, ...)` — one-call tensor node classification with leakage guard; aliases `node_classification`, `fit_node_classifier`, `train_node_classifier`.
+- **GROUP 102** `tgx.kg_completion(triples, num_entities, num_relations, model=...)` — one-call KG link prediction; aliases `fit_kg`, `train_kg`.
+- **GROUP 103** `tgx.make_graph(x, edges|edge_index|adjacency|networkx_graph, ...)` — one-call graph constructor from any format; aliases `build_graph`.
+- **GROUP 104** `tgx.explain_error(e)` — maps common errors to actionable guidance including GraphML rank, NSGA-II, VGAE, mask overlap, CUDA, missing optional deps.
+- **GROUP 105** `tgx.debug_batch(batch)` / `batch_summary` — NeighborLoader/GraphBatch content debugger.
+- **GROUP 106** `tgx.dataset_card(dataset)`, `tgx.model_card(model)` — JSON-serializable metadata cards.
+- **GROUP 107** `tgx.benchmark_card(result)` — no-SOTA-claim benchmark card from workflow result.
+- **GROUP 108** `tgx.public_api()` / `api_status` / `list_aliases` — API stability registry (v1.4.0); consistency checks.
+- **GROUP 109** CPU/GPU parity smoke via deterministic same-seed tests.
+- **GROUP 110** `tgx.audit_package_readiness()` — full package readiness dict (optional deps, public API count, known limitations); `python -m tgraphx readiness` CLI; `list-datasets` and `list-methods` CLI subcommands.
+- **GROUP 111** `tgx.generate_graph(method, ...)` — one-call graph generation with method aliases (`"ba"`, `"er"`, `"ws"`, ...), tensor node shapes, VGAE helpful error, artifact writing.
+- **GROUP 112** `tgx.evaluate_generated_graphs(graphs, ...)` — structural evaluation report for generated graphs.
+- **GROUP 113** `tgx.optimize_graph(objective, algorithm, ...)` — one-call evolutionary graph optimization; aliases `evolve_graph`, `graph_evolution`, `run_evolution`.
+- **GROUP 114** `tgx.train_graph_rl(env, algorithm, ...)` — one-call graph RL; environment and algorithm aliases (`"maxcut"` → `"max_cut"`, etc.); aliases `graph_rl`, `run_rl`.
+- **GROUP 115** Dashboard audit extensions: `audit_generation_run`, `audit_evolution_run`, `audit_rl_run`; `dashboard_audit(path, workflow="generation"|"evolution"|"graph_rl")`.
+
+### Enhanced in v1.4.1
+
+- `audit_run_dir` / `dashboard_audit` now return UX quality scores: `completeness_score`, `reproducibility_score`, `portability_score`, `scientific_reporting_score` (0–100 each) and support `return_markdown=True`.
+- Readiness CLI: `python -m tgraphx readiness` + `list-datasets` + `list-methods` + `help`.
+
+### Validation
+
+- 70 new v1.4.1 group-101-to-115 tests pass.
+- Full test suite: **3332 passed, 25 skipped, 0 failed.**
+- Build + twine PASSED. Clean wheel smoke PASSED. CI PASSED. PyPI PASSED.
+
+### Notes
+
+- All v1.3.x and v1.4.0 syntax fully preserved.
+- No SOTA claims. New APIs are Beta.
+- TGraphX remains complementary to PyG, DGL, NetworkX, PyKEEN, SB3, RLlib.
+
+---
+
 ## [1.4.0] — 2026-05-11
 
 Major user-experience release: a new `tgraphx.ux` layer brings

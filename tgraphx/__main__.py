@@ -50,17 +50,48 @@ def main() -> None:
         print("Available TGraphX samplers:")
         for name, desc in samplers.items():
             print(f"  {name}: {desc}")
+    elif command in ("readiness", "check", "audit"):
+        import json as _json
+        from tgraphx.ux import audit_package_readiness
+        report = audit_package_readiness()
+        print("TGraphX Package Readiness Report")
+        print("=" * 40)
+        print(f"Version: {report['tgraphx_version']}")
+        print(f"Torch: {report['torch_version']}")
+        print(f"CUDA: {report['cuda_available']} (devices: {report['cuda_device_count']})")
+        print("\nOptional dependencies:")
+        for pkg, ver in report.get("optional_dependencies", {}).items():
+            print(f"  {pkg}: {ver}")
+        print("\nPublic API:", report.get("public_api", {}))
+        print("\nWorkflow tasks:", report.get("workflow_tasks", []))
+        print("\nFeatures:", {k: v for k, v in report.get("features", {}).items() if v})
+        print("\nKnown limitations:")
+        for lim in report.get("known_limitations", []):
+            print(f"  • {lim}")
+    elif command in ("list-datasets", "list_datasets"):
+        from tgraphx.datasets import list_dataset_aliases, list_datasets
+        print("User-friendly dataset aliases:")
+        for alias, canonical in sorted(list_dataset_aliases().items()):
+            print(f"  {alias:25s} → {canonical}")
+    elif command in ("list-methods", "list_methods", "list-generation"):
+        from tgraphx.generation import list_graph_generation_methods
+        print("Graph generation methods:")
+        for name, info in list_graph_generation_methods().items():
+            print(f"  {name:25s} [{info.get('stability', '?')}] {info.get('description', '')}")
     elif command in ("help", "--help", "-h"):
         print(
             "Usage: python -m tgraphx [command]\n\n"
             "Commands:\n"
-            "  doctor       Check TGraphX installation (default)\n"
-            "  info         Alias for doctor\n"
-            "  capabilities Show all TGraphX capabilities\n"
-            "  tasks        List available tasks\n"
-            "  models       List available models\n"
-            "  samplers     List available samplers\n"
-            "  help         Show this help message\n"
+            "  doctor          Check TGraphX installation (default)\n"
+            "  info            Alias for doctor\n"
+            "  readiness       Full package readiness audit (v1.4.1+)\n"
+            "  capabilities    Show all TGraphX capabilities\n"
+            "  tasks           List available workflow tasks\n"
+            "  models          List available models\n"
+            "  samplers        List available samplers\n"
+            "  list-datasets   List user-friendly dataset aliases\n"
+            "  list-methods    List graph generation methods\n"
+            "  help            Show this help message\n"
         )
     else:
         print(f"Unknown command: {command!r}.  Run 'python -m tgraphx help' for usage.")

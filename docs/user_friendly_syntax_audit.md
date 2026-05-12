@@ -97,3 +97,25 @@ The v1.4.0 audit enforces these properties through tests:
   set_seed, ...) are **stable** and unchanged.
 - No silent semantics changes. Every alias goes through the same input
   validation as its canonical name.
+
+---
+
+## Groups 101–115 (v1.4.1)
+
+| Group | Topic | Status | Canonical | Tests |
+|-------|-------|--------|-----------|-------|
+| 101 | One-call tensor node classification | IMPLEMENTED_AND_TESTED | `classify_nodes(x, edge_index, labels, ...)` | `TestGroup101ClassifyNodes` |
+| 102 | One-call KG completion | IMPLEMENTED_AND_TESTED | `kg_completion(triples, num_entities, num_relations, ...)` | `TestGroup102KGCompletion` |
+| 103 | One-call graph construction | IMPLEMENTED_AND_TESTED | `make_graph(x, edges|adjacency|networkx_graph, ...)` | `TestGroup103MakeGraph` |
+| 104 | Explainable error guidance | IMPLEMENTED_AND_TESTED | `explain_error(e)` → actionable string | `TestGroup104ExplainError` |
+| 105 | Batch debugger | IMPLEMENTED_AND_TESTED | `debug_batch(batch)` / `batch_summary` | `TestGroup105DebugBatch` |
+| 106 | Dataset/model cards | IMPLEMENTED_AND_TESTED | `dataset_card`, `model_card` | `TestGroup106Cards` |
+| 107 | Benchmark card (no SOTA) | IMPLEMENTED_AND_TESTED | `benchmark_card(result)` | `TestGroup107BenchmarkCard` |
+| 108 | API docs sync | IMPLEMENTED_AND_TESTED | `public_api()`, `api_status()` | `TestGroup108APIDocsSync` |
+| 109 | CPU/GPU parity smoke | IMPLEMENTED_AND_TESTED | Same-seed deterministic CPU tests | `TestGroup109CPUGPUParity` |
+| 110 | Package readiness audit | IMPLEMENTED_AND_TESTED | `audit_package_readiness()`, `python -m tgraphx readiness` | `TestGroup110Readiness` |
+| 111 | One-call graph generation | IMPLEMENTED_AND_TESTED | `generate_graph(method, ...)` with aliases + artifact writing | `TestGroup111GenerateGraph` |
+| 112 | Generated graph evaluation | IMPLEMENTED_AND_TESTED | `evaluate_generated_graphs(graphs, ...)` | `TestGroup112EvaluateGenerated` |
+| 113 | One-call evolutionary optimization | IMPLEMENTED_AND_TESTED | `optimize_graph(objective, algorithm, ...)` | `TestGroup113OptimizeGraph` |
+| 114 | One-call graph RL | IMPLEMENTED_AND_TESTED | `train_graph_rl(env, algorithm, ...)` | `TestGroup114TrainGraphRL` |
+| 115 | Gen/Evo/RL dashboard audit | IMPLEMENTED_AND_TESTED | `audit_generation_run`, `audit_rl_run`, `audit_evolution_run` | `TestGroup115DashboardExtended` |

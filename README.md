@@ -87,6 +87,57 @@ Advanced users can always drop down to PyTorch: `result.model`, `result.graph`,
 
 ---
 
+## v1.4.1: final usability hardening
+
+v1.4.1 adds one-call entry points for common workflows. All v1.4.0 and
+v1.3.x syntax is preserved.
+
+**Tensor node classification in one call.**
+```python
+result = tgx.classify_nodes(
+    x=images, edge_index=edge_index, labels=y,
+    model="tensor_gcn", seed=42, device="auto",
+)
+print(result.metrics["val_accuracy"])
+```
+
+**KG link prediction in one call.**
+```python
+result = tgx.kg_completion(
+    triples=triples, num_entities=N, num_relations=R,
+    model="transe", seed=42,
+)
+```
+
+**Graph construction from any format.**
+```python
+g = tgx.make_graph(x=x, edges=[(0,1),(1,2)], labels=y)
+g = tgx.make_graph(x=x, adjacency=adj)
+g = tgx.make_graph(networkx_graph=G)
+```
+
+**Graph generation, optimization, and RL in one call.**
+```python
+g = tgx.generate_graph("ba", num_nodes=100, m=3, node_shape=(8,), seed=42)
+
+result = tgx.optimize_graph(objective="connectivity", algorithm="ga", num_nodes=30, seed=42)
+
+rl = tgx.train_graph_rl(env="maxcut", algorithm="random", episodes=5, seed=42)
+```
+
+**Troubleshooting.**
+```python
+print(tgx.explain_error(error))  # returns actionable guidance
+```
+
+**Package readiness.**
+```bash
+python -m tgraphx readiness
+python -m tgraphx list-datasets
+```
+
+---
+
 ## v1.4.0: user-friendly tensor-native workflows
 
 v1.4.0 keeps every canonical API stable while adding **mathematically-safe**
