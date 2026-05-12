@@ -1,0 +1,34 @@
+# Core
+tgraphx>=1.4.1
+torch>=2.0
+torchvision>=0.15
+
+# Detector ecosystems (optional; the pipeline gracefully handles missing ones)
+ultralytics>=8.0
+transformers>=4.40
+timm>=0.9
+accelerate>=0.20
+
+# Image / metadata
+pillow>=9.0
+opencv-python>=4.5
+numpy>=1.23
+pandas>=1.5
+pyyaml>=6.0
+tqdm>=4.60
+scikit-learn>=1.1
+
+# Plotting / reporting
+matplotlib>=3.6
+
+# Notebook execution (testing only)
+nbclient>=0.7
+nbformat>=5.7
+jupyter_client>=8
+ipykernel>=6
+
+# Tests
+pytest>=7.0
+
+# Optional COCO support
+# pycocotools>=2.0

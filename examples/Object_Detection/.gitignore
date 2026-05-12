@@ -1,0 +1,44 @@
+# Datasets / weights / generated files
+data/*
+!data/.gitkeep
+cache/*
+!cache/.gitkeep
+runs/*
+!runs/.gitkeep
+reports/figures/*
+!reports/figures/.gitkeep
+reports/tables/*
+!reports/tables/.gitkeep
+*.pt
+*.pth
+*.onnx
+*.engine
+*.ts
+*.tar
+*.zip
+*.mp4
+mobileclip*.ts
+mobileclip*.pt
+
+# Venv / Python
+.venv*
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Legacy folder is kept locally for reference but not committed
+legacy/
+# Stray detector weights downloaded by Ultralytics at runtime
+yolo*.pt
+best_*.pt
+rtdetr*.pt
+yoloe*.pt
+
+# Built docs / generated plots
+*.tmp
+.DS_Store
+
+# But keep small example/template figures
+!docs/assets/*.png
+!docs/assets/*.svg
