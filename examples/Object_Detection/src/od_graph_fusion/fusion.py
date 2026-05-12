@@ -73,7 +73,8 @@ def fuse_with_model(
     cand_mask = (
         (node_types == NODE_TYPES["proposal"])
         | (node_types == NODE_TYPES["cluster"])
-        | (node_types == NODE_TYPES["consensus"])
+        | (node_types == NODE_TYPES["consensus"]) \
+        | (node_types == NODE_TYPES["nms_candidate"])
     )
 
     # Build the scoring tensor used for in-cluster ranking

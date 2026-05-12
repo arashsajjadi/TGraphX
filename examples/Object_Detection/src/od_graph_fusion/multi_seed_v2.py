@@ -43,14 +43,17 @@ def _split_seeded(records, seed: int):
 
 
 def _attach_slot_metadata(g, meta, detector_names):
+    from .graph_builder import NODE_TYPES as NT
     N = meta.node_types.shape[0]
     slots = torch.full((N,), -1, dtype=torch.long)
     for i in range(meta.num_proposals):
         d = int(meta.proposal_detector_ids[i]) if i < meta.proposal_detector_ids.shape[0] else -1
         if 0 <= d < len(detector_names):
-            slots[i] = detector_name_to_slot(detector_names[d])
-    slots[meta.node_types == NODE_TYPES["cluster"]] = SOURCE_SLOTS["wbf"]
-    slots[meta.node_types == NODE_TYPES["consensus"]] = SOURCE_SLOTS["union"]
+            s = detector_name_to_slot(detector_names[d])
+            slots[i] = s if s >= 0 else SOURCE_SLOTS.get("nms_candidate", 6)
+    slots[meta.node_types == NT["cluster"]] = SOURCE_SLOTS["wbf"]
+    slots[meta.node_types == NT["consensus"]] = SOURCE_SLOTS["union"]
+    slots[meta.node_types == NT.get("nms_candidate", 4)] = SOURCE_SLOTS.get("nms_candidate", 6)
     g.metadata["slot_assignments"] = slots
     g.metadata["cluster_of_raw"] = meta.cluster_of_node
     g.metadata["proposal_det_ids"] = meta.proposal_detector_ids

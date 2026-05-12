@@ -38,23 +38,29 @@ SOURCE_SLOTS: Dict[str, int] = {
 }
 NUM_SOURCES = 7  # 0..6
 
-# Detector name → source slot
+# Detector name → source slot (comprehensive aliases)
 _DETECTOR_TO_SLOT: Dict[str, int] = {
-    "yolo_modern":    0,
-    "yolo_open_vocab":1,
-    "rt_detr":        2,
-    "retinanet":      3,
-    # synthetic fallbacks map to family slot
+    # YOLO modern family (slot 0)
+    "yolo_modern": 0, "yolo11n": 0, "yolo11s": 0, "yolo11m": 0, "yolo11x": 0,
     "yolo_modern_synthetic": 0,
+    # Open-vocabulary YOLO family (slot 1)
+    "yolo_open_vocab": 1, "yoloe": 1, "yoloworld": 1, "yolo_world": 1,
+    "open_vocab": 1, "yoloe_11": 1, "yoloe-11": 1,
     "yolo_open_vocab_synthetic": 1,
+    # RT-DETR / DETR family (slot 2)
+    "rt_detr": 2, "rtdetr": 2, "rt-detr": 2, "detr": 2,
     "rt_detr_synthetic": 2,
+    # RetinaNet family (slot 3)
+    "retinanet": 3, "retina": 3, "retina_net": 3,
     "retinanet_synthetic": 3,
+    # NMS/best-proposal (slot 6)
+    "nms_candidate": 6, "nms": 6, "best_proposal": 6,
 }
 
 
 def detector_name_to_slot(name: str) -> int:
     """Map a detector name string to a source slot index, or -1 if unknown."""
-    n = name.lower().replace(" ", "_")
+    n = name.lower().replace(" ", "_").replace("-", "_")
     if n in _DETECTOR_TO_SLOT:
         return _DETECTOR_TO_SLOT[n]
     # Fuzzy matching

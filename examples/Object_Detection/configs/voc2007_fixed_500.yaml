@@ -1,0 +1,61 @@
+run_name: voc2007_fixed_500
+seed: 42
+device: auto
+fast_mode: false
+mode: DEV_EXPERIMENT
+
+dataset:
+  name: voc2007
+  voc_root: data/VOCdevkit
+  num_images: 500
+  num_classes: 20
+  image_size: [320, 320]
+  split_policy: fixed_seed_subset  # NOT random per run
+
+detectors:
+  use_real: true
+  use_yolo: true
+  use_yoloe: true
+  use_rtdetr: true
+  use_retinanet: true
+  yolo_model: yolo11n.pt
+  rtdetr_source: ultralytics
+  rtdetr_model: rtdetr-l.pt
+  conf_threshold: 0.15
+  iou_threshold: 0.5
+
+graph:
+  cluster_iou_threshold: 0.5
+  crop_size: 64
+  max_proposals_per_image: 48
+  include_context_node: true
+  include_consensus_nodes: true
+
+fusion:
+  mode: selector
+  score_mode: logits
+  residual_alpha: 0.0
+
+model:
+  hidden_dim: 64
+  crop_channels: 16
+  num_message_passing: 2
+  use_source_router: true
+
+training:
+  epochs: 30
+  batch_size: 2
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+  objectness_weight: 1.0
+  class_weight: 0.5
+  box_weight: 0.0
+
+evaluation:
+  iou_match_threshold: 0.5
+  ap_iou_thresholds: [0.5, 0.75]
+  class_agnostic: true
+  sweep_metric: "AP@0.50"
+
+output:
+  run_dir_base: runs

@@ -42,7 +42,7 @@ NUM_EDGE_TYPES = len(EDGE_TYPES)
 
 # Node type IDs (encoded inside metadata so a single TGraphX Graph can hold
 # heterogeneous nodes).
-NODE_TYPES = {"proposal": 0, "cluster": 1, "consensus": 2, "context": 3}
+NODE_TYPES = {"proposal": 0, "cluster": 1, "consensus": 2, "context": 3, "nms_candidate": 4}
 NUM_NODE_TYPES = len(NODE_TYPES)
 
 
@@ -256,6 +256,35 @@ def build_detection_graph(
             node_to_proposal.append(-1)
             node_cluster.append(c)
 
+    # ── NMS candidate nodes (one per cluster) ──────────────────────────
+    # NMS node = the proposal with highest base confidence per cluster.
+    # This lets TGraphX learn "keep NMS" vs "override NMS".
+    nms_node_offsets = []
+    if num_clusters > 0:
+        for c in range(num_clusters):
+            m = cluster_id == c
+            if not m.any():
+                nms_node_offsets.append(-1)
+                continue
+            # Pick the highest-score proposal in this cluster as NMS representative
+            scores_in_c = proposal_scores[m]
+            idx_in_c = m.nonzero(as_tuple=False).squeeze(-1)
+            nms_local = int(scores_in_c.argmax().item())
+            nms_global = int(idx_in_c[nms_local].item())
+            nms_crop = crop_tensor_from_image(image, proposal_boxes[nms_global], crop_size=crop_size)
+            nms_meta = proposal_metadata(
+                proposal_boxes[nms_global], float(proposal_scores[nms_global].item()),
+                int(proposal_labels[nms_global].item()),
+                int(proposal_det_ids[nms_global].item()),
+                num_detectors, num_classes, image_size,
+            )
+            nms_node_offsets.append(len(all_crops))
+            all_crops.append(nms_crop)
+            all_meta.append(nms_meta)
+            node_types.append(NODE_TYPES["nms_candidate"])
+            node_to_proposal.append(nms_global)   # points to the actual proposal node
+            node_cluster.append(c)
+
     context_node_idx = -1
     if include_context_node:
         context_node_idx = len(all_crops)
@@ -391,10 +420,18 @@ def build_detection_graph(
         node_label[idx] = cluster_labels[c]
         node_score[idx] = cluster_mean[c]
     for c, idx in enumerate(consensus_node_offsets):
-        # consensus uses the same cluster_box for now; could be union_box.
         node_box[idx] = cluster_boxes[c]
         node_label[idx] = cluster_labels[c]
         node_score[idx] = cluster_mean[c]
+    # NMS candidate nodes: copy from the highest-score proposal in each cluster
+    for c, idx in enumerate(nms_node_offsets):
+        if idx < 0:
+            continue
+        src_prop = node_to_proposal[idx]  # points to the NMS-selected proposal
+        if 0 <= src_prop < proposal_boxes.shape[0]:
+            node_box[idx] = proposal_boxes[src_prop]
+            node_label[idx] = proposal_labels[src_prop]
+            node_score[idx] = proposal_scores[src_prop]
     if include_context_node and context_node_idx >= 0:
         node_box[context_node_idx] = torch.tensor(
             [0, 0, image_size[1] - 1, image_size[0] - 1], dtype=torch.float32)
@@ -433,6 +470,7 @@ def build_detection_graph(
     g.metadata["node_score"] = node_score
     # V3 source-slot router metadata
     g.metadata["cluster_of_raw"] = torch.tensor(node_cluster, dtype=torch.long)
+    g.metadata["nms_node_offsets"] = nms_node_offsets  # for override router
     g.metadata["proposal_det_ids"] = torch.cat([
         proposal_det_ids,                          # proposals
         torch.full((num_clusters,), -1, dtype=torch.long),  # cluster nodes
@@ -522,7 +560,8 @@ def _build_targets_full(
     is_best_source = torch.zeros(N, dtype=torch.float32)
     candidate_mask = (node_types == NODE_TYPES["proposal"]) \
         | (node_types == NODE_TYPES["cluster"]) \
-        | (node_types == NODE_TYPES["consensus"])
+        | (node_types == NODE_TYPES["consensus"]) \
+        | (node_types == NODE_TYPES["nms_candidate"])
 
     if gt_boxes.numel() == 0 or not candidate_mask.any():
         return {"objectness": objectness, "class": cls_targets,

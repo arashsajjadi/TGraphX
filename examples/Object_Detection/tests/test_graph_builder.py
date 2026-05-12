@@ -31,14 +31,14 @@ def test_graph_basic_four_detectors():
         include_context_node=True, include_consensus_nodes=True,
         is_training=False,
     )
-    # 4 proposals + 2 clusters + 2 consensus + 1 context = 9 nodes
-    assert g.num_nodes == 9
+    # 4 proposals + 2 clusters + 2 consensus + 2 NMS nodes + 1 context = 11 nodes
+    assert g.num_nodes == 11
     assert meta.num_proposals == 4
     assert meta.num_clusters == 2
     assert meta.num_consensus == 2
     assert meta.has_context
     # Tensor crops preserve [3, 32, 32]
-    assert g.node_features.shape == (9, 3, 32, 32)
+    assert g.node_features.shape == (11, 3, 32, 32)
     # Edges exist
     assert g.edge_index.shape[1] > 0
 
