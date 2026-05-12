@@ -10,13 +10,17 @@ import torch
 
 @dataclass
 class DetectionResult:
-    """Standard detector output for one image."""
+    """Standard detector output for one image.
+
+    label_ids are now canonical dataset class IDs (VOC-space for VOC datasets).
+    Unknown classes have id=-1 and should be ignored.
+    """
     image_id: str
     model_name: str
     boxes_xyxy: torch.Tensor       # [N, 4]
     scores: torch.Tensor           # [N]
-    label_ids: torch.Tensor        # [N] long, dataset-class space
-    labels: List[str]              # [N]
+    label_ids: torch.Tensor        # [N] long — CANONICAL dataset class ids (-1=unknown)
+    labels: List[str]              # [N] canonical label strings
     image_size: Tuple[int, int]    # (H, W)
     device: str = "cpu"
     runtime_ms: float = 0.0

@@ -51,8 +51,8 @@ def train_fusion_model(
                      else 14)
 
     if use_source_router:
-        from .source_router import TGraphXSourceRouter
-        model = TGraphXSourceRouter(
+        from .source_router_v3 import TGraphXSourceRouterV3
+        model = TGraphXSourceRouterV3(
             num_classes=num_classes, num_detectors=num_detectors,
             crop_size=crop_size, crop_channels=crop_channels,
             hidden_dim=hidden_dim, metadata_dim=metadata_dim,
@@ -66,8 +66,9 @@ def train_fusion_model(
             edge_feat_dim=edge_feat_dim, num_message_passing=num_message_passing,
         ).to(device)
 
-    from .source_router import source_routing_loss, TGraphXSourceRouter as SRClass
-    is_router = isinstance(model, SRClass)
+    from .source_router import source_routing_loss
+    from .source_router_v3 import TGraphXSourceRouterV3 as SRV3Class, source_slot_loss
+    is_router = isinstance(model, SRV3Class)
 
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     history: Dict[str, Any] = {
@@ -85,7 +86,11 @@ def train_fusion_model(
             if meta.targets is None:
                 continue
             g = graph.to(device)
-            out = model(g)
+            _det_names = meta.detector_names if hasattr(meta, "detector_names") else []
+            if is_router:
+                out = model(g, detector_names=_det_names)
+            else:
+                out = model(g)
             mask = _supervised_mask(meta).to(device)
             if mask.sum() == 0:
                 continue

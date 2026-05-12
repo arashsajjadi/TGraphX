@@ -79,10 +79,14 @@ class YOLOAdapter(BaseDetector):
             labels = [l for l, m in zip(labels, mask.tolist()) if m]
             labels_idx = [i for i, m in zip(labels_idx, mask.tolist()) if m]
 
+        from ..source_router import canonical_label_id as _clid
+        dataset_classes = list(class_filter) if class_filter is not None else []
+        can_ids = [_clid(l, dataset_classes) for l in labels]
+
         return DetectionResult(
             image_id=image_id, model_name=self.name,
             boxes_xyxy=boxes, scores=scores,
-            label_ids=torch.tensor(labels_idx, dtype=torch.long),
+            label_ids=torch.tensor(can_ids, dtype=torch.long),
             labels=labels, image_size=(H, W),
             device=self.device, runtime_ms=runtime,
         )

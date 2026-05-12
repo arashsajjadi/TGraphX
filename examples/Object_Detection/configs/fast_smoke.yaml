@@ -55,9 +55,9 @@ training:
   early_stopping_patience: 3
 
 fusion:
-  mode: selector            # selector / refiner — selector is default and recommended
-  score_mode: residual      # base_only / residual / logits — residual is guarded
-  residual_alpha: 0.1       # weight of the graph residual on top of base score
+  mode: selector
+  score_mode: logits        # graph-only logits — decoupled from NMS/base_score
+  residual_alpha: 0.0       # no residual — pure graph decision
 
 evaluation:
   iou_match_threshold: 0.5

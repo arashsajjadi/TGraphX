@@ -23,6 +23,8 @@ from .detectors.registry import detector_availability_report
 from .graph_builder import build_detection_graph
 from .training import train_fusion_model
 from .fusion import fuse_with_model
+from .source_router_v3 import fuse_v3, TGraphXSourceRouterV3, SOURCE_SLOTS
+from .source_router import compute_source_utilities
 from .baselines import pool_detector_results, nms, weighted_boxes_fusion
 from .evaluation import (
     evaluate_predictions, evaluate_at_multiple_ious,
@@ -192,15 +194,30 @@ def run_one_seed(
             best_v = v; best_thr = thr
     chosen_thr = best_thr
 
-    # TGraphX test
+    # TGraphX test — use fuse_v3 with trace so source_acc uses the DEPLOYED decision
     preds_tgx = []
+    all_fuse_traces: List[Any] = []  # collect FuseTrace objects across images
+    is_v3 = isinstance(model, TGraphXSourceRouterV3) if model is not None else False
+    fusion_mode_is_source_logits = is_v3
+
     for g, meta in graphs_by_split.get("test", []):
-        out = fuse_with_model(model, g, meta, keep_threshold=chosen_thr, device=device,
-                              score_mode=cfg.get("fusion", {}).get("score_mode", "residual"),
-                              residual_alpha=float(cfg.get("fusion", {}).get("residual_alpha", 0.1)))
+        if model is not None:
+            if is_v3:
+                out = fuse_v3(model, g, meta, keep_threshold=chosen_thr,
+                               device=device, detector_names=detector_names,
+                               return_trace=True)
+            else:
+                out = fuse_with_model(model, g, meta, keep_threshold=chosen_thr, device=device,
+                                      score_mode=cfg.get("fusion", {}).get("score_mode", "residual"),
+                                      residual_alpha=float(cfg.get("fusion", {}).get("residual_alpha", 0.1)))
+        else:
+            out = {"boxes_xyxy": torch.zeros(0, 4), "scores": torch.zeros(0),
+                   "labels": torch.zeros(0, dtype=torch.long)}
         preds_tgx.append(DetectionPrediction(image_id=meta.image_id,
                                              boxes_xyxy=out["boxes_xyxy"],
                                              scores=out["scores"], labels=out["labels"]))
+        if "trace" in out:
+            all_fuse_traces.extend(out["trace"])
     method_predictions["fusion::tgraphx"] = preds_tgx
 
     # Evaluate
@@ -214,24 +231,32 @@ def run_one_seed(
         res["num_predictions"] = r0["num_predictions"]
         results[name] = res
 
-    # ── Source-routing metrics ──────────────────────────────────────────
-    from .source_router import compute_source_utilities, oracle_gap_recovery
-    src_acc_all = []
-    src_acc_oracle_all = []
-    copies_nms = []
-    selected_equals_highest_conf = []
+    # ── Source-routing metrics — computed from DEPLOYED fuse trace ─────
+    # This is the fix for the metric/inference mismatch (P1 audit):
+    # source_acc now uses the same decision rule as deployed AP.
+    from .source_router import oracle_gap_recovery
+    test_records_by_id = {r.image_id: r for r in by_split.get("test", [])}
+
+    deployed_src_acc = []  # from fuse trace (same path as AP)
+    copies_nms_deployed = []
+    copies_highest_conf_deployed = []
+    mean_iou_deployed = []
+
+    for (graph, meta), graph_trace in zip(
+        graphs_by_split.get("test", []),
+        [t for _ in preds_tgx for t in all_fuse_traces if _ is not None],
+    ) if all_fuse_traces else []:
+        pass  # handled below
+
+    # Compute oracle source per cluster using GT (for accuracy computation)
+    traces_by_image: Dict[str, List] = {}
+    for tr in all_fuse_traces:
+        traces_by_image.setdefault(tr.image_id, []).append(tr)
 
     for graph, meta in graphs_by_split.get("test", []):
-        if meta.num_clusters == 0:
+        rec = test_records_by_id.get(meta.image_id)
+        if rec is None or rec.gt_boxes.numel() == 0:
             continue
-        from .graph_builder import NODE_TYPES
-        rec = next((r for r in by_split.get("test", []) if r.image_id == meta.image_id), None)
-        if rec is None:
-            continue
-        gt_b = rec.gt_boxes; gt_l = rec.gt_labels
-        if gt_b.numel() == 0:
-            continue
-
         node_box = graph.metadata.get("node_box")
         node_label = graph.metadata.get("node_label")
         node_score_t = graph.metadata.get("node_score")
@@ -240,48 +265,111 @@ def run_one_seed(
 
         util, best_src, cand_mask = compute_source_utilities(
             node_box, node_label, node_score_t, meta.cluster_of_node,
-            meta.node_types, gt_b, gt_l, class_agnostic=True, iou_match=0.5,
+            meta.node_types, rec.gt_boxes, rec.gt_labels,
+            class_agnostic=True, iou_match=0.5,
         )
 
-        # TGraphX predictions
-        if model is not None:
-            out = fuse_with_model(model, graph, meta, keep_threshold=chosen_thr,
-                                  device=device, score_mode=cfg.get("fusion", {}).get("score_mode", "residual"),
-                                  residual_alpha=float(cfg.get("fusion", {}).get("residual_alpha", 0.1)))
-        else:
-            out = {"boxes_xyxy": torch.zeros(0, 4), "scores": torch.zeros(0), "labels": torch.zeros(0, dtype=torch.long)}
+        traces = traces_by_image.get(meta.image_id, [])
+        trace_by_cluster = {tr.cluster_id: tr for tr in traces}
 
-        # For each cluster, check if TGraphX picked the oracle source
         cluster_of = meta.cluster_of_node
         n_clusters = int(cluster_of.max().item() + 1) if cluster_of.numel() > 0 else 0
         for c in range(n_clusters):
             oracle_node = int(best_src[c].item()) if c < len(best_src) else -1
             if oracle_node < 0:
                 continue
-            # What did TGraphX select?
-            from .fusion import fuse_with_model as _fwm
-            qual = model(graph.to(device))["quality_logits"].cpu() if model is not None else node_score_t
             in_c = (cluster_of == c) & cand_mask
             if not in_c.any():
                 continue
             idx_c = in_c.nonzero(as_tuple=False).squeeze(-1)
-            sel_local = int(qual[idx_c].argmax().item())
-            sel_node = int(idx_c[sel_local].item())
-            src_acc_all.append(int(sel_node == oracle_node))
-            # What does NMS select? NMS picks highest base score
-            nms_local = int(node_score_t[idx_c].argmax().item()) if node_score_t is not None else sel_local
-            nms_node = int(idx_c[nms_local].item())
-            copies_nms.append(int(sel_node == nms_node))
-            # Highest-confidence source
-            hc_local = int(node_score_t[idx_c].argmax().item()) if node_score_t is not None else sel_local
-            hc_node = int(idx_c[hc_local].item())
-            selected_equals_highest_conf.append(int(sel_node == hc_node))
+
+            # DEPLOYED decision: from fuse trace (same path as AP)
+            tr = trace_by_cluster.get(c)
+            if tr is not None:
+                sel_node = tr.chosen_node
+            else:
+                # Fallback: infer from residual scoring (legacy path)
+                ns = node_score_t
+                if ns is not None:
+                    sel_node = int(idx_c[ns[idx_c].argmax().item()])
+                else:
+                    sel_node = int(idx_c[0].item())
+
+            deployed_src_acc.append(int(sel_node == oracle_node))
+            # IoU of deployed selection
+            mean_iou_deployed.append(float(util[sel_node].item()))
+
+            # Does deployed match NMS (highest base score)?
+            ns = node_score_t
+            if ns is not None:
+                nms_node = int(idx_c[ns[idx_c].argmax().item()])
+                copies_nms_deployed.append(int(sel_node == nms_node))
+                copies_highest_conf_deployed.append(int(sel_node == nms_node))
+
+    # Oracle-gap recovery
+    mean_iou_sel = float(sum(mean_iou_deployed) / max(1, len(mean_iou_deployed)))
+    # NMS IoU (highest base score per cluster)
+    nms_iou_list = []
+    for graph, meta in graphs_by_split.get("test", []):
+        rec = test_records_by_id.get(meta.image_id)
+        if rec is None or rec.gt_boxes.numel() == 0:
+            continue
+        node_box = graph.metadata.get("node_box")
+        node_label = graph.metadata.get("node_label")
+        node_score_t = graph.metadata.get("node_score")
+        if node_box is None or node_score_t is None:
+            continue
+        util, best_src, cand_mask = compute_source_utilities(
+            node_box, node_label, node_score_t, meta.cluster_of_node,
+            meta.node_types, rec.gt_boxes, rec.gt_labels,
+            class_agnostic=True, iou_match=0.5,
+        )
+        cluster_of = meta.cluster_of_node
+        n_clusters = int(cluster_of.max().item() + 1) if cluster_of.numel() > 0 else 0
+        for c in range(n_clusters):
+            in_c = (cluster_of == c) & cand_mask
+            if not in_c.any():
+                continue
+            idx_c = in_c.nonzero(as_tuple=False).squeeze(-1)
+            nms_node = int(idx_c[node_score_t[idx_c].argmax().item()])
+            nms_iou_list.append(float(util[nms_node].item()))
+
+    oracle_iou_list = []
+    for graph, meta in graphs_by_split.get("test", []):
+        rec = test_records_by_id.get(meta.image_id)
+        if rec is None or rec.gt_boxes.numel() == 0:
+            continue
+        node_box = graph.metadata.get("node_box")
+        node_label = graph.metadata.get("node_label")
+        node_score_t = graph.metadata.get("node_score")
+        if node_box is None:
+            continue
+        util, best_src, cand_mask = compute_source_utilities(
+            node_box, node_label, node_score_t if node_score_t is not None else torch.zeros(meta.node_types.shape[0]),
+            meta.cluster_of_node, meta.node_types, rec.gt_boxes, rec.gt_labels,
+            class_agnostic=True, iou_match=0.5,
+        )
+        cluster_of = meta.cluster_of_node
+        n_clusters = int(cluster_of.max().item() + 1) if cluster_of.numel() > 0 else 0
+        for c in range(n_clusters):
+            oracle_n = int(best_src[c].item()) if c < len(best_src) else -1
+            if oracle_n >= 0:
+                oracle_iou_list.append(float(util[oracle_n].item()))
+
+    mean_nms_iou = float(sum(nms_iou_list) / max(1, len(nms_iou_list)))
+    mean_oracle_iou = float(sum(oracle_iou_list) / max(1, len(oracle_iou_list)))
+    gap_rec = oracle_gap_recovery(mean_iou_sel, mean_nms_iou, mean_oracle_iou)
 
     source_routing_metrics = {
-        "source_acc": float(sum(src_acc_all) / max(1, len(src_acc_all))),
-        "copies_nms_rate": float(sum(copies_nms) / max(1, len(copies_nms))),
-        "selected_equals_highest_conf": float(sum(selected_equals_highest_conf) / max(1, len(selected_equals_highest_conf))),
-        "n_clusters_evaluated": len(src_acc_all),
+        "deployed_source_acc": float(sum(deployed_src_acc) / max(1, len(deployed_src_acc))),
+        "copies_nms_rate_deployed": float(sum(copies_nms_deployed) / max(1, len(copies_nms_deployed))) if copies_nms_deployed else 0.0,
+        "mean_iou_deployed": mean_iou_sel,
+        "mean_iou_nms": mean_nms_iou,
+        "mean_iou_oracle": mean_oracle_iou,
+        "oracle_gap_recovery_iou": gap_rec,
+        "n_clusters_evaluated": len(deployed_src_acc),
+        "uses_v3_source_logits": is_v3,
+        "note": "source_acc computed from same fuse_v3 trace as AP (unified decision rule)",
     }
     write_json(source_routing_metrics, out_dir / "source_routing_metrics.json")
     results["_source_routing"] = source_routing_metrics

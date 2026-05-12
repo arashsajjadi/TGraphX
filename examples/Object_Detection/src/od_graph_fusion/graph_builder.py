@@ -431,6 +431,14 @@ def build_detection_graph(
     g.metadata["node_box"] = node_box
     g.metadata["node_label"] = node_label
     g.metadata["node_score"] = node_score
+    # V3 source-slot router metadata
+    g.metadata["cluster_of_raw"] = torch.tensor(node_cluster, dtype=torch.long)
+    g.metadata["proposal_det_ids"] = torch.cat([
+        proposal_det_ids,                          # proposals
+        torch.full((num_clusters,), -1, dtype=torch.long),  # cluster nodes
+        torch.full((num_clusters if consensus_nodes_enabled else 0,), -1, dtype=torch.long),
+        torch.tensor([-1] * (1 if include_context_node else 0), dtype=torch.long),
+    ]) if proposal_det_ids.numel() > 0 else torch.full((node_features.shape[0],), -1, dtype=torch.long)
     return g, meta
 
 
