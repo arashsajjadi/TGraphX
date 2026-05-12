@@ -92,7 +92,63 @@ def evaluate_predictions(
     Pools per-class AP using all images.
     """
     gt_by_id = {gt.image_id: gt for gt in ground_truths}
-    # Per-class TP/FP/FN aggregation
+    # ── Class-agnostic path: single global PR curve, no class buckets ──
+    if class_agnostic:
+        all_scores: List[float] = []
+        all_tps: List[int] = []
+        n_pred = 0; n_tp = 0
+        total_gt = 0
+        for pred in predictions:
+            gt = gt_by_id.get(pred.image_id)
+            if gt is None:
+                continue
+            total_gt += int(gt.boxes_xyxy.shape[0])
+            tp, _fn = _match_predictions(
+                pred.boxes_xyxy, pred.scores, pred.labels,
+                gt.boxes_xyxy, gt.labels, iou_threshold,
+                class_agnostic=True,
+            )
+            n_pred += pred.boxes_xyxy.shape[0]
+            n_tp += int(tp.sum().item())
+            for i in range(pred.boxes_xyxy.shape[0]):
+                all_scores.append(float(pred.scores[i].item()))
+                all_tps.append(int(tp[i].item()))
+
+        precision = n_tp / max(1, n_pred)
+        recall = n_tp / max(1, total_gt)
+        f1 = 2 * precision * recall / max(1e-9, (precision + recall))
+
+        if not all_scores or total_gt == 0:
+            ap = 0.0
+        else:
+            scores = torch.tensor(all_scores, dtype=torch.float32)
+            tps_t = torch.tensor(all_tps, dtype=torch.float32)
+            order = scores.argsort(descending=True)
+            tps_ord = tps_t[order]
+            fps_ord = 1 - tps_ord
+            cum_tp = tps_ord.cumsum(0)
+            cum_fp = fps_ord.cumsum(0)
+            prec = cum_tp / (cum_tp + cum_fp).clamp(min=1)
+            rec = cum_tp / max(1, total_gt)
+            for i in range(len(prec) - 2, -1, -1):
+                prec[i] = max(prec[i].item(), prec[i + 1].item())
+            ap = 0.0
+            last_r = 0.0
+            for i in range(len(prec)):
+                ap += (rec[i].item() - last_r) * prec[i].item()
+                last_r = rec[i].item()
+            ap = float(ap)
+        return {
+            "iou_threshold": iou_threshold,
+            "num_predictions": n_pred, "num_tp": n_tp,
+            "num_fp": n_pred - n_tp, "num_gt": total_gt,
+            "precision": float(precision), "recall": float(recall),
+            "f1": float(f1), "per_class_ap": {},
+            "mAP": ap, "AP": ap,
+            "mode": "class_agnostic",
+        }
+
+    # ── Class-aware path (original behaviour) ──
     per_class_scores: Dict[int, List[float]] = {c: [] for c in range(num_classes)}
     per_class_tp: Dict[int, List[int]] = {c: [] for c in range(num_classes)}
     per_class_total_gt: Dict[int, int] = {c: 0 for c in range(num_classes)}
@@ -111,7 +167,7 @@ def evaluate_predictions(
         tp, _fn = _match_predictions(
             pred.boxes_xyxy, pred.scores, pred.labels,
             gt.boxes_xyxy, gt.labels, iou_threshold,
-            class_agnostic=class_agnostic,
+            class_agnostic=False,
         )
         n_pred += pred.boxes_xyxy.shape[0]
         n_tp += int(tp.sum().item())
@@ -125,13 +181,16 @@ def evaluate_predictions(
     recall = n_tp / max(1, total_gt)
     f1 = 2 * precision * recall / max(1e-9, (precision + recall))
 
-    # Per-class AP (11-point or all-point; use all-point precision-recall AUC)
     per_class_ap: Dict[int, float] = {}
-    for c in per_class_scores:
-        scores = torch.tensor(per_class_scores[c], dtype=torch.float32)
-        tps = torch.tensor(per_class_tp[c], dtype=torch.float32)
+    # Only classes that have GT contribute to mAP; classes only in predictions
+    # are pure-FP buckets and would zero-out an average if included.
+    contributing = sorted(set(per_class_total_gt.keys()) | set(per_class_scores.keys()))
+    contributing = [c for c in contributing if per_class_total_gt.get(c, 0) > 0]
+    for c in contributing:
+        scores = torch.tensor(per_class_scores.get(c, []), dtype=torch.float32)
+        tps = torch.tensor(per_class_tp.get(c, []), dtype=torch.float32)
         total = per_class_total_gt.get(c, 0)
-        if scores.numel() == 0 or total == 0:
+        if scores.numel() == 0:
             per_class_ap[c] = 0.0
             continue
         order = scores.argsort(descending=True)
@@ -141,10 +200,8 @@ def evaluate_predictions(
         cum_fp = fps_ord.cumsum(0)
         prec = cum_tp / (cum_tp + cum_fp).clamp(min=1)
         rec = cum_tp / max(1, total)
-        # Make precision monotonically decreasing (PASCAL VOC style)
         for i in range(len(prec) - 2, -1, -1):
             prec[i] = max(prec[i].item(), prec[i + 1].item())
-        # AP = area under PR curve
         ap = 0.0
         last_r = 0.0
         for i in range(len(prec)):
@@ -163,7 +220,8 @@ def evaluate_predictions(
         "f1": float(f1),
         "per_class_ap": per_class_ap,
         "mAP": float(mAP),
-        "AP": float(mAP),  # alias
+        "AP": float(mAP),
+        "mode": "class_aware",
     }
 
 

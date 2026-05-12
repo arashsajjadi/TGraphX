@@ -271,15 +271,18 @@ def run_pipeline(config_path: str) -> Dict[str, Any]:
         gt_val = [GroundTruth(image_id=r.image_id, boxes_xyxy=r.gt_boxes, labels=r.gt_labels)
                   for r in by_split.get("val", [])]
         best_thr = 0.0
-        best_f1 = -1.0
+        best_metric = -1.0
         sweep = []
         class_agnostic = class_agnostic_early
+        sweep_metric = cfg.get("evaluation", {}).get("sweep_metric", "AP@0.50")
         for thr in thresholds:
             preds_val = []
             for graph, meta in graphs_by_split.get("val", []):
                 out = fuse_with_model(model, graph, meta,
                                       keep_threshold=thr, device=device,
                                       fusion_mode=cfg.get("fusion", {}).get("mode", "selector"),
+                                      score_mode=cfg.get("fusion", {}).get("score_mode", "residual"),
+                                      residual_alpha=float(cfg.get("fusion", {}).get("residual_alpha", 0.1)),
                                       apply_box_regression=False)
                 preds_val.append(DetectionPrediction(
                     image_id=meta.image_id, boxes_xyxy=out["boxes_xyxy"],
@@ -294,12 +297,18 @@ def run_pipeline(config_path: str) -> Dict[str, Any]:
             sweep.append({"threshold": thr, "AP@0.50": r["AP"],
                            "precision": r["precision"], "recall": r["recall"],
                            "f1": r["f1"]})
-            if r["f1"] > best_f1:
-                best_f1 = r["f1"]; best_thr = thr
+            if sweep_metric == "f1":
+                metric_v = r["f1"]
+            else:
+                metric_v = r["AP"]
+            if metric_v > best_metric:
+                best_metric = metric_v; best_thr = thr
         chosen_threshold = best_thr
-        write_json({"sweep": sweep, "chosen_threshold": chosen_threshold},
+        write_json({"sweep": sweep, "chosen_threshold": chosen_threshold,
+                    "metric": sweep_metric},
                    out_dir / "threshold_sweep.json")
-        print(f"[pipeline] TGraphX threshold sweep: chose {chosen_threshold} (val F1={best_f1:.3f})")
+        print(f"[pipeline] TGraphX threshold sweep: chose {chosen_threshold} "
+              f"(val {sweep_metric}={best_metric:.3f})")
 
         # Apply on test
         preds_tgx = []
@@ -315,24 +324,65 @@ def run_pipeline(config_path: str) -> Dict[str, Any]:
             ))
         method_predictions["fusion::tgraphx"] = preds_tgx
 
-    # ── Evaluate every method ─────────────────────────────────────────────
+    # ── Evaluate every method in BOTH modes ─────────────────────────────
     method_results: Dict[str, Dict[str, Any]] = {}
+    method_results_class_aware: Dict[str, Dict[str, Any]] = {}
     ev_cfg = cfg.get("evaluation", {})
     class_agnostic = bool(ev_cfg.get("class_agnostic", True))
     for name, preds in method_predictions.items():
-        res = evaluate_at_multiple_ious(
+        # Class-agnostic (localization)
+        res_ca = evaluate_at_multiple_ious(
             preds, ground_truths, iou_thresholds=iou_list,
-            num_classes=num_classes, class_agnostic=class_agnostic,
+            num_classes=num_classes, class_agnostic=True,
         )
-        primary = evaluate_predictions(preds, ground_truths,
-                                        iou_threshold=iou_list[0],
-                                        num_classes=num_classes,
-                                        class_agnostic=class_agnostic)
-        res["AP"] = primary["AP"]
-        res["num_predictions"] = primary["num_predictions"]
-        method_results[name] = res
+        primary_ca = evaluate_predictions(preds, ground_truths,
+                                          iou_threshold=iou_list[0],
+                                          num_classes=num_classes,
+                                          class_agnostic=True)
+        res_ca["AP"] = primary_ca["AP"]
+        res_ca["num_predictions"] = primary_ca["num_predictions"]
+        # Class-aware (detection)
+        res_aw = evaluate_at_multiple_ious(
+            preds, ground_truths, iou_thresholds=iou_list,
+            num_classes=num_classes, class_agnostic=False,
+        )
+        primary_aw = evaluate_predictions(preds, ground_truths,
+                                          iou_threshold=iou_list[0],
+                                          num_classes=num_classes,
+                                          class_agnostic=False)
+        res_aw["AP"] = primary_aw["AP"]
+        res_aw["num_predictions"] = primary_aw["num_predictions"]
+        # Headline = whichever the config requests
+        method_results[name] = res_ca if class_agnostic else res_aw
+        method_results_class_aware[name] = res_aw
 
     write_json(method_results, out_dir / "method_results.json")
+    write_json(method_results_class_aware,
+               out_dir / "method_results_class_aware.json")
+
+    # ── Oracle invariant check ──────────────────────────────────────────
+    invariant_issues: List[str] = []
+    if "oracle::best_proposal_per_gt" in method_results:
+        oracle_ap = method_results["oracle::best_proposal_per_gt"].get("AP", 0.0)
+        for name, r in method_results.items():
+            if name == "oracle::best_proposal_per_gt":
+                continue
+            if name == "fusion::tgraphx" or name.startswith("lower_bound::") \
+                    or name == "fusion::wbf" or name == "fusion::nms":
+                if r.get("AP", 0.0) > oracle_ap + 1e-3:
+                    invariant_issues.append(
+                        f"INVARIANT VIOLATED (class-{('agnostic' if class_agnostic else 'aware')}): "
+                        f"{name} AP={r['AP']:.4f} > oracle AP={oracle_ap:.4f}"
+                    )
+    if invariant_issues:
+        print("[pipeline] !! Oracle/evaluator invariant warnings:")
+        for issue in invariant_issues:
+            print(f"  {issue}")
+        write_json({"violations": invariant_issues},
+                   out_dir / "oracle_invariant_violations.json")
+    else:
+        write_json({"violations": []},
+                   out_dir / "oracle_invariant_violations.json")
 
     # Latency aggregation
     latencies = {

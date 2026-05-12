@@ -54,6 +54,8 @@ training:
 
 fusion:
   mode: selector
+  score_mode: residual
+  residual_alpha: 0.1
 
 evaluation:
   iou_match_threshold: 0.5

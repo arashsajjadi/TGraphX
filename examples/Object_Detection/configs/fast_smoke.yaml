@@ -56,6 +56,8 @@ training:
 
 fusion:
   mode: selector            # selector / refiner — selector is default and recommended
+  score_mode: residual      # base_only / residual / logits — residual is guarded
+  residual_alpha: 0.1       # weight of the graph residual on top of base score
 
 evaluation:
   iou_match_threshold: 0.5

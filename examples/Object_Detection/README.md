@@ -7,13 +7,20 @@ fuse and refine their outputs.
 > **Status:** Beta showcase example. FAST_SMOKE runs in under a minute with
 > no model downloads. All v1.4.1 TGraphX APIs are used.
 >
-> **v2 (2026-05-11 rebuild):** TGraphX now operates in **selector mode** by
-> default. The model picks the best candidate node per cluster and copies
-> that box verbatim — no untrained box regression. Result: TGraphX beats
-> every classical fusion baseline (NMS, WBF, best-proposal-per-cluster) on
-> a 16-image VOC 2007 DEV_EXPERIMENT (`AP@0.50 = 0.081` vs WBF `0.004`).
-> See [`reports/SCIENTIFIC_RESULTS.md`](reports/SCIENTIFIC_RESULTS.md) and
-> [`reports/TGRAPHX_OBJECT_DETECTION_FAITHFULNESS_SPEC.md`](reports/TGRAPHX_OBJECT_DETECTION_FAITHFULNESS_SPEC.md).
+> **v3 (2026-05-11 final):** TGraphX operates as a **Guarded Residual
+> Selector**. The model produces a small residual on top of the candidate's
+> detector confidence, so it is mathematically lower-bounded by detector
+> score and cannot collapse to noise. With AP-optimal validation threshold
+> on a 60-image VOC 2007 DEV_EXPERIMENT, TGraphX achieves AP@0.50 = 0.834,
+> beating every individual detector (RT-DETR 0.818, RetinaNet 0.713,
+> YOLOE 0.656, YOLO 11n 0.470) and every classical fusion baseline (NMS
+> 0.821, WBF 0.633, best-proposal-per-cluster 0.821). Oracle = 1.000.
+> See [`reports/SCIENTIFIC_RESULTS_v3.md`](reports/SCIENTIFIC_RESULTS_v3.md).
+>
+> **Methodology fixes since v2:** the per-class mAP class-bucket bug is
+> fixed (added 7 oracle/evaluator invariant tests); both class-aware and
+> class-agnostic metrics are reported; validation threshold sweep optimises
+> the chosen `sweep_metric` (default AP@0.50) and is frozen before test.
 
 ---
 
