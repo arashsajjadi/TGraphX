@@ -54,11 +54,15 @@ training:
   box_weight: 1.0
   early_stopping_patience: 3
 
+fusion:
+  mode: selector            # selector / refiner — selector is default and recommended
+
 evaluation:
   iou_match_threshold: 0.5
   ap_iou_thresholds: [0.5, 0.75]
   per_class_ap: true
   report_latency: true
+  class_agnostic: true      # COCO-trained detectors → VOC GT class spaces differ
 
 output:
   run_dir_base: runs

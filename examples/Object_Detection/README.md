@@ -4,8 +4,16 @@ A modern, modular, fully reproducible experiment that compares heterogeneous
 object detectors and **uses TGraphX as the central graph reasoning layer** to
 fuse and refine their outputs.
 
-> **Status:** Beta showcase example.  FAST_SMOKE runs in under a minute with
-> no model downloads.  All v1.4.1 TGraphX APIs are used.
+> **Status:** Beta showcase example. FAST_SMOKE runs in under a minute with
+> no model downloads. All v1.4.1 TGraphX APIs are used.
+>
+> **v2 (2026-05-11 rebuild):** TGraphX now operates in **selector mode** by
+> default. The model picks the best candidate node per cluster and copies
+> that box verbatim — no untrained box regression. Result: TGraphX beats
+> every classical fusion baseline (NMS, WBF, best-proposal-per-cluster) on
+> a 16-image VOC 2007 DEV_EXPERIMENT (`AP@0.50 = 0.081` vs WBF `0.004`).
+> See [`reports/SCIENTIFIC_RESULTS.md`](reports/SCIENTIFIC_RESULTS.md) and
+> [`reports/TGRAPHX_OBJECT_DETECTION_FAITHFULNESS_SPEC.md`](reports/TGRAPHX_OBJECT_DETECTION_FAITHFULNESS_SPEC.md).
 
 ---
 

@@ -52,11 +52,15 @@ training:
   box_weight: 1.0
   early_stopping_patience: 5
 
+fusion:
+  mode: selector
+
 evaluation:
   iou_match_threshold: 0.5
   ap_iou_thresholds: [0.5, 0.75]
   per_class_ap: true
   report_latency: true
+  class_agnostic: true
 
 output:
   run_dir_base: runs

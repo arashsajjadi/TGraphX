@@ -375,10 +375,34 @@ def build_detection_graph(
         "image_id": image_id,
     }
 
+    # Build a per-node "candidate box": the box the selector should pick if it
+    # picks this node. For proposal nodes this is the proposal box; for
+    # cluster nodes the WBF box; for consensus the union box; for context
+    # the full image.
+    node_box = torch.zeros(node_features.shape[0], 4, dtype=torch.float32)
+    node_label = torch.zeros(node_features.shape[0], dtype=torch.long)
+    node_score = torch.zeros(node_features.shape[0], dtype=torch.float32)
+    for i in range(proposal_boxes.shape[0]):
+        node_box[i] = proposal_boxes[i]
+        node_label[i] = proposal_labels[i]
+        node_score[i] = proposal_scores[i]
+    for c, idx in enumerate(cluster_node_offsets):
+        node_box[idx] = cluster_boxes[c]
+        node_label[idx] = cluster_labels[c]
+        node_score[idx] = cluster_mean[c]
+    for c, idx in enumerate(consensus_node_offsets):
+        # consensus uses the same cluster_box for now; could be union_box.
+        node_box[idx] = cluster_boxes[c]
+        node_label[idx] = cluster_labels[c]
+        node_score[idx] = cluster_mean[c]
+    if include_context_node and context_node_idx >= 0:
+        node_box[context_node_idx] = torch.tensor(
+            [0, 0, image_size[1] - 1, image_size[0] - 1], dtype=torch.float32)
+
     targets = None
     if is_training and gt_boxes is not None and gt_labels is not None and gt_boxes.numel() > 0:
-        targets = _build_targets(
-            node_types_t, cluster_boxes, cluster_labels,
+        targets = _build_targets_full(
+            node_types_t, node_box, node_label,
             cluster_node_offsets, consensus_node_offsets if consensus_nodes_enabled else [],
             gt_boxes, gt_labels, iou_match,
         )
@@ -403,6 +427,10 @@ def build_detection_graph(
         cluster_score=cluster_mean,
         targets=targets,
     )
+    # Attach per-node candidate box (used for selector-mode decoding)
+    g.metadata["node_box"] = node_box
+    g.metadata["node_label"] = node_label
+    g.metadata["node_score"] = node_score
     return g, meta
 
 
@@ -446,40 +474,83 @@ def _empty_graph(image, image_id, image_size, detector_names, class_names,
     )
 
 
-def _build_targets(
+def _build_targets_full(
     node_types: torch.Tensor,
-    cluster_boxes: torch.Tensor,
-    cluster_labels: torch.Tensor,
+    node_box: torch.Tensor,            # [N, 4] per-node candidate box
+    node_label: torch.Tensor,          # [N]
     cluster_offsets: List[int],
     consensus_offsets: List[int],
     gt_boxes: torch.Tensor, gt_labels: torch.Tensor,
     iou_match: float,
 ) -> Dict[str, torch.Tensor]:
-    """For each cluster/consensus node, compute objectness / class / box-reg targets."""
+    """Target assignment for the *selector*.
+
+    A candidate node (proposal, cluster, or consensus) is positive if its
+    candidate box has IoU >= ``iou_match`` with any GT AND the predicted
+    class agrees with that GT's class (or the candidate has no class info
+    yet, in which case we trust IoU).
+
+    Positives also get a per-GT ranking: among all nodes that overlap the
+    same GT, the one with the highest IoU is marked ``is_best_source=1``.
+    The selector loss prefers the best-source node and discourages other
+    positives, while still allowing the model to pick a runner-up when the
+    best-source choice is wrong.
+
+    Targets:
+        objectness:        [N] 1.0 for positives else 0.0
+        class:             [N] gt class id for positives else -1
+        box_reg:           [N, 4] gt - candidate_box (offsets; only used if
+                           refiner mode is enabled)
+        iou:               [N] IoU with assigned GT (0 if no match)
+        is_best_source:    [N] 1.0 for the single best-IoU node per GT
+        candidate_mask:    [N] True for proposal/cluster/consensus (selector
+                           eligibility)
+    """
     N = node_types.shape[0]
     objectness = torch.zeros(N, dtype=torch.float32)
     cls_targets = torch.full((N,), -1, dtype=torch.long)
     box_reg = torch.zeros(N, 4, dtype=torch.float32)
     iou_targets = torch.zeros(N, dtype=torch.float32)
+    is_best_source = torch.zeros(N, dtype=torch.float32)
+    candidate_mask = (node_types == NODE_TYPES["proposal"]) \
+        | (node_types == NODE_TYPES["cluster"]) \
+        | (node_types == NODE_TYPES["consensus"])
 
-    if cluster_boxes.shape[0] == 0 or gt_boxes.numel() == 0:
+    if gt_boxes.numel() == 0 or not candidate_mask.any():
         return {"objectness": objectness, "class": cls_targets,
-                "box_reg": box_reg, "iou": iou_targets}
+                "box_reg": box_reg, "iou": iou_targets,
+                "is_best_source": is_best_source,
+                "candidate_mask": candidate_mask}
 
-    ious = box_iou(cluster_boxes, gt_boxes)         # [C, G]
+    cand_idx = candidate_mask.nonzero(as_tuple=False).squeeze(-1)
+    cand_boxes = node_box[cand_idx]
+    cand_labels = node_label[cand_idx]
+    ious = box_iou(cand_boxes, gt_boxes)  # [Nc, G]
     best_iou, best_gt = ious.max(dim=1)
-    for c, node_idx in enumerate(cluster_offsets):
-        if best_iou[c].item() >= iou_match:
-            objectness[node_idx] = 1.0
-            cls_targets[node_idx] = int(gt_labels[best_gt[c]].item())
-            box_reg[node_idx] = gt_boxes[best_gt[c]] - cluster_boxes[c]
-            iou_targets[node_idx] = float(best_iou[c].item())
-    for c, node_idx in enumerate(consensus_offsets):
-        if best_iou[c].item() >= iou_match:
-            objectness[node_idx] = 1.0
-            cls_targets[node_idx] = int(gt_labels[best_gt[c]].item())
-            box_reg[node_idx] = gt_boxes[best_gt[c]] - cluster_boxes[c]
-            iou_targets[node_idx] = float(best_iou[c].item())
+    for k, ni in enumerate(cand_idx.tolist()):
+        if best_iou[k].item() >= iou_match:
+            objectness[ni] = 1.0
+            cls_targets[ni] = int(gt_labels[best_gt[k]].item())
+            box_reg[ni] = gt_boxes[best_gt[k]] - cand_boxes[k]
+            iou_targets[ni] = float(best_iou[k].item())
+
+    # Mark best-source per GT (only among candidates assigned to that GT)
+    for g_idx in range(gt_boxes.shape[0]):
+        # Candidates that picked this GT
+        picks = []
+        for k, ni in enumerate(cand_idx.tolist()):
+            if best_iou[k].item() >= iou_match and int(best_gt[k].item()) == g_idx:
+                picks.append((float(best_iou[k].item()), ni))
+        if picks:
+            picks.sort(reverse=True)
+            is_best_source[picks[0][1]] = 1.0
 
     return {"objectness": objectness, "class": cls_targets,
-            "box_reg": box_reg, "iou": iou_targets}
+            "box_reg": box_reg, "iou": iou_targets,
+            "is_best_source": is_best_source,
+            "candidate_mask": candidate_mask}
+
+
+def _build_targets(*args, **kwargs):
+    """Backward-compatible shim for old signature."""
+    return _build_targets_full(*args, **kwargs)

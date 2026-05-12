@@ -219,11 +219,95 @@ def run_pipeline(config_path: str) -> Dict[str, Any]:
         ))
     method_predictions["fusion::wbf"] = preds_wbf
 
-    # 4) TGraphX fusion (if model trained)
+    # 4) Lower bound: best proposal per cluster (no learning)
+    preds_best_proposal = []
+    for rec in by_split.get("test", []):
+        det_res = [detector_outputs[n][records.index(rec)] for n in detector_names]
+        b, s, l, _d = pool_detector_results(det_res)
+        # For each "cluster" via greedy IoU + same-class grouping, pick the
+        # highest-confidence proposal. This is exactly what `select_best_proposal`
+        # would do.
+        keep = nms(b, s, iou_threshold=iou_cluster)  # acts like best-per-cluster
+        preds_best_proposal.append(DetectionPrediction(
+            image_id=rec.image_id, boxes_xyxy=b[keep] if b.numel() > 0 else b,
+            scores=s[keep] if s.numel() > 0 else s,
+            labels=l[keep] if l.numel() > 0 else l,
+        ))
+    method_predictions["lower_bound::best_proposal"] = preds_best_proposal
+
+    # Resolve eval defaults early so the threshold sweep can use them
+    ev_cfg_early = cfg.get("evaluation", {})
+    iou_list = ev_cfg_early.get("ap_iou_thresholds", [0.5, 0.75])
+    class_agnostic_early = bool(ev_cfg_early.get("class_agnostic", True))
+
+    # 5) Oracle upper bound: best detector proposal per GT (uses test GT,
+    #    not deployable — for context only)
+    preds_oracle = []
+    for rec in by_split.get("test", []):
+        det_res = [detector_outputs[n][records.index(rec)] for n in detector_names]
+        b, s, l, _d = pool_detector_results(det_res)
+        if b.numel() == 0 or rec.gt_boxes.numel() == 0:
+            preds_oracle.append(DetectionPrediction(
+                image_id=rec.image_id, boxes_xyxy=torch.zeros(0, 4),
+                scores=torch.zeros(0), labels=torch.zeros(0, dtype=torch.long),
+            ))
+            continue
+        from .box_ops import box_iou as _iou
+        ious = _iou(b, rec.gt_boxes)  # [N, G]
+        best_per_gt = ious.argmax(dim=0)  # [G]
+        keep_set = sorted(set(best_per_gt.tolist()))
+        keep_idx = torch.tensor(keep_set, dtype=torch.long)
+        preds_oracle.append(DetectionPrediction(
+            image_id=rec.image_id, boxes_xyxy=b[keep_idx],
+            scores=s[keep_idx], labels=l[keep_idx],
+        ))
+    method_predictions["oracle::best_proposal_per_gt"] = preds_oracle
+
+    # 6) TGraphX fusion (if model trained) — validation threshold sweep
+    chosen_threshold = 0.0
     if model is not None:
+        # Validation threshold sweep
+        thresholds = [0.0, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5]
+        gt_val = [GroundTruth(image_id=r.image_id, boxes_xyxy=r.gt_boxes, labels=r.gt_labels)
+                  for r in by_split.get("val", [])]
+        best_thr = 0.0
+        best_f1 = -1.0
+        sweep = []
+        class_agnostic = class_agnostic_early
+        for thr in thresholds:
+            preds_val = []
+            for graph, meta in graphs_by_split.get("val", []):
+                out = fuse_with_model(model, graph, meta,
+                                      keep_threshold=thr, device=device,
+                                      fusion_mode=cfg.get("fusion", {}).get("mode", "selector"),
+                                      apply_box_regression=False)
+                preds_val.append(DetectionPrediction(
+                    image_id=meta.image_id, boxes_xyxy=out["boxes_xyxy"],
+                    scores=out["scores"], labels=out["labels"],
+                ))
+            if not gt_val:
+                continue
+            r = evaluate_predictions(preds_val, gt_val,
+                                      iou_threshold=iou_list[0],
+                                      num_classes=num_classes,
+                                      class_agnostic=class_agnostic)
+            sweep.append({"threshold": thr, "AP@0.50": r["AP"],
+                           "precision": r["precision"], "recall": r["recall"],
+                           "f1": r["f1"]})
+            if r["f1"] > best_f1:
+                best_f1 = r["f1"]; best_thr = thr
+        chosen_threshold = best_thr
+        write_json({"sweep": sweep, "chosen_threshold": chosen_threshold},
+                   out_dir / "threshold_sweep.json")
+        print(f"[pipeline] TGraphX threshold sweep: chose {chosen_threshold} (val F1={best_f1:.3f})")
+
+        # Apply on test
         preds_tgx = []
         for graph, meta in graphs_by_split.get("test", []):
-            out = fuse_with_model(model, graph, meta, keep_threshold=0.3, device=device)
+            out = fuse_with_model(model, graph, meta,
+                                  keep_threshold=chosen_threshold, device=device,
+                                  fusion_mode=cfg.get("fusion", {}).get("mode", "selector"),
+                                  apply_box_regression=False)
             preds_tgx.append(DetectionPrediction(
                 image_id=meta.image_id,
                 boxes_xyxy=out["boxes_xyxy"],
@@ -234,16 +318,16 @@ def run_pipeline(config_path: str) -> Dict[str, Any]:
     # ── Evaluate every method ─────────────────────────────────────────────
     method_results: Dict[str, Dict[str, Any]] = {}
     ev_cfg = cfg.get("evaluation", {})
-    iou_list = ev_cfg.get("ap_iou_thresholds", [0.5, 0.75])
+    class_agnostic = bool(ev_cfg.get("class_agnostic", True))
     for name, preds in method_predictions.items():
         res = evaluate_at_multiple_ious(
             preds, ground_truths, iou_thresholds=iou_list,
-            num_classes=num_classes,
+            num_classes=num_classes, class_agnostic=class_agnostic,
         )
-        # also add legacy AP@0.50 / AP for plotting
         primary = evaluate_predictions(preds, ground_truths,
                                         iou_threshold=iou_list[0],
-                                        num_classes=num_classes)
+                                        num_classes=num_classes,
+                                        class_agnostic=class_agnostic)
         res["AP"] = primary["AP"]
         res["num_predictions"] = primary["num_predictions"]
         method_results[name] = res

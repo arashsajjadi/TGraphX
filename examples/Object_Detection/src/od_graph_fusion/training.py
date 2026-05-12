@@ -13,9 +13,14 @@ from .models import DetectionFusionModel
 
 
 def _supervised_mask(meta: DetectionGraphMeta) -> torch.Tensor:
-    """Return a boolean mask over nodes selecting cluster + consensus nodes."""
+    """Return a boolean mask over nodes selecting candidate nodes
+    (proposal + cluster + consensus). v1.1: proposals are now scored too."""
     nt = meta.node_types
-    return (nt == NODE_TYPES["cluster"]) | (nt == NODE_TYPES["consensus"])
+    if meta.targets is not None and "candidate_mask" in meta.targets:
+        return meta.targets["candidate_mask"]
+    return ((nt == NODE_TYPES["proposal"])
+            | (nt == NODE_TYPES["cluster"])
+            | (nt == NODE_TYPES["consensus"]))
 
 
 def train_fusion_model(

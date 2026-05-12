@@ -36,11 +36,17 @@ def _match_predictions(
     pred_boxes: torch.Tensor, pred_scores: torch.Tensor, pred_labels: torch.Tensor,
     gt_boxes: torch.Tensor, gt_labels: torch.Tensor,
     iou_threshold: float,
+    class_agnostic: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Match predictions to GT greedily (highest score first).
 
+    Args:
+        class_agnostic: If True, ignore class labels when matching. Useful
+            when detector class spaces (COCO-80) differ from dataset class
+            spaces (VOC-20) and a class-name fallback mapping is unavailable.
+
     Returns:
-        tp:  [N_pred] bool. True if matched & class agrees.
+        tp:  [N_pred] bool. True if matched (and class agrees if class_agnostic=False).
         fn:  scalar (number of unmatched GT).
     """
     N = pred_boxes.shape[0]
@@ -56,9 +62,11 @@ def _match_predictions(
     ious = box_iou(pred_boxes, gt_boxes)
 
     for idx in order.tolist():
-        # Restrict to GT of matching class
-        cls_mask = gt_labels == pred_labels[idx]
-        cls_mask = cls_mask & (~matched_gt)
+        if class_agnostic:
+            cls_mask = ~matched_gt
+        else:
+            cls_mask = gt_labels == pred_labels[idx]
+            cls_mask = cls_mask & (~matched_gt)
         if cls_mask.sum() == 0:
             continue
         row = ious[idx].clone()
@@ -77,6 +85,7 @@ def evaluate_predictions(
     ground_truths: List[GroundTruth],
     iou_threshold: float = 0.5,
     num_classes: int = 20,
+    class_agnostic: bool = False,
 ) -> Dict[str, Any]:
     """Compute AP@iou_threshold, precision, recall, F1.
 
@@ -102,6 +111,7 @@ def evaluate_predictions(
         tp, _fn = _match_predictions(
             pred.boxes_xyxy, pred.scores, pred.labels,
             gt.boxes_xyxy, gt.labels, iou_threshold,
+            class_agnostic=class_agnostic,
         )
         n_pred += pred.boxes_xyxy.shape[0]
         n_tp += int(tp.sum().item())
@@ -162,11 +172,13 @@ def evaluate_at_multiple_ious(
     ground_truths: List[GroundTruth],
     iou_thresholds: List[float] = (0.5, 0.75),
     num_classes: int = 20,
+    class_agnostic: bool = False,
 ) -> Dict[str, Any]:
     out = {}
     for t in iou_thresholds:
         r = evaluate_predictions(predictions, ground_truths,
-                                  iou_threshold=t, num_classes=num_classes)
+                                  iou_threshold=t, num_classes=num_classes,
+                                  class_agnostic=class_agnostic)
         out[f"AP@{t:.2f}"] = r["AP"]
         out[f"precision@{t:.2f}"] = r["precision"]
         out[f"recall@{t:.2f}"] = r["recall"]
