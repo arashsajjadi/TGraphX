@@ -261,7 +261,7 @@ def _custom_folder_dataset(
     if root is None:
         raise ValueError("custom_folder dataset requires 'dataset.root'")
     p = Path(root)
-    imgs = sorted(p.glob("*.jpg")) + sorted(p.glob("*.png"))[:num_images]
+    imgs = (sorted(p.glob("*.jpg")) + sorted(p.glob("*.png")))[:num_images]
     H, W = image_size
     records = []
     import numpy as np

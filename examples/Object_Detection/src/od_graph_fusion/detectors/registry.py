@@ -59,8 +59,9 @@ class SyntheticDetector(BaseDetector):
                 gt_labels: Optional[torch.Tensor] = None) -> DetectionResult:
         """Synthetic predictor takes GT as a hidden hint (set by registry helper)."""
         H, W = int(image.shape[1]), int(image.shape[2])
-        rng = random.Random(hash((image_id, self._seed)) % (2**31))
-        gen = torch.Generator().manual_seed(hash((image_id, self._seed, 1)) % (2**31))
+        from ..source_router import stable_image_seed
+        rng = random.Random(stable_image_seed(image_id, extra=self._seed))
+        gen = torch.Generator().manual_seed(stable_image_seed(image_id, extra=self._seed + 1))
 
         if gt_boxes is None or gt_boxes.numel() == 0:
             return self.empty_result(image_id, (H, W))

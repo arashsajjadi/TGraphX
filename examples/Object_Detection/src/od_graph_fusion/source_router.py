@@ -104,18 +104,21 @@ def compute_source_utilities(
     ious = box_iou(node_box[cand_idx], gt_boxes)  # [Nc, G]
     best_iou, best_gt = ious.max(dim=1)
 
+    # CONTINUOUS utility — never threshold IoU before ranking.
+    # Even if all candidates are below iou_match=0.5, the highest-IoU candidate
+    # is still the best available source for routing supervision.
     for ki, ni in enumerate(cand_idx.tolist()):
         iou = float(best_iou[ki].item())
-        if iou < iou_match:
-            continue
         g_idx = int(best_gt[ki].item())
         if class_agnostic:
             utility[ni] = iou
         else:
             canonical_match = (int(node_label[ni].item()) == int(gt_labels[g_idx].item()))
             utility[ni] = iou if canonical_match else 0.0
+        # Note: we always assign a continuous utility value.
+        # iou_match is used ONLY for detection metrics, not for routing labels.
 
-    # Best source per cluster
+    # Best source per cluster = argmax continuous utility
     n_clusters = int(cluster_of.max().item() + 1) if cluster_of.numel() > 0 else 0
     best_src = torch.full((n_clusters,), -1, dtype=torch.long)
     for c in range(n_clusters):
@@ -212,18 +215,25 @@ def source_routing_loss(
         else:
             regret_weights.append(1.0)
 
-    def _mean_safe(lst):
-        return torch.stack(lst).mean() if lst else torch.tensor(0.0, device=device)
+    # Per-cluster regret weighting (P3.1 fix):
+    # Each cluster's loss is scaled by its own regret, not the batch mean.
+    # This focuses learning on clusters where baseline routing is wrong.
+    all_cluster_losses = []
+    for i in range(len(ce_terms)):
+        w_c = 1.0 + regret_lambda * regret_weights[i]
+        cluster_loss = (ce_terms[i]
+                        + 0.5 * kl_terms[i]
+                        + (pairwise_weight * pw_terms[i] if i < len(pw_terms) else torch.tensor(0.0, device=device)))
+        all_cluster_losses.append(w_c * cluster_loss)
 
-    ce_loss = _mean_safe(ce_terms)
-    kl_loss = _mean_safe(kl_terms)
-    pw_loss = _mean_safe(pw_terms)
+    if not all_cluster_losses:
+        z = torch.tensor(0.0, device=device)
+        return {"total": z, "ce": z, "kl": z, "pairwise": z}
 
-    # Regret-weighted scaling
-    rw = torch.tensor(regret_weights, device=device)
-    rw_scale = 1.0 + regret_lambda * rw.mean() if rw.numel() > 0 else torch.tensor(1.0)
-
-    total = rw_scale * (ce_loss + 0.5 * kl_loss + pairwise_weight * pw_loss)
+    total = torch.stack(all_cluster_losses).mean()
+    ce_loss = torch.stack(ce_terms).mean()
+    kl_loss = torch.stack(kl_terms).mean()
+    pw_loss = (torch.stack(pw_terms).mean() if pw_terms else torch.tensor(0.0, device=device))
     losses = {"total": total, "ce": ce_loss, "kl": kl_loss, "pairwise": pw_loss}
     return losses
 
@@ -311,26 +321,38 @@ class EdgeConditionedMP(nn.Module):
         ei: torch.Tensor,          # [2, E]
         edge_attr: Optional[torch.Tensor] = None,  # [E, edge_feat_dim]
     ) -> torch.Tensor:
-        """Edge-conditioned tensor message passing."""
+        """Vectorized edge-conditioned tensor message passing.
+
+        Uses index_add for scatter aggregation (no Python loops over edges).
+        Normalizes by destination degree to prevent activation blow-up.
+        """
         h_base = self.mp(x, ei)               # [N, C_out, H_out, W_out]
         if edge_attr is None or edge_attr.numel() == 0 or ei.shape[1] == 0:
             return h_base
 
-        # Compute edge gates [E, C_out]
-        gates = self.edge_gate(edge_attr)      # [E, C_out]
-        N, C_out = h_base.shape[0], h_base.shape[1]
-        h_extra = torch.zeros_like(h_base)
+        N, C_out, H_out, W_out = h_base.shape
+        src_nodes, dst_nodes = ei[0], ei[1]
 
-        # For each destination node j, accumulate gated source features
-        src, dst = ei[0], ei[1]
-        x_for_h, _, _ = self.mp.in_shape, None, None  # get spatial dims
-        H_out, W_out = h_base.shape[2], h_base.shape[3]
-        for e_idx in range(ei.shape[1]):
-            s = int(src[e_idx].item())
-            d = int(dst[e_idx].item())
-            gate = gates[e_idx]               # [C_out]
-            gated = gate[:, None, None] * h_base[s]  # [C_out, H_out, W_out]
-            h_extra[d] += gated
+        # Edge gates: [E, C_out]
+        gates = self.edge_gate(edge_attr)      # [E, C_out]
+
+        # Gated source features: h_base[src] scaled by gate per edge
+        # h_base[src_nodes]: [E, C_out, H_out, W_out]
+        src_feats = h_base[src_nodes]          # [E, C_out, H_out, W_out]
+        # broadcast gates [E, C_out] → [E, C_out, 1, 1]
+        gated = src_feats * gates[:, :, None, None]  # [E, C_out, H_out, W_out]
+
+        # Scatter-add to destination nodes
+        h_extra = torch.zeros_like(h_base)
+        h_extra.index_add_(0, dst_nodes, gated)
+
+        # Degree normalization: count in-edges per node
+        degree = torch.zeros(N, device=x.device, dtype=x.dtype)
+        degree.index_add_(0, dst_nodes, torch.ones(ei.shape[1], device=x.device))
+        degree = degree.clamp(min=1)
+        # Broadcast degree over spatial dims: [N] → [N, 1, 1, 1]
+        h_extra = h_extra / degree[:, None, None, None]
+
         return h_base + 0.1 * h_extra  # residual with small weight
 
 

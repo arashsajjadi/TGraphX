@@ -214,6 +214,78 @@ def run_one_seed(
         res["num_predictions"] = r0["num_predictions"]
         results[name] = res
 
+    # ── Source-routing metrics ──────────────────────────────────────────
+    from .source_router import compute_source_utilities, oracle_gap_recovery
+    src_acc_all = []
+    src_acc_oracle_all = []
+    copies_nms = []
+    selected_equals_highest_conf = []
+
+    for graph, meta in graphs_by_split.get("test", []):
+        if meta.num_clusters == 0:
+            continue
+        from .graph_builder import NODE_TYPES
+        rec = next((r for r in by_split.get("test", []) if r.image_id == meta.image_id), None)
+        if rec is None:
+            continue
+        gt_b = rec.gt_boxes; gt_l = rec.gt_labels
+        if gt_b.numel() == 0:
+            continue
+
+        node_box = graph.metadata.get("node_box")
+        node_label = graph.metadata.get("node_label")
+        node_score_t = graph.metadata.get("node_score")
+        if node_box is None:
+            continue
+
+        util, best_src, cand_mask = compute_source_utilities(
+            node_box, node_label, node_score_t, meta.cluster_of_node,
+            meta.node_types, gt_b, gt_l, class_agnostic=True, iou_match=0.5,
+        )
+
+        # TGraphX predictions
+        if model is not None:
+            out = fuse_with_model(model, graph, meta, keep_threshold=chosen_thr,
+                                  device=device, score_mode=cfg.get("fusion", {}).get("score_mode", "residual"),
+                                  residual_alpha=float(cfg.get("fusion", {}).get("residual_alpha", 0.1)))
+        else:
+            out = {"boxes_xyxy": torch.zeros(0, 4), "scores": torch.zeros(0), "labels": torch.zeros(0, dtype=torch.long)}
+
+        # For each cluster, check if TGraphX picked the oracle source
+        cluster_of = meta.cluster_of_node
+        n_clusters = int(cluster_of.max().item() + 1) if cluster_of.numel() > 0 else 0
+        for c in range(n_clusters):
+            oracle_node = int(best_src[c].item()) if c < len(best_src) else -1
+            if oracle_node < 0:
+                continue
+            # What did TGraphX select?
+            from .fusion import fuse_with_model as _fwm
+            qual = model(graph.to(device))["quality_logits"].cpu() if model is not None else node_score_t
+            in_c = (cluster_of == c) & cand_mask
+            if not in_c.any():
+                continue
+            idx_c = in_c.nonzero(as_tuple=False).squeeze(-1)
+            sel_local = int(qual[idx_c].argmax().item())
+            sel_node = int(idx_c[sel_local].item())
+            src_acc_all.append(int(sel_node == oracle_node))
+            # What does NMS select? NMS picks highest base score
+            nms_local = int(node_score_t[idx_c].argmax().item()) if node_score_t is not None else sel_local
+            nms_node = int(idx_c[nms_local].item())
+            copies_nms.append(int(sel_node == nms_node))
+            # Highest-confidence source
+            hc_local = int(node_score_t[idx_c].argmax().item()) if node_score_t is not None else sel_local
+            hc_node = int(idx_c[hc_local].item())
+            selected_equals_highest_conf.append(int(sel_node == hc_node))
+
+    source_routing_metrics = {
+        "source_acc": float(sum(src_acc_all) / max(1, len(src_acc_all))),
+        "copies_nms_rate": float(sum(copies_nms) / max(1, len(copies_nms))),
+        "selected_equals_highest_conf": float(sum(selected_equals_highest_conf) / max(1, len(selected_equals_highest_conf))),
+        "n_clusters_evaluated": len(src_acc_all),
+    }
+    write_json(source_routing_metrics, out_dir / "source_routing_metrics.json")
+    results["_source_routing"] = source_routing_metrics
+
     write_json({"seed": seed, "threshold": chosen_thr, "results": results},
                out_dir / "results.json")
     return {"seed": seed, "threshold": chosen_thr, "results": results}

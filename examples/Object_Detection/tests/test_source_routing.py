@@ -87,6 +87,54 @@ def test_compute_source_utilities_perfect_proposal():
     assert abs(utility[0].item() - 1.0) < 1e-4
 
 
+def test_continuous_utility_all_below_iou_threshold():
+    """P2.1 fix: all candidates below iou_match must still have non-zero utility
+    and best_source must be the highest-IoU node."""
+    node_types, cluster_of = _make_candidate_graph(3, 0)
+    N = node_types.shape[0]
+    node_box = torch.tensor([
+        [0.5, 0.5, 4.5, 4.5],    # small overlap
+        [1., 1., 6., 6.],          # medium
+        [2., 2., 8., 8.],          # largest — should win
+    ], dtype=torch.float32)
+    gt_box = torch.tensor([[0., 0., 10., 10.]])
+    gt_label = torch.tensor([0])
+    node_label = torch.zeros(N, dtype=torch.long)
+    node_score = torch.tensor([0.9, 0.3, 0.5])  # high-conf != best IoU
+    util, best_src, _ = compute_source_utilities(
+        node_box, node_label, node_score, cluster_of, node_types,
+        gt_box, gt_label, class_agnostic=True, iou_match=0.5,
+    )
+    assert not all(u == 0.0 for u in util.tolist()), (
+        "Utility should be continuous even when all IoUs < iou_match"
+    )
+    assert best_src[0].item() == 2, (
+        f"Best source must be highest-IoU node (2), got {best_src[0].item()}"
+    )
+
+
+def test_per_cluster_regret_weighting_finite():
+    """P3.1 fix: per-cluster regret weighting must produce finite loss."""
+    N = 6
+    cluster_of = torch.tensor([0, 0, 0, 1, 1, 1], dtype=torch.long)
+    cand_mask = torch.ones(N, dtype=torch.bool)
+    node_scores = torch.randn(N)
+    utility = torch.tensor([0.9, 0.3, 0.1, 0.8, 0.3, 0.2])
+    best_src = torch.tensor([0, 3])
+    baseline_scores = torch.tensor([2.0, 0.0, 0.0, 0.0, 2.0, 1.0])
+    losses = source_routing_loss(
+        node_scores, utility, best_src, cluster_of, cand_mask,
+        regret_lambda=2.0, baseline_scores=baseline_scores,
+    )
+    assert torch.isfinite(losses["total"])
+    # lambda=0 should match unweighted
+    losses0 = source_routing_loss(
+        node_scores, utility, best_src, cluster_of, cand_mask,
+        regret_lambda=0.0, baseline_scores=baseline_scores,
+    )
+    assert torch.isfinite(losses0["total"])
+
+
 def test_compute_source_utilities_no_gt():
     node_types, cluster_of = _make_candidate_graph(2, 1)
     N = node_types.shape[0]

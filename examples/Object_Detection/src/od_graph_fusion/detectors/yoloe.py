@@ -87,7 +87,8 @@ class YOLOEAdapter(BaseDetector):
         scores = r0.boxes.conf.detach().cpu()
         labels_idx = r0.boxes.cls.detach().cpu().long().tolist()
         names = r0.names
-        labels = [names.get(int(i), str(i)) for i in labels_idx]
+        from ..source_router import canonical_label as _canon
+        labels = [_canon(names.get(int(i), str(i))) for i in labels_idx]
 
         if class_filter is not None:
             mask = torch.tensor([l in class_filter for l in labels], dtype=torch.bool)

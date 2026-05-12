@@ -75,7 +75,8 @@ class RetinaNetAdapter(BaseDetector):
         boxes = boxes[keep]
         scores = scores[keep]
         labels_idx = [l for l, k in zip(labels_idx, keep.tolist()) if k]
-        labels = [COCO_INSTANCE_CATEGORY_NAMES[i] if 0 <= i < len(COCO_INSTANCE_CATEGORY_NAMES) else "unknown"
+        from ..source_router import canonical_label as _canon
+        labels = [_canon(COCO_INSTANCE_CATEGORY_NAMES[i] if 0 <= i < len(COCO_INSTANCE_CATEGORY_NAMES) else "unknown")
                   for i in labels_idx]
 
         if class_filter is not None:
