@@ -56,7 +56,8 @@ def fuse_with_model(
     model.eval()
     g = graph.to(device)
     out = model(g)
-    obj_logits = out["objectness_logits"]
+    # TGraphXSourceRouter returns "quality_logits"; legacy returns "objectness_logits"
+    obj_logits = out.get("quality_logits", out.get("objectness_logits"))
     resid = (torch.sigmoid(obj_logits) - 0.5).cpu()
     box_reg = out["box_reg"].cpu()
 
