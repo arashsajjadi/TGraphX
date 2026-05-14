@@ -36,13 +36,47 @@ def train_fusion_model(
     objectness_weight: float = 1.0,
     class_weight: float = 0.5,
     box_weight: float = 0.0,
-    device: str = "cpu",
+    device: str = "auto",
     log_every: int = 1,
     use_source_router: bool = True,
+    detector_names: Optional[List[str]] = None,
+    utility_mode: str = "ap50",
+    class_agnostic: bool = True,
+    strict_source_router: bool = True,
 ) -> Tuple[Any, Dict[str, Any]]:
-    """Train TGraphXSourceRouter (default) or legacy DetectionFusionModel."""
+    """Train TGraphXSourceRouter (default) or legacy DetectionFusionModel.
+
+    Args:
+      detector_names: REQUIRED for V3. Must be non-empty and a list of strings.
+        Passing an empty list with V3 makes proposal nodes invisible to the
+        slot aggregator (no slot mapping), which silently collapses training
+        to the auxiliary heads only — the source-router fails to train.
+      utility_mode: AP-aware utility mode passed to _build_util_and_labels.
+        One of "iou" | "ap50" | "ap75" | "deployable" | "anchor_delta_ap50".
+      class_agnostic: false for multi-class — utility uses class-aware match.
+      strict_source_router: when True (default) and use_source_router=True,
+        the legacy objectness/class/box loss branch is disabled — any
+        unexpected fall-through raises instead of silently training a
+        different objective.
+    """
+    from .config import resolve_device, device_audit
+    device = resolve_device(device)
+    audit = device_audit(device, device)
+    import warnings
+    if audit["cuda_available"] and device == "cpu":
+        warnings.warn(
+            f"CUDA is available ({audit['gpu_name']}) but training on CPU. "
+            "Set device='auto' or device='cuda' in your config.", stacklevel=2
+        )
     if not train_graphs:
         raise ValueError("train_fusion_model: no training graphs")
+    if use_source_router and (detector_names is None or len(detector_names) == 0):
+        raise RuntimeError(
+            "train_fusion_model: detector_names is required for V3 source router. "
+            "Got None or empty. Pass detector_names=manifest['detector_names'] "
+            "from step 03's split_manifest.json. Passing an empty list silently "
+            "disables proposal-slot routing and trains the wrong objective."
+        )
     g0, _ = train_graphs[0]
     md = g0.metadata.get("node_metadata")
     metadata_dim = md.shape[1] if md is not None else None
@@ -69,6 +103,12 @@ def train_fusion_model(
     from .source_router import source_routing_loss
     from .source_router_v3 import TGraphXSourceRouterV3 as SRV3Class, source_slot_loss
     is_router = isinstance(model, SRV3Class)
+    if use_source_router and not is_router:
+        raise RuntimeError(
+            "train_fusion_model: use_source_router=True but constructed model is not "
+            f"TGraphXSourceRouterV3 (got {type(model).__name__}). Refusing to train "
+            "the legacy objectness loss against a router model."
+        )
 
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     history: Dict[str, Any] = {
@@ -86,8 +126,15 @@ def train_fusion_model(
             if meta.targets is None:
                 continue
             g = graph.to(device)
-            _det_names = meta.detector_names if hasattr(meta, "detector_names") else []
+            # Use the explicit detector_names argument. Do NOT fall back silently
+            # to an empty list — that path was the root cause of v8/v9 routing failure.
             if is_router:
+                _det_names = list(detector_names) if detector_names else []
+                if not _det_names:
+                    raise RuntimeError(
+                        "train_fusion_model: empty detector_names reached the train loop. "
+                        "Step 03 must record split_manifest['detector_names']."
+                    )
                 out = model(g, detector_names=_det_names)
             else:
                 out = model(g)
@@ -96,29 +143,49 @@ def train_fusion_model(
                 continue
 
             if is_router:
-                quality = out["quality_logits"]
-                iou_t = meta.targets.get("iou", torch.zeros(quality.shape[0])).to(device)
-                best_s = meta.targets.get("is_best_source", None)
-                cluster_of = meta.cluster_of_node.to(device)
-                n_clusters = int(cluster_of.max().item() + 1) if cluster_of.numel() > 0 else 0
-                best_src_pc = torch.full((n_clusters,), -1, dtype=torch.long, device=device)
-                for c in range(n_clusters):
-                    in_c = (cluster_of == c) & mask
-                    if not in_c.any():
-                        continue
-                    if best_s is not None:
-                        best_in_c = in_c & (best_s.to(device) > 0.5)
-                        if best_in_c.any():
-                            best_src_pc[c] = int(best_in_c.nonzero(as_tuple=False)[0].item())
-                            continue
-                    idx_c = in_c.nonzero(as_tuple=False).squeeze(-1)
-                    best_src_pc[c] = int(idx_c[iou_t[idx_c].argmax()].item())
-                ns = graph.metadata.get("node_score")
-                base_s = ns.to(device) if ns is not None else None
-                losses = source_routing_loss(quality, iou_t, best_src_pc, cluster_of, mask,
-                                              baseline_scores=base_s)
+                # V3 path: source_slot_loss on source_logits (not quality_logits)
+                from .multi_seed_v2 import _build_util_and_labels
+                src_logits = out.get("source_logits")
+                src_mask = out.get("source_mask")
+                if src_logits is None:
+                    continue
+                _det_names_list = list(_det_names) if _det_names else []
+                # GT boxes: try graph.metadata (stored by step 03), then meta attribute
+                if isinstance(graph.metadata, dict):
+                    gt_b = graph.metadata.get("gt_boxes", getattr(meta, "gt_boxes", None))
+                    gt_l = graph.metadata.get("gt_labels", getattr(meta, "gt_labels", None))
+                else:
+                    gt_b = getattr(meta, "gt_boxes", None)
+                    gt_l = getattr(meta, "gt_labels", None)
+                if gt_b is None or gt_l is None or gt_b.numel() == 0:
+                    continue
+                util_result = _build_util_and_labels(
+                    graph, meta, gt_b.to(device), gt_l.to(device),
+                    class_agnostic=class_agnostic, baseline_source="nms_candidate",
+                    utility_mode=utility_mode,
+                )
+                if util_result is None:
+                    continue
+                _, best_slot, bl_slot, ups, slot_avail = util_result
+                valid = (best_slot >= 0)
+                if not valid.any():
+                    continue
+                losses = source_slot_loss(
+                    src_logits[valid], src_mask[valid],
+                    best_slot[valid].to(device), ups[valid].to(device),
+                    baseline_slot=bl_slot[valid].to(device),
+                    regret_lambda=2.0,
+                )
                 loss = losses["total"]
+                if not loss.requires_grad:
+                    continue
             else:
+                if strict_source_router and use_source_router:
+                    raise RuntimeError(
+                        "Unexpected legacy loss branch under strict_source_router=True. "
+                        "The V3 router fell through; this would silently train objectness "
+                        "loss instead of source routing. Check is_router and src_logits."
+                    )
                 obj_target = meta.targets["objectness"].to(device)
                 cls_target = meta.targets["class"].to(device)
                 box_target = meta.targets["box_reg"].to(device)
@@ -174,7 +241,8 @@ def _evaluate_loss(
     w_box: float,
     is_router: bool = False,
 ) -> Tuple[float, float]:
-    from .source_router import source_routing_loss, TGraphXSourceRouter as SRClass
+    from .source_router import TGraphXSourceRouter as SRClass
+    from .source_router_v3 import TGraphXSourceRouterV3 as SRV3Class, source_slot_loss
     model.eval()
     total = 0.0
     n = 0
@@ -182,15 +250,45 @@ def _evaluate_loss(
     seen = 0
     with torch.no_grad():
         for graph, meta in graphs:
-            if meta.targets is None:
-                continue
             g = graph.to(device)
-            out = model(g)
+            _det_names = (meta.detector_names if hasattr(meta, "detector_names") else
+                          g.metadata.get("detector_names", []) if isinstance(g.metadata, dict) else [])
+            if isinstance(model, SRV3Class):
+                out = model(g, detector_names=list(_det_names) if _det_names else [])
+            else:
+                out = model(g)
             mask = _supervised_mask(meta).to(device)
-            if mask.sum() == 0:
-                continue
 
-            if is_router or isinstance(model, SRClass):
+            if isinstance(model, SRV3Class):
+                from .multi_seed_v2 import _build_util_and_labels
+                src_logits = out.get("source_logits")
+                src_mask_t = out.get("source_mask")
+                if src_logits is None: continue
+                # GT from graph.metadata (set by step 03)
+                if isinstance(graph.metadata, dict):
+                    gt_b = graph.metadata.get("gt_boxes", getattr(meta, "gt_boxes", None))
+                    gt_l = graph.metadata.get("gt_labels", getattr(meta, "gt_labels", None))
+                else:
+                    gt_b = getattr(meta, "gt_boxes", None)
+                    gt_l = getattr(meta, "gt_labels", None)
+                if gt_b is None or gt_l is None or gt_b.numel() == 0: continue
+                util_result = _build_util_and_labels(graph, meta, gt_b, gt_l, True, "nms_candidate")
+                if util_result is None: continue
+                _, best_slot, bl_slot, ups, _ = util_result
+                valid = (best_slot >= 0)
+                if not valid.any(): continue
+                losses = source_slot_loss(src_logits[valid], src_mask_t[valid],
+                                          best_slot[valid], ups[valid],
+                                          baseline_slot=bl_slot[valid])
+                loss = losses["total"]
+                total += float(loss.item()); n += 1
+                # Source slot accuracy for val
+                pred_slot = src_logits[valid].masked_fill(~src_mask_t[valid], float("-inf")).argmax(dim=-1)
+                correct += int((pred_slot == best_slot[valid]).sum().item())
+                seen += int(valid.sum().item())
+                continue
+            elif is_router or isinstance(model, SRClass):
+                from .source_router import source_routing_loss
                 quality = out["quality_logits"]
                 iou_t = meta.targets.get("iou", torch.zeros(quality.shape[0])).to(device)
                 cluster_of = meta.cluster_of_node.to(device)
@@ -199,13 +297,11 @@ def _evaluate_loss(
                 best_s = meta.targets.get("is_best_source", None)
                 for c in range(n_clusters):
                     in_c = (cluster_of == c) & mask
-                    if not in_c.any():
-                        continue
+                    if not in_c.any(): continue
                     if best_s is not None:
                         best_in_c = in_c & (best_s.to(device) > 0.5)
                         if best_in_c.any():
-                            best_src_pc[c] = int(best_in_c.nonzero(as_tuple=False)[0].item())
-                            continue
+                            best_src_pc[c] = int(best_in_c.nonzero(as_tuple=False)[0].item()); continue
                     idx_c = in_c.nonzero(as_tuple=False).squeeze(-1)
                     best_src_pc[c] = int(idx_c[iou_t[idx_c].argmax()].item())
                 losses = source_routing_loss(quality, iou_t, best_src_pc, cluster_of, mask)

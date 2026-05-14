@@ -149,16 +149,17 @@ def run_pipeline(config_path: str) -> Dict[str, Any]:
                 val_graphs=graphs_by_split["val"] or graphs_by_split["train"][:1],
                 num_classes=num_classes, num_detectors=num_detectors,
                 crop_size=crop_size,
-                crop_channels=cfg.get("model", {}).get("crop_channels", 32),
-                hidden_dim=cfg.get("model", {}).get("hidden_dim", 64),
+                crop_channels=cfg.get("model", {}).get("crop_channels", 16),
+                hidden_dim=cfg.get("model", {}).get("hidden_dim", 48),
                 num_message_passing=cfg.get("model", {}).get("num_message_passing", 2),
-                epochs=int(tcfg.get("epochs", 2)),
-                lr=float(tcfg.get("lr", 1e-3)),
+                epochs=int(tcfg.get("epochs", 8)),
+                lr=float(tcfg.get("lr", 5e-4)),
                 weight_decay=float(tcfg.get("weight_decay", 1e-4)),
                 objectness_weight=float(tcfg.get("objectness_weight", 1.0)),
                 class_weight=float(tcfg.get("class_weight", 0.5)),
-                box_weight=float(tcfg.get("box_weight", 1.0)),
+                box_weight=0.0,  # no regression by default
                 device=device,
+                use_source_router=bool(cfg.get("model", {}).get("use_source_router", True)),
             )
             write_json(history, out_dir / "training_history.json")
             plot_training_curves(history, out_dir / "figures" / "training_curves.png")

@@ -1,0 +1,69 @@
+run_name: real_voc200_multiclass
+seed: 42
+device: auto
+mode: REAL_EXPERIMENT
+experiment_type: real_voc
+
+dataset:
+  name: voc2007
+  voc_root: data/VOCdevkit
+  num_images: 200
+  num_classes: 20
+  image_size: [320, 320]
+  class_filter: null
+  split_policy: fixed_seed_subset
+
+detectors:
+  use_real: true
+  use_yolo: true
+  use_yoloe: false
+  use_rtdetr: true
+  use_retinanet: true
+  yolo_model: yolo11n.pt
+  rtdetr_source: ultralytics
+  rtdetr_model: rtdetr-l.pt
+  conf_threshold: 0.20
+  iou_threshold: 0.50
+
+graph:
+  cluster_iou_threshold: 0.5
+  crop_size: 64
+  max_proposals_per_image: 32
+  include_context_node: false
+  include_consensus_nodes: true
+
+model:
+  hidden_dim: 64
+  crop_channels: 16
+  num_message_passing: 2
+  use_source_router: true
+  strict_source_router: true
+
+training:
+  epochs: 50
+  batch_size: 1
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+  utility_mode: ap50
+  tau: 0.05
+  regret_lambda: 2.0
+  baseline_source: nms_candidate
+
+evaluation:
+  iou_match_threshold: 0.5
+  ap_iou_thresholds: [0.5, 0.75]
+  per_class_ap: true
+  class_agnostic: true
+
+score_calibration:
+  mode: auto
+  candidates:
+    - routing_prob
+    - routing_prob_times_base
+    - base_score
+  select_on: validation
+  freeze_for: test
+
+output:
+  run_dir_base: runs
+  reports_dir: reports

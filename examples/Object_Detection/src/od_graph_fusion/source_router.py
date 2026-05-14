@@ -85,13 +85,10 @@ def compute_source_utilities(
         cluster_mask: [N] bool — nodes eligible as candidates.
     """
     from .graph_builder import NODE_TYPES
+    from .candidate_mask import candidate_node_mask
     N = node_box.shape[0]
     utility = torch.zeros(N, dtype=torch.float32, device=node_box.device)
-    cand_mask = (
-        (node_types == NODE_TYPES["proposal"])
-        | (node_types == NODE_TYPES["cluster"])
-        | (node_types == NODE_TYPES["consensus"])
-    )
+    cand_mask = candidate_node_mask(node_types, NODE_TYPES)
 
     if gt_boxes.numel() == 0:
         return utility, torch.zeros(0, dtype=torch.long), cand_mask

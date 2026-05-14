@@ -1,0 +1,81 @@
+# Universal Candidate Node Selection — canonical experiment config
+#
+# Task: Object-level candidate-node classification.
+#   For each object hypothesis (cluster), build a graph of candidate
+#   detection boxes — one node per detector/fusion source.
+#   TGraphX uses tensor-aware ConvMP over crop nodes to select the best
+#   candidate per object.
+#
+# YOLO26X is not a publicly available checkpoint.
+# The strongest available YOLO in this environment is yolo11x.pt (reported honestly).
+#
+run_name: universal_candidate_voc_car
+seed: 42
+seeds: [0, 1, 2, 3, 4]
+device: auto
+mode: REAL_EXPERIMENT
+experiment_type: object_level_candidate_node_selection
+
+dataset:
+  name: voc2007
+  voc_root: data/VOCdevkit
+  num_images: 200
+  num_classes: 1
+  image_size: [320, 320]
+  class_filter: [car]
+  class_names: [car]
+  split_policy: fixed_seed_subset
+
+detectors:
+  use_real: true
+  use_yolo: true
+  use_yoloe: true
+  use_rtdetr: true
+  use_retinanet: true
+  use_faster_rcnn: true
+  use_ssd: true
+  # yolo11x is the highest-capacity publicly available YOLO in this environment.
+  # YOLO26X is NOT available; report as yolo_high_capacity (yolo11x).
+  yolo_model: yolo11x.pt
+  yoloe_model: yoloe-11s-seg.pt
+  rtdetr_source: ultralytics
+  rtdetr_model: rtdetr-l.pt
+  conf_threshold: 0.15
+  iou_threshold: 0.50
+  class_filter: [car]
+
+graph:
+  cluster_iou_threshold: 0.5
+  crop_size: 128
+  max_proposals_per_image: 64
+  include_context_node: false
+  include_consensus_nodes: true
+  object_level_export: true
+
+model:
+  # TGraphXCandidateNodeSelector: tensor-aware ConvMP + per-node heads
+  hidden_dim: 64
+  crop_channels: 16
+  num_message_passing: 2
+  use_message_passing: true
+  use_metadata: true
+  feature_mode: crop_metadata_mp    # paper-faithful default
+
+training:
+  epochs: 30
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+  lambda_selection: 1.0
+  lambda_tp50: 1.0
+  lambda_tp75: 2.0
+  lambda_iou: 0.5
+  lambda_rank: 0.5
+
+evaluation:
+  iou_match_threshold: 0.5
+  ap_iou_thresholds: [0.5, 0.75]
+  class_agnostic: true
+
+output:
+  run_dir_base: runs/universal_candidate
+  reports_dir: reports

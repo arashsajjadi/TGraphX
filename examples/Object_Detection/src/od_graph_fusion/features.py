@@ -103,10 +103,13 @@ def cluster_metadata(
     if 0 <= label_id < num_classes:
         cls_onehot[label_id] = 1.0
 
-    # Use 8-scalar layout but encode cluster-ness in is_proposal_flag = 0 and log_area channel reused
+    # detector_diversity stored in a dedicated scalar (index 7); det_onehot is
+    # all-zeros for fusion nodes (no single source detector). Previously this
+    # was incorrectly set to det_onehot * diversity, which broke the one-hot
+    # semantics. The diversity scalar is encoded separately in the log_n slot.
     scalar = torch.tensor([cx, cy, w, h, max_score, mean_score, log_n, 0.0],
                           dtype=torch.float32)
-    return torch.cat([scalar, det_onehot * diversity, cls_onehot], dim=0)
+    return torch.cat([scalar, det_onehot, cls_onehot], dim=0)
 
 
 def edge_feature_vector(

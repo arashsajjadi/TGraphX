@@ -42,7 +42,15 @@ NUM_EDGE_TYPES = len(EDGE_TYPES)
 
 # Node type IDs (encoded inside metadata so a single TGraphX Graph can hold
 # heterogeneous nodes).
-NODE_TYPES = {"proposal": 0, "cluster": 1, "consensus": 2, "context": 3, "nms_candidate": 4}
+NODE_TYPES = {
+    "proposal":               0,
+    "cluster":                1,
+    "consensus":              2,
+    "context":                3,
+    "nms_candidate":          4,
+    "soft_nms_candidate":     5,
+    "best_proposal_candidate": 6,
+}
 NUM_NODE_TYPES = len(NODE_TYPES)
 
 
@@ -256,10 +264,12 @@ def build_detection_graph(
             node_to_proposal.append(-1)
             node_cluster.append(c)
 
-    # ── NMS candidate nodes (one per cluster) ──────────────────────────
-    # NMS node = the proposal with highest base confidence per cluster.
-    # This lets TGraphX learn "keep NMS" vs "override NMS".
+    # ── NMS / Soft-NMS / BestProposal candidate nodes (one per cluster) ─
     nms_node_offsets = []
+    soft_nms_node_offsets: List[int] = []
+    best_proposal_node_offsets: List[int] = []
+    soft_nms_src_props: List[int] = []     # which proposal the soft-NMS node points to
+    best_proposal_src_props: List[int] = []
     if num_clusters > 0:
         for c in range(num_clusters):
             m = cluster_id == c
@@ -282,7 +292,58 @@ def build_detection_graph(
             all_crops.append(nms_crop)
             all_meta.append(nms_meta)
             node_types.append(NODE_TYPES["nms_candidate"])
-            node_to_proposal.append(nms_global)   # points to the actual proposal node
+            node_to_proposal.append(nms_global)
+            node_cluster.append(c)
+
+            # ── Soft-NMS candidate: Gaussian score decay, pick highest post-decay box ──
+            # For each proposal in cluster, decay its score by iou with top-score proposal.
+            # soft_scores[i] = score[i] * exp(-iou(i, nms_box)^2 / sigma)
+            # Then pick argmax of soft_scores as the soft-NMS representative.
+            _sigma = 0.5
+            boxes_c = proposal_boxes[idx_in_c]  # [K, 4]
+            nms_box = proposal_boxes[nms_global]  # [4]
+            # IoU between each box and the NMS box
+            _inter_x1 = torch.max(boxes_c[:, 0], nms_box[0])
+            _inter_y1 = torch.max(boxes_c[:, 1], nms_box[1])
+            _inter_x2 = torch.min(boxes_c[:, 2], nms_box[2])
+            _inter_y2 = torch.min(boxes_c[:, 3], nms_box[3])
+            _inter = (_inter_x2 - _inter_x1).clamp(min=0) * (_inter_y2 - _inter_y1).clamp(min=0)
+            _area_c = (boxes_c[:, 2] - boxes_c[:, 0]) * (boxes_c[:, 3] - boxes_c[:, 1])
+            _area_nms = (nms_box[2] - nms_box[0]) * (nms_box[3] - nms_box[1])
+            _union = _area_c + _area_nms - _inter
+            _iou = (_inter / (_union + 1e-6)).clamp(0, 1)
+            soft_scores = scores_in_c * torch.exp(-(_iou ** 2) / _sigma)
+            soft_local = int(soft_scores.argmax().item())
+            soft_global = int(idx_in_c[soft_local].item())
+            soft_crop = crop_tensor_from_image(image, proposal_boxes[soft_global], crop_size=crop_size)
+            soft_meta = proposal_metadata(
+                proposal_boxes[soft_global], float(soft_scores[soft_local].item()),
+                int(proposal_labels[soft_global].item()),
+                int(proposal_det_ids[soft_global].item()),
+                num_detectors, num_classes, image_size,
+            )
+            soft_nms_node_offsets.append(len(all_crops))
+            soft_nms_src_props.append(soft_global)
+            all_crops.append(soft_crop)
+            all_meta.append(soft_meta)
+            node_types.append(NODE_TYPES["soft_nms_candidate"])
+            node_to_proposal.append(soft_global)
+            node_cluster.append(c)
+
+            # ── BestProposal candidate: highest-score proposal (distinct token) ──
+            bp_crop = crop_tensor_from_image(image, proposal_boxes[nms_global], crop_size=crop_size)
+            bp_meta = proposal_metadata(
+                proposal_boxes[nms_global], float(proposal_scores[nms_global].item()),
+                int(proposal_labels[nms_global].item()),
+                int(proposal_det_ids[nms_global].item()),
+                num_detectors, num_classes, image_size,
+            )
+            best_proposal_node_offsets.append(len(all_crops))
+            best_proposal_src_props.append(nms_global)
+            all_crops.append(bp_crop)
+            all_meta.append(bp_meta)
+            node_types.append(NODE_TYPES["best_proposal_candidate"])
+            node_to_proposal.append(nms_global)
             node_cluster.append(c)
 
     context_node_idx = -1
@@ -432,6 +493,18 @@ def build_detection_graph(
             node_box[idx] = proposal_boxes[src_prop]
             node_label[idx] = proposal_labels[src_prop]
             node_score[idx] = proposal_scores[src_prop]
+    for ci, idx in enumerate(soft_nms_node_offsets):
+        src = soft_nms_src_props[ci]
+        if 0 <= src < proposal_boxes.shape[0]:
+            node_box[idx] = proposal_boxes[src]
+            node_label[idx] = proposal_labels[src]
+            node_score[idx] = proposal_scores[src]
+    for ci, idx in enumerate(best_proposal_node_offsets):
+        src = best_proposal_src_props[ci]
+        if 0 <= src < proposal_boxes.shape[0]:
+            node_box[idx] = proposal_boxes[src]
+            node_label[idx] = proposal_labels[src]
+            node_score[idx] = proposal_scores[src]
     if include_context_node and context_node_idx >= 0:
         node_box[context_node_idx] = torch.tensor(
             [0, 0, image_size[1] - 1, image_size[0] - 1], dtype=torch.float32)
@@ -558,10 +631,14 @@ def _build_targets_full(
     box_reg = torch.zeros(N, 4, dtype=torch.float32)
     iou_targets = torch.zeros(N, dtype=torch.float32)
     is_best_source = torch.zeros(N, dtype=torch.float32)
-    candidate_mask = (node_types == NODE_TYPES["proposal"]) \
-        | (node_types == NODE_TYPES["cluster"]) \
-        | (node_types == NODE_TYPES["consensus"]) \
+    candidate_mask = (
+        (node_types == NODE_TYPES["proposal"])
+        | (node_types == NODE_TYPES["cluster"])
+        | (node_types == NODE_TYPES["consensus"])
         | (node_types == NODE_TYPES["nms_candidate"])
+        | (node_types == NODE_TYPES["soft_nms_candidate"])
+        | (node_types == NODE_TYPES["best_proposal_candidate"])
+    )
 
     if gt_boxes.numel() == 0 or not candidate_mask.any():
         return {"objectness": objectness, "class": cls_targets,

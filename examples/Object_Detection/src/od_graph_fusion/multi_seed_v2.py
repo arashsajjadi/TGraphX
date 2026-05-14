@@ -54,13 +54,81 @@ def _attach_slot_metadata(g, meta, detector_names):
     slots[meta.node_types == NT["cluster"]] = SOURCE_SLOTS["wbf"]
     slots[meta.node_types == NT["consensus"]] = SOURCE_SLOTS["union"]
     slots[meta.node_types == NT.get("nms_candidate", 4)] = SOURCE_SLOTS.get("nms_candidate", 6)
+    if "soft_nms_candidate" in NT:
+        slots[meta.node_types == NT["soft_nms_candidate"]] = SOURCE_SLOTS.get("soft_nms", 7)
+    if "best_proposal_candidate" in NT:
+        slots[meta.node_types == NT["best_proposal_candidate"]] = SOURCE_SLOTS.get("best_proposal", 8)
     g.metadata["slot_assignments"] = slots
     g.metadata["cluster_of_raw"] = meta.cluster_of_node
     g.metadata["proposal_det_ids"] = meta.proposal_detector_ids
 
 
-def _build_util_and_labels(graph, meta, gt_b, gt_l, class_agnostic=True):
-    """Return (utility [N], best_slot [C], nms_slot [C], util_per_slot [C,S]) or None."""
+def _compute_node_ap_utility(
+    node_box: torch.Tensor,
+    node_label: torch.Tensor,
+    node_score: torch.Tensor,
+    gt_b: torch.Tensor,
+    gt_l: torch.Tensor,
+    class_agnostic: bool,
+    iou_thresh: float = 0.5,
+    tau: float = 0.05,
+    mode: str = "ap50",
+) -> torch.Tensor:
+    """Per-node AP-aware utility.
+
+    mode options:
+      "iou"         — continuous IoU (original, argmax != AP argmax when IoU<thresh)
+      "ap50"        — soft TP@0.50: sigmoid((IoU-0.5)/tau) * class_correct + 0.05*IoU
+      "ap75"        — soft TP@0.75: sigmoid((IoU-0.75)/tau) * class_correct + 0.05*IoU
+      "deployable"  — 0.60*ap50 + 0.20*ap75 + 0.20*iou
+    """
+    from .box_ops import box_iou
+    N = node_box.shape[0]
+    utility = torch.zeros(N, dtype=torch.float32)
+    if gt_b.numel() == 0:
+        return utility
+
+    # Ensure all tensors are on the same device (CPU for utility computation)
+    _nb = node_box.cpu(); _gt = gt_b.cpu(); _nl = node_label.cpu()
+    ious = box_iou(_nb, _gt)          # [N, G]
+    best_iou, best_gt = ious.max(dim=1)     # [N]
+
+    for ni in range(N):
+        iou = float(best_iou[ni].item())
+        g_idx = int(best_gt[ni].item())
+        cls_ok = class_agnostic or (int(_nl[ni].item()) == int(gt_l[g_idx].item()))
+
+        if mode == "iou":
+            utility[ni] = iou if cls_ok else 0.0
+        elif mode == "ap50":
+            soft_tp = torch.sigmoid(torch.tensor((iou - iou_thresh) / tau)).item()
+            utility[ni] = (soft_tp * float(cls_ok)) + 0.05 * iou
+        elif mode == "ap75":
+            soft_tp = torch.sigmoid(torch.tensor((iou - 0.75) / tau)).item()
+            utility[ni] = (soft_tp * float(cls_ok)) + 0.05 * iou
+        elif mode == "deployable":
+            soft50 = torch.sigmoid(torch.tensor((iou - 0.50) / tau)).item()
+            soft75 = torch.sigmoid(torch.tensor((iou - 0.75) / tau)).item()
+            u50 = (soft50 * float(cls_ok)) + 0.05 * iou
+            u75 = (soft75 * float(cls_ok)) + 0.05 * iou
+            utility[ni] = 0.60 * u50 + 0.20 * u75 + 0.20 * iou
+        else:
+            utility[ni] = iou if cls_ok else 0.0
+    return utility
+
+
+def _build_util_and_labels(graph, meta, gt_b, gt_l, class_agnostic=True,
+                           baseline_source: str = "nms_candidate",
+                           utility_mode: str = "ap50",
+                           iou_thresh: float = 0.5,
+                           tau: float = 0.05):
+    """Return (utility [N], best_slot [C], baseline_slot [C], util_per_slot [C,S],
+               slot_available_mask [C,S]) or None.
+
+    utility_mode: "iou" | "ap50" | "ap75" | "deployable"
+    util_per_slot uses -inf for absent slots.
+    slot_available_mask[c,s]=True iff at least one node in cluster c maps to slot s.
+    """
     node_box = graph.metadata.get("node_box")
     node_label = graph.metadata.get("node_label")
     node_score = graph.metadata.get("node_score")
@@ -68,16 +136,23 @@ def _build_util_and_labels(graph, meta, gt_b, gt_l, class_agnostic=True):
     if node_box is None or slots is None or gt_b.numel() == 0:
         return None
 
-    util, best_src_node, cand_mask = compute_source_utilities(
-        node_box, node_label, node_score, meta.cluster_of_node, meta.node_types,
-        gt_b, gt_l, class_agnostic=class_agnostic, iou_match=0.5,
+    from .graph_builder import NODE_TYPES as NT
+    from .candidate_mask import candidate_node_mask
+    cand_mask = candidate_node_mask(meta.node_types, NT)
+
+    util = _compute_node_ap_utility(
+        node_box, node_label, node_score if node_score is not None else torch.zeros(node_box.shape[0]),
+        gt_b, gt_l, class_agnostic, iou_thresh, tau, utility_mode,
     )
+
     cluster_of = meta.cluster_of_node
     n_clusters = int(cluster_of.max().item()) + 1 if cluster_of.numel() > 0 else 0
     S = NUM_SOURCES
     best_slot = torch.full((n_clusters,), -1, dtype=torch.long)
-    nms_slot = torch.full((n_clusters,), SOURCE_SLOTS.get("wbf", 5), dtype=torch.long)
-    util_per_slot = torch.zeros(n_clusters, S)
+    bl_default = SOURCE_SLOTS.get(baseline_source, SOURCE_SLOTS.get("nms_candidate", 6))
+    bl_slot = torch.full((n_clusters,), bl_default, dtype=torch.long)
+    raw_util = torch.full((n_clusters, S), float('-inf'))
+    slot_avail = torch.zeros(n_clusters, S, dtype=torch.bool)
 
     for c in range(n_clusters):
         in_c = (cluster_of == c) & cand_mask
@@ -88,17 +163,25 @@ def _build_util_and_labels(graph, meta, gt_b, gt_l, class_agnostic=True):
             s = int(slots[ni]) if ni < slots.shape[0] else -1
             if 0 <= s < S:
                 u = float(util[ni].item())
-                if u > util_per_slot[c, s].item():
-                    util_per_slot[c, s] = u
-        if util_per_slot[c].max() > 0:
-            best_slot[c] = int(util_per_slot[c].argmax().item())
-        # NMS/best-proposal → highest base score
-        if node_score is not None:
-            nms_local = int(idx_c[node_score[idx_c].argmax()].item())
-            nms_s = int(slots[nms_local]) if nms_local < slots.shape[0] else SOURCE_SLOTS.get("wbf", 5)
-            nms_slot[c] = max(0, nms_s)
+                slot_avail[c, s] = True
+                if raw_util[c, s].item() == float('-inf') or u > raw_util[c, s].item():
+                    raw_util[c, s] = u
+        avail_s = slot_avail[c].nonzero(as_tuple=False).squeeze(-1)
+        if avail_s.numel() > 0:
+            best_local = int(raw_util[c, avail_s].argmax().item())
+            best_slot[c] = int(avail_s[best_local].item())
+        bl_s = SOURCE_SLOTS.get(baseline_source, SOURCE_SLOTS.get("nms_candidate", 6))
+        if slot_avail[c, bl_s]:
+            bl_slot[c] = bl_s
+        else:
+            if node_score is not None:
+                nms_local = int(idx_c[node_score[idx_c].argmax()].item())
+                ns = int(slots[nms_local]) if nms_local < slots.shape[0] else bl_s
+                bl_slot[c] = max(0, ns)
 
-    return util, best_slot, nms_slot, util_per_slot
+    util_per_slot = raw_util.clone()
+    util_per_slot[~slot_avail] = 0.0
+    return util, best_slot, bl_slot, util_per_slot, slot_avail
 
 
 def run_one_seed_v2(
@@ -178,7 +261,7 @@ def run_one_seed_v2(
             labels = _build_util_and_labels(g, meta, rec.gt_boxes, rec.gt_labels, class_agnostic)
             if labels is None:
                 continue
-            _, best_slot, nms_slot, util_per_slot = labels
+            _, best_slot, nms_slot, util_per_slot, _slot_avail = labels
             gg = g.to(device)
             out = model(gg, detector_names=detector_names)
             sl = out.get("source_logits"); sm = out.get("source_mask"); ol = out.get("override_logits")
@@ -273,7 +356,7 @@ def run_one_seed_v2(
         if rec.gt_boxes.numel() == 0: continue
         labels = _build_util_and_labels(g, meta, rec.gt_boxes, rec.gt_labels, class_agnostic)
         if labels is None: continue
-        util, best_slot, nms_slot, util_per_slot = labels
+        util, best_slot, nms_slot, util_per_slot, _slot_avail = labels
         node_score = g.metadata.get("node_score")
         node_box = g.metadata.get("node_box")
         cluster_of = meta.cluster_of_node
@@ -297,7 +380,7 @@ def run_one_seed_v2(
         if rec.gt_boxes.numel() == 0: continue
         labels = _build_util_and_labels(g, meta, rec.gt_boxes, rec.gt_labels, class_agnostic)
         if labels is None: continue
-        _, best_slot, _, _ = labels
+        _, best_slot, _, _, _ = labels
         slots = g.metadata.get("slot_assignments")
         if slots is None: continue
         cluster_of = meta.cluster_of_node
@@ -330,10 +413,9 @@ def run_one_seed_v2(
         if rec.gt_boxes.numel() == 0: continue
         labels = _build_util_and_labels(g, meta, rec.gt_boxes, rec.gt_labels, class_agnostic)
         if labels is None: continue
-        util, _, _, _ = labels
-        cand_mask = ((meta.node_types == NODE_TYPES["proposal"]) |
-                     (meta.node_types == NODE_TYPES["cluster"]) |
-                     (meta.node_types == NODE_TYPES["consensus"]))
+        util, _, _, _, _ = labels
+        from .candidate_mask import candidate_node_mask
+        cand_mask = candidate_node_mask(meta.node_types, NODE_TYPES)
         if cand_mask.any():
             max_util = float(util[cand_mask].max().item())
             oracle_ious.append(max_util)

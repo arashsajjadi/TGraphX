@@ -76,11 +76,30 @@ def test_nms_node_box_equals_highest_score_proposal():
         )
 
 
+def test_soft_nms_node_exists_in_graph():
+    """Every cluster must have exactly one soft-NMS node."""
+    image = torch.rand(3, 64, 64)
+    d0 = _make_det("yolo_modern"); d1 = _make_det("retinanet", seed=2)
+    gt = torch.tensor([[5., 5., 25., 25.]]); gtl = torch.tensor([0])
+    res = [d0.predict(image, "img", gt_boxes=gt, gt_labels=gtl),
+           d1.predict(image, "img", gt_boxes=gt, gt_labels=gtl)]
+    g, meta = build_detection_graph(
+        image, "img", (64, 64), res, ["yolo_modern", "retinanet"], ["car"],
+        crop_size=16, max_proposals=8, include_context_node=False, include_consensus_nodes=True,
+        is_training=False,
+    )
+    soft_count = (meta.node_types == NODE_TYPES["soft_nms_candidate"]).sum().item()
+    bp_count = (meta.node_types == NODE_TYPES["best_proposal_candidate"]).sum().item()
+    assert soft_count == meta.num_clusters, f"Expected {meta.num_clusters} soft-NMS nodes, got {soft_count}"
+    assert bp_count == meta.num_clusters, f"Expected {meta.num_clusters} BestProposal nodes, got {bp_count}"
+
+
 def test_slot_aliases_all_resolve():
     aliases = {
         "yoloe": 1, "yolo_open_vocab": 1, "rtdetr": 2, "rt_detr": 2,
         "retinanet": 3, "retina": 3, "nms_candidate": 6, "nms": 6,
-        "best_proposal": 6, "yolo_modern": 0,
+        "soft_nms": 7, "soft_nms_candidate": 7,
+        "best_proposal": 8, "best_proposal_candidate": 8, "yolo_modern": 0,
     }
     for name, expected in aliases.items():
         got = detector_name_to_slot(name)

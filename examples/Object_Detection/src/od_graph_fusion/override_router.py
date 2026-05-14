@@ -169,8 +169,8 @@ class NMSOverrideRouter(nn.Module):
 
             n_clusters = int(cluster_of.to(device).max().item()) + 1 if cluster_of.numel() > 0 else 0
             if n_clusters > 0:
-                slot_emb, slot_mask = self.slot_agg(node_emb, cluster_of.to(device),
-                                                     slot_of, n_clusters)
+                slot_emb, slot_mask, _slot_node_idx = self.slot_agg(node_emb, cluster_of.to(device),
+                                                                     slot_of, n_clusters)
                 attn_out, _ = self.slot_attn(slot_emb, slot_emb, slot_emb,
                                               key_padding_mask=~slot_mask)
                 slot_emb2 = self.slot_norm(slot_emb + attn_out)  # [C, S, hidden]

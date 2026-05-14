@@ -1,0 +1,52 @@
+run_name: voc2007_fixed_200
+seed: 42
+device: auto
+fast_mode: false
+mode: DEV_EXPERIMENT
+
+dataset:
+  name: synthetic_voc_like
+  num_images: 200
+  num_classes: 4
+  image_size: [64, 64]
+  split_policy: fixed_seed_subset
+
+detectors:
+  use_real: false
+  use_synthetic: true
+  synthetic_jitter_per_detector: [0.04, 0.12, 0.20, 0.36]
+
+graph:
+  cluster_iou_threshold: 0.5
+  crop_size: 16
+  max_proposals_per_image: 8
+  include_context_node: false
+  include_consensus_nodes: true
+
+fusion:
+  mode: selector
+  score_mode: logits
+  residual_alpha: 0.0
+
+model:
+  hidden_dim: 48
+  crop_channels: 8
+  num_message_passing: 2
+  use_source_router: true
+
+training:
+  epochs: 50
+  batch_size: 4
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+  objectness_weight: 1.0
+  class_weight: 0.5
+  box_weight: 0.0
+
+evaluation:
+  iou_match_threshold: 0.5
+  ap_iou_thresholds: [0.5]
+  class_agnostic: true
+
+output:
+  run_dir_base: runs

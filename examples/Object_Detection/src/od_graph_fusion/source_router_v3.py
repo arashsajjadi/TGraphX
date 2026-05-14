@@ -26,19 +26,23 @@ import torch.nn.functional as F
 
 from tgraphx import ConvMessagePassing, Graph
 
-# Source slot definitions
+# ── Universal source-slot definitions ────────────────────────────────────
+# Every fusion method and raw detector is a real candidate source.
 SOURCE_SLOTS: Dict[str, int] = {
-    "yolo_modern":    0,
-    "yolo_open_vocab":1,
-    "rt_detr":        2,
-    "retinanet":      3,
-    "union":          4,   # Union/consensus nodes
-    "wbf":            5,   # WBF/cluster nodes
-    "nms_candidate":  6,   # Optional NMS/best-proposal candidate
+    "yolo_modern":      0,   # YOLO / YOLO26 fallback
+    "yolo_open_vocab":  1,   # YOLOE / YOLO-World / open-vocabulary
+    "rt_detr":          2,   # RT-DETR / DETR-family transformer
+    "retinanet":        3,   # RetinaNet anchor-based CNN
+    "union":            4,   # Geometric union box
+    "wbf":              5,   # Weighted Boxes Fusion
+    "nms_candidate":    6,   # NMS highest-confidence candidate
+    "soft_nms":         7,   # Soft-NMS decayed candidate
+    "best_proposal":    8,   # Highest-calibrated-score proposal
+    "calibrated_consensus": 9,  # Optional score-calibrated consensus
 }
-NUM_SOURCES = 7  # 0..6
+NUM_SOURCES = 10  # 0..9
 
-# Detector name → source slot (comprehensive aliases)
+# Detector / node name → source slot (comprehensive aliases)
 _DETECTOR_TO_SLOT: Dict[str, int] = {
     # YOLO modern family (slot 0)
     "yolo_modern": 0, "yolo11n": 0, "yolo11s": 0, "yolo11m": 0, "yolo11x": 0,
@@ -53,8 +57,13 @@ _DETECTOR_TO_SLOT: Dict[str, int] = {
     # RetinaNet family (slot 3)
     "retinanet": 3, "retina": 3, "retina_net": 3,
     "retinanet_synthetic": 3,
-    # NMS/best-proposal (slot 6)
-    "nms_candidate": 6, "nms": 6, "best_proposal": 6,
+    # Fusion methods (slots 4–9)
+    "union": 4, "consensus": 4,
+    "wbf": 5, "weighted_boxes_fusion": 5, "cluster": 5,
+    "nms_candidate": 6, "nms": 6,
+    "soft_nms": 7, "soft_nms_candidate": 7,
+    "best_proposal": 8, "best_proposal_candidate": 8,
+    "calibrated_consensus": 9,
 }
 
 
@@ -105,35 +114,74 @@ class SourceSlotAggregator(nn.Module):
         cluster_of: torch.Tensor,       # [N] long
         node_source_slot: torch.Tensor, # [N] long (-1 for non-candidate)
         n_clusters: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Returns:
-            slot_emb: [n_clusters, S, embed_dim]
-            slot_mask: [n_clusters, S] bool — True if slot has a node
+        node_score: Optional[torch.Tensor] = None,  # [N] base confidence for top-score agg
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Vectorized scatter aggregation — no Python loop, no .item() sync.
+
+        Returns:
+            slot_emb:      [n_clusters, S, embed_dim]
+            slot_mask:     [n_clusters, S] bool — True if slot has a node
+            slot_node_idx: [n_clusters, S] long — EXACT node index per slot
         """
         device = node_emb.device
+        N = node_emb.shape[0]
         S = self.num_sources
         D = self.embed_dim
 
-        slot_emb = self.absent_emb.unsqueeze(0).unsqueeze(0).expand(n_clusters, S, D).clone()
-        slot_mask = torch.zeros(n_clusters, S, dtype=torch.bool, device=device)
+        slot_emb    = self.absent_emb.unsqueeze(0).unsqueeze(0).expand(n_clusters, S, D).clone()
+        slot_mask   = torch.zeros(n_clusters, S, dtype=torch.bool, device=device)
+        slot_node_idx = torch.full((n_clusters, S), -1, dtype=torch.long, device=device)
 
-        # Fill slots from actual nodes
-        for n_idx in range(node_emb.shape[0]):
-            c = int(cluster_of[n_idx].item())
-            s = int(node_source_slot[n_idx].item())
-            if c < 0 or c >= n_clusters or s < 0 or s >= S:
-                continue
-            # Take the first or max-norm node embedding per slot
-            # (in practice, usually 1 proposal per detector per cluster)
-            if not slot_mask[c, s]:
-                slot_emb[c, s] = node_emb[n_idx]
-                slot_mask[c, s] = True
-            else:
-                # Max-norm aggregation (no GT needed)
-                if node_emb[n_idx].norm() > slot_emb[c, s].norm():
-                    slot_emb[c, s] = node_emb[n_idx]
+        if N == 0:
+            return slot_emb, slot_mask, slot_node_idx
 
-        return slot_emb, slot_mask
+        # Valid nodes: cluster in [0, n_clusters) and slot in [0, S)
+        valid = (cluster_of >= 0) & (cluster_of < n_clusters) & \
+                (node_source_slot >= 0) & (node_source_slot < S)
+        if not valid.any():
+            return slot_emb, slot_mask, slot_node_idx
+
+        v_idx   = valid.nonzero(as_tuple=False).squeeze(-1)   # [V]
+        v_c     = cluster_of[v_idx]                            # [V]
+        v_s     = node_source_slot[v_idx]                      # [V]
+        v_emb   = node_emb[v_idx]                              # [V, D]
+        v_score = node_score[v_idx] if node_score is not None \
+                  else torch.zeros(v_idx.shape[0], device=device)
+
+        # Flat index into [n_clusters, S] grid
+        flat_idx = v_c * S + v_s                               # [V]
+        n_flat   = n_clusters * S
+
+        # For each (cluster, slot) cell, keep the node with highest score.
+        # Deterministic tie-breaking: encode (score, node_index) as a single float
+        # key = score + node_idx * eps, so equal scores resolve to HIGHEST node index.
+        # This is deterministic on both CPU and CUDA.
+        eps_tiebreak = 1e-7 / max(1, N)  # small enough not to affect score ordering
+        key = v_score.float() + v_idx.float() * eps_tiebreak
+
+        best_key_flat = torch.full((n_flat,), float("-inf"), device=device)
+        best_key_flat.scatter_reduce_(0, flat_idx, key, reduce="amax", include_self=True)
+
+        # Winner is the node whose key matches the cell's best key (deterministic)
+        wins = (key >= best_key_flat[flat_idx] - 1e-9)  # tiny tolerance for fp precision
+        winner_node_flat = torch.full((n_flat,), -1, dtype=torch.long, device=device)
+        winner_node_flat.scatter_(0, flat_idx[wins], v_idx[wins])
+
+        # Cells that have at least one valid node
+        has_node = winner_node_flat >= 0                       # [n_flat]
+        has_node_2d = has_node.view(n_clusters, S)             # [C, S]
+        slot_mask[:] = has_node_2d
+        slot_node_idx[:] = winner_node_flat.view(n_clusters, S)
+
+        # Scatter winner embeddings
+        winner_cells = has_node.nonzero(as_tuple=False).squeeze(-1)  # cells with nodes
+        if winner_cells.numel() > 0:
+            w_ni = winner_node_flat[winner_cells]              # node indices
+            w_c  = winner_cells // S
+            w_s  = winner_cells %  S
+            slot_emb[w_c, w_s] = node_emb[w_ni]
+
+        return slot_emb, slot_mask, slot_node_idx
 
 
 class TGraphXSourceRouterV3(nn.Module):
@@ -200,7 +248,7 @@ class TGraphXSourceRouterV3(nn.Module):
         self.source_head = nn.Linear(hidden_dim, 1)  # score per slot
 
         # Override head: P(override base_source = NMS) — optional
-        self.override_head = nn.Linear(hidden_dim, 1)
+        # override_head removed: V3 uses pure source_slot routing, not binary override
 
         # Auxiliary per-node quality head (for backward compat)
         self.quality_head = nn.Linear(hidden_dim, 1)
@@ -213,14 +261,20 @@ class TGraphXSourceRouterV3(nn.Module):
         proposal_det_ids: torch.Tensor, # [N] (-1 for non-proposal)
         detector_names: List[str],
     ) -> torch.Tensor:
-        """Map each node to a source slot index."""
+        """Map every node to a source slot index (forward-time, complete mapping).
+
+        This runs INSIDE model.forward, so the slot_mask built from these slots
+        is the authoritative visibility mask for SourceSlotAggregator.
+        """
         from .graph_builder import NODE_TYPES
         N = node_types.shape[0]
         slots = torch.full((N,), -1, dtype=torch.long, device=node_types.device)
         for i in range(N):
             nt = int(node_types[i].item())
             if nt == NODE_TYPES["proposal"]:
-                d = int(proposal_det_ids[i].item()) if proposal_det_ids is not None else -1
+                d = (int(proposal_det_ids[i].item())
+                     if proposal_det_ids is not None and i < proposal_det_ids.shape[0]
+                     else -1)
                 if 0 <= d < len(detector_names):
                     slot = detector_name_to_slot(detector_names[d])
                     slots[i] = slot
@@ -228,6 +282,15 @@ class TGraphXSourceRouterV3(nn.Module):
                 slots[i] = SOURCE_SLOTS["wbf"]
             elif nt == NODE_TYPES["consensus"]:
                 slots[i] = SOURCE_SLOTS["union"]
+            elif "nms_candidate" in NODE_TYPES and nt == NODE_TYPES["nms_candidate"]:
+                slots[i] = SOURCE_SLOTS["nms_candidate"]
+            elif "soft_nms_candidate" in NODE_TYPES and nt == NODE_TYPES["soft_nms_candidate"]:
+                slots[i] = SOURCE_SLOTS["soft_nms"]
+            elif "best_proposal_candidate" in NODE_TYPES and nt == NODE_TYPES["best_proposal_candidate"]:
+                slots[i] = SOURCE_SLOTS["best_proposal"]
+            elif "calibrated_consensus" in NODE_TYPES and nt == NODE_TYPES["calibrated_consensus"]:
+                slots[i] = SOURCE_SLOTS["calibrated_consensus"]
+            # context nodes and unknown types stay at -1 — not candidate sources
         return slots
 
     def forward(
@@ -281,9 +344,12 @@ class TGraphXSourceRouterV3(nn.Module):
             )
             n_clusters = int(cluster_of.max().item()) + 1 if cluster_of.numel() > 0 else 0
             if n_clusters > 0:
-                # Aggregate node embeddings into source slots
-                slot_emb, slot_mask = self.slot_agg(node_emb, cluster_of.to(device),
-                                                      slot_assignments, n_clusters)
+                # Aggregate node embeddings into source slots (top-calibrated-score)
+                node_score_t = graph.metadata.get("node_score") if isinstance(graph.metadata, dict) else None
+                ns = node_score_t.to(device) if node_score_t is not None else None
+                slot_emb, slot_mask, slot_node_idx = self.slot_agg(
+                    node_emb, cluster_of.to(device), slot_assignments, n_clusters, ns
+                )
                 # slot_emb: [n_clusters, S, hidden]
                 # Attention over slots to get context-aware embeddings
                 attn_out, _ = self.slot_attn(slot_emb, slot_emb, slot_emb,
@@ -297,11 +363,14 @@ class TGraphXSourceRouterV3(nn.Module):
 
                 source_mask = slot_mask  # [n_clusters, S] bool
                 source_logits_for_override = source_logits.clone()
+                # Store slot_node_idx in output so fuse_v3 uses the EXACT aggregated node
+                if isinstance(graph.metadata, dict):
+                    graph.metadata["_slot_node_idx"] = slot_node_idx
 
                 # Override logit: aggregate over available slots
                 available = slot_emb2[slot_mask]  # [num_available, hidden]
                 if available.shape[0] > 0:
-                    pass  # override head applied per-cluster below
+                    pass  # no binary override in V3 — source_head handles routing
 
         return {
             "source_logits": source_logits,         # [C, S] or None
@@ -328,11 +397,15 @@ def source_slot_loss(
     beta_kl: float = 5.0,
     pairwise_weight: float = 0.5,
     regret_lambda: float = 1.0,
-    baseline_slot: Optional[torch.Tensor] = None,  # [C] — NMS slot for regret
+    baseline_slot: Optional[torch.Tensor] = None,
+    source_class_weights: Optional[torch.Tensor] = None,  # [S] balance vector
+    focal_gamma: float = 0.0,   # >0 adds focal-loss-style down-weighting
 ) -> Dict[str, torch.Tensor]:
-    """Source-slot loss for TGraphXSourceRouterV3.
+    """Source-slot loss with class-balanced CE + optional focal weighting.
 
-    Training objective matches inference: argmax(masked_source_logits).
+    source_class_weights: inverse-frequency weights per slot.
+      Computed from oracle distribution and passed in to upweight rare sources.
+    focal_gamma: gamma > 0 applies (1-p_t)^gamma focus on hard clusters.
     """
     device = source_logits.device
     C, S = source_logits.shape
@@ -344,60 +417,65 @@ def source_slot_loss(
         return {"total": z, "ce": z, "kl": z, "pairwise": z}
 
     per_cluster_losses = []
-    regret_weights = []
 
     for c in valid_idx.tolist():
         bs = int(best_source_slot[c].item())
-        log_c = source_logits[c]           # [S]
-        util_c = utility_per_slot[c]       # [S]
-        mask_c = source_mask[c]            # [S]
+        log_c = source_logits[c]
+        util_c = utility_per_slot[c]
+        mask_c = source_mask[c]
 
-        # Only available slots
         avail = mask_c.nonzero(as_tuple=False).squeeze(-1)
         if avail.numel() == 0:
             continue
         local_log = log_c[avail]
         local_util = util_c[avail]
 
-        # Find local index of best source
         local_best = (avail == bs).nonzero(as_tuple=False)
         if local_best.numel() == 0:
             continue
         local_best_idx = int(local_best[0].item())
 
-        # CE loss
-        ce = F.cross_entropy(local_log.unsqueeze(0),
-                               torch.tensor([local_best_idx], device=device))
+        # Balanced CE: weight by inverse oracle frequency for this slot
+        slot_weight = 1.0
+        if source_class_weights is not None and bs < source_class_weights.shape[0]:
+            slot_weight = float(source_class_weights[bs].item())
+        ce_raw = F.cross_entropy(local_log.unsqueeze(0),
+                                  torch.tensor([local_best_idx], device=device),
+                                  reduction="none")
+        # Focal: down-weight easy predictions, focus on hard ones
+        if focal_gamma > 0:
+            p_t = float(torch.softmax(local_log, dim=0)[local_best_idx].item())
+            focal_w = (1.0 - p_t) ** focal_gamma
+        else:
+            focal_w = 1.0
+        ce = slot_weight * focal_w * ce_raw.mean()
 
         # KL utility soft labels
         soft = F.softmax(beta_kl * local_util.float(), dim=0)
         kl = F.kl_div(F.log_softmax(local_log, dim=0), soft, reduction="sum")
 
-        # Pairwise ranking
+        # Pairwise ranking (vectorized over local slots)
         Nc = avail.numel()
         pw = torch.tensor(0.0, device=device)
-        n_pairs = 0
-        for ai in range(Nc):
-            for bi in range(ai + 1, Nc):
-                da = local_util[ai].item(); db = local_util[bi].item()
-                if abs(da - db) < 1e-6:
-                    continue
-                sa = local_log[ai]; sb = local_log[bi]
-                pw += F.softplus(sb - sa) if da > db else F.softplus(sa - sb)
-                n_pairs += 1
-        if n_pairs > 0:
-            pw = pw / n_pairs
+        if Nc > 1:
+            n_pairs = 0
+            for ai in range(Nc):
+                for bi in range(ai + 1, Nc):
+                    da = local_util[ai].item(); db = local_util[bi].item()
+                    if abs(da - db) < 1e-6: continue
+                    pw += F.softplus(local_log[bi] - local_log[ai]) if da > db \
+                          else F.softplus(local_log[ai] - local_log[bi])
+                    n_pairs += 1
+            if n_pairs > 0: pw = pw / n_pairs
 
         # Per-cluster regret weight
         regret = 0.0
         if baseline_slot is not None:
             base = int(baseline_slot[c].item())
             base_util = float(util_c[base].item()) if 0 <= base < S and mask_c[base] else 0.0
-            oracle_util = float(util_c[bs].item())
-            regret = max(0.0, oracle_util - base_util)
-        regret_weights.append(regret)
-
+            regret = max(0.0, float(util_c[bs].item()) - base_util)
         w_c = 1.0 + regret_lambda * regret
+
         per_cluster_losses.append(w_c * (ce + 0.5 * kl + pairwise_weight * pw))
 
     if not per_cluster_losses:
@@ -406,6 +484,41 @@ def source_slot_loss(
 
     total = torch.stack(per_cluster_losses).mean()
     return {"total": total, "n_valid": len(per_cluster_losses)}
+
+
+def compute_source_class_weights(
+    best_slots: List[torch.Tensor],
+    num_sources: int = NUM_SOURCES,
+    min_weight: float = 0.5,
+    max_weight: float = 5.0,
+) -> torch.Tensor:
+    """Compute inverse-frequency class weights for balanced CE.
+
+    Args:
+        best_slots: list of [C] tensors (oracle slot per cluster, from training set)
+        Returns [S] weight tensor, higher for rare oracle sources.
+    """
+    counts = torch.zeros(num_sources, dtype=torch.float)
+    for bs in best_slots:
+        valid = bs[(bs >= 0) & (bs < num_sources)]
+        for s in valid.tolist():
+            counts[s] += 1.0
+    total = counts.sum().item()
+    if total == 0:
+        return torch.ones(num_sources)
+    freq = counts / total
+    # w = 1/freq, normalized so mean = 1.0, clamped to [min_weight, max_weight]
+    weights = torch.zeros(num_sources)
+    for s in range(num_sources):
+        if counts[s] > 0:
+            weights[s] = (1.0 / freq[s]).clamp(min_weight, max_weight)
+        else:
+            weights[s] = max_weight  # never-seen oracle gets max weight (push to select)
+    # Normalize to mean=1 over non-zero slots
+    present = weights > 0
+    if present.any():
+        weights[present] = weights[present] / weights[present].mean()
+    return weights
 
 
 def build_source_slot_labels(
@@ -440,34 +553,36 @@ def build_source_slot_labels(
 
         n_clusters = int(meta.cluster_of_node.max().item()) + 1 if meta.cluster_of_node.numel() > 0 else 0
         for c in range(n_clusters):
-            # Which nodes are in this cluster?
             in_c = (meta.cluster_of_node == c) & cand_mask
             if not in_c.any():
                 continue
             idx_c = in_c.nonzero(as_tuple=False).squeeze(-1)
 
-            # Map nodes to source slots and aggregate utility by max
-            util_per_slot = torch.full((NUM_SOURCES,), float('-inf'))
+            # -inf for absent slots; do NOT clamp before availability check
+            raw_util = torch.full((NUM_SOURCES,), float('-inf'))
             for ni in idx_c.tolist():
                 s = int(slot_assignments[ni].item()) if ni < slot_assignments.shape[0] else -1
                 if 0 <= s < NUM_SOURCES:
-                    util_per_slot[s] = max(util_per_slot[s].item(), util[ni].item())
-            util_per_slot = util_per_slot.clamp(min=0)
+                    raw_util[s] = max(raw_util[s].item(), util[ni].item())
 
-            # Best source slot = argmax utility over available slots
-            avail_mask = util_per_slot > float('-inf')
+            # Availability = slots that have at least one real node
+            avail_mask = torch.isfinite(raw_util)
             if not avail_mask.any():
                 continue
-            best_slot = int(util_per_slot[avail_mask].argmax().item())
-            # Remap local idx to global slot
             avail_idx = avail_mask.nonzero(as_tuple=False).squeeze(-1)
-            best_slot_global = int(avail_idx[best_slot].item())
+            best_local = int(raw_util[avail_idx].argmax().item())
+            best_slot_global = int(avail_idx[best_local].item())
+
+            # util_per_slot: absent → 0 (for loss computation); availability tracked separately
+            util_per_slot = raw_util.clone()
+            util_per_slot[~avail_mask] = 0.0
 
             results.append({
                 "cluster": c, "image_id": meta.image_id,
                 "best_source_slot": best_slot_global,
                 "utility_per_slot": util_per_slot,
-                "baseline_slot": SOURCE_SLOTS.get("wbf", 5),
+                "source_mask": avail_mask,
+                "baseline_slot": SOURCE_SLOTS.get("nms_candidate", 6),
             })
     return results
 
@@ -509,10 +624,15 @@ def fuse_v3(
                 d = int(prop_det_ids[i].item()) if i < prop_det_ids.shape[0] else -1
                 if 0 <= d < len(detector_names or []):
                     all_slots[i] = detector_name_to_slot((detector_names or [])[d])
-            # Cluster nodes → WBF slot
             nt = meta.node_types
             all_slots[nt == NODE_TYPES["cluster"]] = SOURCE_SLOTS["wbf"]
             all_slots[nt == NODE_TYPES["consensus"]] = SOURCE_SLOTS["union"]
+            if NODE_TYPES.get("nms_candidate") is not None:
+                all_slots[nt == NODE_TYPES["nms_candidate"]] = SOURCE_SLOTS.get("nms_candidate", 6)
+            if NODE_TYPES.get("soft_nms_candidate") is not None:
+                all_slots[nt == NODE_TYPES["soft_nms_candidate"]] = SOURCE_SLOTS.get("soft_nms", 7)
+            if NODE_TYPES.get("best_proposal_candidate") is not None:
+                all_slots[nt == NODE_TYPES["best_proposal_candidate"]] = SOURCE_SLOTS.get("best_proposal", 8)
             g.metadata["proposal_det_ids"] = prop_det_ids.to(device)
             g.metadata["slot_assignments"] = all_slots.to(device)
 
@@ -528,11 +648,8 @@ def fuse_v3(
             r["trace"] = []
         return r
 
-    cand_mask = (
-        (meta.node_types == NODE_TYPES["proposal"])
-        | (meta.node_types == NODE_TYPES["cluster"])
-        | (meta.node_types == NODE_TYPES["consensus"])
-    )
+    from .candidate_mask import candidate_node_mask
+    cand_mask = candidate_node_mask(meta.node_types, NODE_TYPES)
     cluster_of = meta.cluster_of_node
 
     final_boxes: List[torch.Tensor] = []
@@ -561,31 +678,42 @@ def fuse_v3(
             chosen_slot = int(available_slots[best_local].item())
             chosen_score = float(sl[chosen_slot].item())
 
-            # Find the node in this cluster that belongs to chosen_slot
-            in_c = (cluster_of == c) & cand_mask
-            if not in_c.any():
-                continue
-            idx_c = in_c.nonzero(as_tuple=False).squeeze(-1)
+            # Use slot_node_idx for EXACT node — no mismatch possible
+            slot_node_idx = g.metadata.get("_slot_node_idx")
             chosen_idx = None
-            if slot_assignments is not None:
-                for ni in idx_c.tolist():
-                    if ni < slot_assignments.shape[0] and int(slot_assignments[ni].item()) == chosen_slot:
-                        chosen_idx = ni
-                        break
+            if slot_node_idx is not None and c < slot_node_idx.shape[0] and chosen_slot < slot_node_idx.shape[1]:
+                ni = int(slot_node_idx[c, chosen_slot].item())
+                if ni >= 0:
+                    chosen_idx = ni
             if chosen_idx is None:
-                # Fallback: use node with highest base score in cluster
-                chosen_idx = int(idx_c[(node_score or torch.zeros_like(meta.cluster_score))[idx_c].argmax()])
+                # Fallback: search by slot assignment
+                in_c = (cluster_of == c) & cand_mask
+                if not in_c.any():
+                    continue
+                idx_c = in_c.nonzero(as_tuple=False).squeeze(-1)
+                if slot_assignments is not None:
+                    for ni in idx_c.tolist():
+                        if ni < slot_assignments.shape[0] and int(slot_assignments[ni].item()) == chosen_slot:
+                            chosen_idx = ni; break
+                if chosen_idx is None:
+                    chosen_idx = int(idx_c[0].item())
 
-            if chosen_score < keep_threshold:
-                continue
+            # V3: never drop on raw logit — logits are unbounded and uncalibrated.
+            # Dropping only happens in legacy path or when no valid node found.
 
             box = node_box[chosen_idx].clone()
             label = int(node_label[chosen_idx].item())
             base_s = float(node_score[chosen_idx].item()) if node_score is not None else 0.0
             quality_s = float(out["quality_logits"][chosen_idx].item())
+            # Routing-calibrated score: sigmoid(source_logit) * max(base_s, 0.1).
+            # sigmoid(source_logit) ranks clusters by routing confidence — clusters
+            # where the model is certain about the chosen source rank higher, which
+            # makes TP predictions outrank FP predictions from uncertain clusters.
+            routing_prob = float(torch.sigmoid(torch.tensor(chosen_score)).item())
+            final_score = max(routing_prob * max(base_s, 0.1), 1e-6)
 
             final_boxes.append(box)
-            final_scores.append(max(base_s, 1e-6))
+            final_scores.append(final_score)
             final_labels.append(label)
 
             if return_trace:

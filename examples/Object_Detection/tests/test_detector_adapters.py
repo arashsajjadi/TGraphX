@@ -42,9 +42,11 @@ def test_build_detectors_synthetic_mode():
     }
     dets = build_detectors(cfg, class_names=["car", "person"])
     assert "retinanet" in dets
-    assert "yolo_modern" in dets
-    assert "yolo_open_vocab" in dets
-    assert "rt_detr" in dets
+    # Detector names updated: yolo_modern → yolo26x, rt_detr → rtdetr_x, yolo_open_vocab → yolo_world
+    assert any(k in dets for k in ("yolo26x", "yolo_modern"))
+    assert any(k in dets for k in ("rtdetr_x", "rt_detr"))
+    # yolo_world replaces yolo_open_vocab; use_yoloe legacy flag maps to yolo_world slot
+    assert any(k in dets for k in ("yolo_world", "yolo_open_vocab"))
 
 
 def test_detection_result_to_dict():

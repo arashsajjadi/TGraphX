@@ -70,12 +70,8 @@ def fuse_with_model(
                 "scores": torch.zeros(0),
                 "labels": torch.zeros(0, dtype=torch.long)}
 
-    cand_mask = (
-        (node_types == NODE_TYPES["proposal"])
-        | (node_types == NODE_TYPES["cluster"])
-        | (node_types == NODE_TYPES["consensus"]) \
-        | (node_types == NODE_TYPES["nms_candidate"])
-    )
+    from .candidate_mask import candidate_node_mask
+    cand_mask = candidate_node_mask(node_types, NODE_TYPES)
 
     # Build the scoring tensor used for in-cluster ranking
     if score_mode == "base_only":

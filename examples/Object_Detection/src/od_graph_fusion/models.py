@@ -42,8 +42,12 @@ class CropCNN(nn.Module):
         return self.net(x)
 
 
-class DetectionFusionModel(nn.Module):
-    """TGraphX fusion model.
+class LegacyDetectionFusionModel(nn.Module):
+    """Legacy TGraphX fusion model (objectness/class/box heads).
+
+    NOTE: edge_mlp is defined but edge_features are NOT used in forward.
+    Do not use this model in V3/strict_source_router experiments.
+    Use TGraphXSourceRouterV3 instead.
 
     Inputs (per graph):
         node_features:  [N, 3, crop_size, crop_size]
@@ -149,3 +153,4 @@ class DetectionFusionModel(nn.Module):
             "box_reg": self.box_head(z),
             "node_embedding": z,
         }
+DetectionFusionModel = LegacyDetectionFusionModel  # backward compat alias

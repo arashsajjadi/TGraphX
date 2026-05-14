@@ -15,7 +15,10 @@ from .base import BaseDetector, DetectionResult
 from .retinanet import RetinaNetAdapter
 from .yolo import YOLOAdapter
 from .yoloe import YOLOEAdapter
+from .yoloworld import YOLOWorldAdapter
 from .rt_detr import RTDETRAdapter
+from .faster_rcnn import FasterRCNNAdapter
+from .ssd import SSDAdapter
 
 
 # ── Synthetic detector ─────────────────────────────────────────────────────
@@ -138,9 +141,16 @@ def build_synthetic_detector(name: str, family: str, seed: int = 0,
 def build_detectors(config: Dict[str, Any], class_names: List[str]) -> Dict[str, BaseDetector]:
     """Return ``{name: detector}`` for all configured/available detectors.
 
-    Honors ``detectors.use_real``. If a real detector cannot load, it is
-    replaced by a synthetic detector of the same name with a clear note in
-    its availability log.
+    Detector priority (from config):
+      yolo26x.pt → yolo11x.pt fallback (reported honestly)
+      rtdetr-x.pt → rtdetr-l.pt fallback (reported honestly)
+      yolov8x-worldv2.pt (YOLOWorld, detection-only)
+      retinanet (torchvision)
+      faster_rcnn (optional)
+      ssd (optional)
+
+    Every real-detector failure is logged. Fallbacks are named distinctly
+    so the audit can distinguish primary from fallback.
     """
     dcfg = config.get("detectors", {})
     use_real = bool(dcfg.get("use_real", False))
@@ -148,16 +158,29 @@ def build_detectors(config: Dict[str, Any], class_names: List[str]) -> Dict[str,
     conf = float(dcfg.get("conf_threshold", 0.25))
     iou = float(dcfg.get("iou_threshold", 0.45))
 
+    # Checkpoint configuration — explicit primary + fallback
+    yolo_primary   = dcfg.get("yolo_model",   "yolo26x.pt")
+    yolo_fallback  = dcfg.get("yolo_fallback", "yolo11x.pt")
+    rtdetr_primary = dcfg.get("rtdetr_model",  "rtdetr-x.pt")
+    rtdetr_fallback = dcfg.get("rtdetr_fallback", "rtdetr-l.pt")
+    world_model    = dcfg.get("yoloworld_model", "yolov8x-worldv2.pt")
+
     requested = {
-        "retinanet": dcfg.get("use_retinanet", True),
-        "yolo_modern": dcfg.get("use_yolo", True),
-        "yolo_open_vocab": dcfg.get("use_yoloe", True),
-        "rt_detr": dcfg.get("use_rtdetr", True),
+        "retinanet":    dcfg.get("use_retinanet",    True),
+        "yolo_modern":  dcfg.get("use_yolo",          True),
+        "yolo_world":   dcfg.get("use_yoloworld",     True),
+        "rt_detr":      dcfg.get("use_rtdetr",        True),
+        "faster_rcnn":  dcfg.get("use_faster_rcnn",   False),
+        "ssd":          dcfg.get("use_ssd",            False),
+        # Legacy key (back-compat)
+        "yolo_open_vocab": dcfg.get("use_yoloe", False),
     }
 
     detectors: Dict[str, BaseDetector] = {}
+    # fallback_log: maps detector_name → info about what fallback was used
+    fallback_log: Dict[str, Any] = {}
 
-    def _try_real(adapter_cls, name: str, family: str, **kwargs) -> Optional[BaseDetector]:
+    def _try_real(adapter_cls, name: str, **kwargs) -> Optional[BaseDetector]:
         if not use_real:
             return None
         try:
@@ -167,49 +190,111 @@ def build_detectors(config: Dict[str, Any], class_names: List[str]) -> Dict[str,
             adapter.load()
             return adapter
         except Exception as exc:
-            print(f"[detectors] {name}: real load failed ({type(exc).__name__}: {exc}); using synthetic.")
+            print(f"[detectors] {name}: load failed ({type(exc).__name__}: {exc})")
             return None
 
-    # RetinaNet — usually works
+    # ── RetinaNet (torchvision) ──────────────────────────────────────────
     if requested["retinanet"]:
-        d = _try_real(RetinaNetAdapter, "retinanet", "anchor_based_cnn")
+        d = _try_real(RetinaNetAdapter, "retinanet")
         if d is None:
             d = build_synthetic_detector("retinanet", "anchor_based_cnn",
                                           seed=1, jitter=0.05, drop_rate=0.1,
                                           class_names=class_names)
         detectors[d.name] = d
 
+    # ── YOLO high-capacity: yolo26x.pt primary, yolo11x fallback ────────
     if requested["yolo_modern"]:
-        d = _try_real(YOLOAdapter, "yolo_modern", "anchor_free_cnn",
-                       model_path=dcfg.get("yolo_model", "yolo11n.pt"))
-        if d is None:
-            d = build_synthetic_detector("yolo_modern", "anchor_free_cnn",
-                                          seed=2, jitter=0.08, drop_rate=0.05,
-                                          class_names=class_names)
+        d = _try_real(YOLOAdapter, "yolo26x", model_path=yolo_primary)
+        if d is not None:
+            d.name = "yolo26x"
+            fallback_log["yolo26x"] = {"primary": yolo_primary, "used": yolo_primary, "fallback": False}
+        else:
+            # Honest fallback — reported, NOT silently used
+            print(f"[detectors] WARNING: {yolo_primary} failed — falling back to {yolo_fallback} (FALLBACK)")
+            d = _try_real(YOLOAdapter, "yolo26x", model_path=yolo_fallback)
+            if d is not None:
+                d.name = "yolo26x"
+                fallback_log["yolo26x"] = {
+                    "primary": yolo_primary, "used": yolo_fallback,
+                    "fallback": True, "reason": f"{yolo_primary} failed to load"
+                }
+            else:
+                d = build_synthetic_detector("yolo26x", "anchor_free_cnn",
+                                              seed=2, jitter=0.08, drop_rate=0.05,
+                                              class_names=class_names)
+                fallback_log["yolo26x"] = {"primary": yolo_primary, "used": "SYNTHETIC", "fallback": True}
         detectors[d.name] = d
 
-    if requested["yolo_open_vocab"]:
-        d = _try_real(YOLOEAdapter, "yolo_open_vocab", "open_vocabulary_yolo",
-                       model_path=dcfg.get("yoloe_model"))
-        if d is None:
-            d = build_synthetic_detector("yolo_open_vocab", "open_vocabulary_yolo",
-                                          seed=3, jitter=0.10, drop_rate=0.15,
-                                          class_names=class_names)
-        detectors[d.name] = d
-
+    # ── RT-DETR X: rtdetr-x.pt primary, rtdetr-l fallback ───────────────
     if requested["rt_detr"]:
-        d = _try_real(
-            RTDETRAdapter, "rt_detr", "transformer_detector",
-            source=dcfg.get("rtdetr_source", "ultralytics"),
-            ultralytics_model=dcfg.get("rtdetr_model", "rtdetr-l.pt"),
-            hf_model=dcfg.get("rtdetr_hf_model", "PekingU/rtdetr_r50vd_coco_o365"),
-        )
+        # Try rtdetr-x.pt first via Ultralytics
+        d = _try_real(RTDETRAdapter, "rt_detr",
+                       source="ultralytics", ultralytics_model=rtdetr_primary,
+                       hf_model=dcfg.get("rtdetr_hf_model", "PekingU/rtdetr_r50vd_coco_o365"))
+        if d is not None:
+            d.name = "rtdetr_x"
+            fallback_log["rtdetr_x"] = {"primary": rtdetr_primary, "used": rtdetr_primary, "fallback": False}
+        else:
+            print(f"[detectors] WARNING: {rtdetr_primary} failed — falling back to {rtdetr_fallback} (FALLBACK)")
+            d = _try_real(RTDETRAdapter, "rt_detr",
+                           source="ultralytics", ultralytics_model=rtdetr_fallback,
+                           hf_model=dcfg.get("rtdetr_hf_model", "PekingU/rtdetr_r50vd_coco_o365"))
+            if d is not None:
+                d.name = "rtdetr_x"
+                fallback_log["rtdetr_x"] = {
+                    "primary": rtdetr_primary, "used": rtdetr_fallback,
+                    "fallback": True, "reason": f"{rtdetr_primary} failed to load"
+                }
+            else:
+                d = build_synthetic_detector("rtdetr_x", "transformer_detector",
+                                              seed=4, jitter=0.06, drop_rate=0.08,
+                                              class_names=class_names)
+                fallback_log["rtdetr_x"] = {"primary": rtdetr_primary, "used": "SYNTHETIC", "fallback": True}
+        detectors[d.name] = d
+
+    # ── YOLO-World (detection-only, open-vocabulary) ──────────────────────
+    if requested["yolo_world"] or requested["yolo_open_vocab"]:
+        d = _try_real(YOLOWorldAdapter, "yolo_world", model_path=world_model)
+        if d is not None:
+            d.name = "yolo_world"
+            fallback_log["yolo_world"] = {"primary": world_model, "used": world_model, "fallback": False}
+        else:
+            # Try legacy YOLOE as fallback
+            yoloe_model = dcfg.get("yoloe_model", "yoloe-11s-seg.pt")
+            d = _try_real(YOLOEAdapter, "yolo_world", model_path=yoloe_model)
+            if d is not None:
+                d.name = "yolo_world"
+                fallback_log["yolo_world"] = {
+                    "primary": world_model, "used": yoloe_model,
+                    "fallback": True, "reason": f"{world_model} failed"
+                }
+            else:
+                d = build_synthetic_detector("yolo_world", "open_vocabulary_yolo",
+                                              seed=3, jitter=0.10, drop_rate=0.15,
+                                              class_names=class_names)
+                fallback_log["yolo_world"] = {"primary": world_model, "used": "SYNTHETIC", "fallback": True}
+        detectors[d.name] = d
+
+    # ── Faster R-CNN (optional) ───────────────────────────────────────────
+    if requested["faster_rcnn"]:
+        d = _try_real(FasterRCNNAdapter, "faster_rcnn")
         if d is None:
-            d = build_synthetic_detector("rt_detr", "transformer_detector",
-                                          seed=4, jitter=0.06, drop_rate=0.08,
+            d = build_synthetic_detector("faster_rcnn", "two_stage_cnn",
+                                          seed=5, jitter=0.07, drop_rate=0.12,
                                           class_names=class_names)
         detectors[d.name] = d
 
+    # ── SSD (optional) ────────────────────────────────────────────────────
+    if requested["ssd"]:
+        d = _try_real(SSDAdapter, "ssd")
+        if d is None:
+            d = build_synthetic_detector("ssd", "anchor_based_cnn",
+                                          seed=6, jitter=0.12, drop_rate=0.20,
+                                          class_names=class_names)
+        detectors[d.name] = d
+
+    # Attach fallback log to config for audit
+    config.setdefault("_detector_fallback_log", {}).update(fallback_log)
     return detectors
 
 

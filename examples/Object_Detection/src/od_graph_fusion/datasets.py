@@ -147,6 +147,7 @@ def _voc2007_dataset(
     num_images: int,
     image_size: Tuple[int, int],
     seed: int = 42,
+    class_filter: Optional[List[str]] = None,
 ) -> Optional[List[ImageRecord]]:
     """Load VOC 2007. Returns None if the data folder is missing."""
     from PIL import Image
@@ -163,7 +164,27 @@ def _voc2007_dataset(
 
     rng = random.Random(seed)
     rng.shuffle(all_imgs)
-    all_imgs = all_imgs[:num_images]
+    # When class_filter is active, pre-scan annotations to find images
+    # that actually contain the target class, then cap at num_images.
+    if class_filter is not None:
+        import xml.etree.ElementTree as ET
+        filtered = []
+        for img_name in all_imgs:
+            ann_path = anns / img_name.replace(".jpg", ".xml")
+            if not ann_path.exists():
+                continue
+            try:
+                tree = ET.parse(ann_path)
+            except Exception:
+                continue
+            names_in_img = {obj.findtext("name", "") for obj in tree.getroot().findall("object")}
+            if any(c in names_in_img for c in class_filter):
+                filtered.append(img_name)
+            if len(filtered) >= num_images:
+                break
+        all_imgs = filtered
+    else:
+        all_imgs = all_imgs[:num_images]
 
     class_to_idx = {c: i for i, c in enumerate(VOC_CLASSES)}
     records = []
@@ -183,17 +204,33 @@ def _voc2007_dataset(
 
         if ann_path.exists():
             boxes_orig, labels = _parse_voc_xml(ann_path, class_to_idx)
-            # rescale boxes to resized image
-            scale_x = W / orig_w
-            scale_y = H / orig_h
+            scale_x = W / orig_w; scale_y = H / orig_h
             boxes = []
-            for x1, y1, x2, y2 in boxes_orig:
+            for (x1, y1, x2, y2), lbl in zip(boxes_orig, labels):
+                # class_filter: keep only boxes matching the target classes
+                if class_filter is not None:
+                    lbl_name = VOC_CLASSES[lbl] if 0 <= lbl < len(VOC_CLASSES) else ""
+                    if lbl_name not in class_filter:
+                        continue
                 boxes.append([x1 * scale_x, y1 * scale_y, x2 * scale_x, y2 * scale_y])
-            gt_boxes = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4)
-            gt_labels = torch.tensor(labels, dtype=torch.long)
+            gt_boxes = (torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4)
+                        if boxes else torch.zeros(0, 4, dtype=torch.float32))
+            # Remap labels to filtered class index when class_filter is active
+            if class_filter is not None:
+                filt_idx = {name: i for i, name in enumerate(class_filter)}
+                filt_labels = [filt_idx[VOC_CLASSES[lbl]] for (_, lbl) in
+                               zip(boxes_orig, labels)
+                               if VOC_CLASSES[lbl] in class_filter]
+                gt_labels = torch.tensor(filt_labels, dtype=torch.long)
+            else:
+                gt_labels = torch.tensor(labels, dtype=torch.long)
         else:
             gt_boxes = torch.zeros(0, 4, dtype=torch.float32)
             gt_labels = torch.zeros(0, dtype=torch.long)
+
+        # Skip images with no GT boxes when class_filter is active
+        if class_filter is not None and gt_boxes.numel() == 0:
+            continue
 
         if i < int(0.7 * len(all_imgs)):
             split = "train"
@@ -201,13 +238,14 @@ def _voc2007_dataset(
             split = "val"
         else:
             split = "test"
+        record_class_names = list(class_filter) if class_filter else list(VOC_CLASSES)
         records.append(ImageRecord(
             image_id=img_path.stem,
             image=img,
             image_size=(H, W),
             gt_boxes=gt_boxes,
             gt_labels=gt_labels,
-            class_names=list(VOC_CLASSES),
+            class_names=record_class_names,
             split=split,
             source="voc2007",
         ))
@@ -234,10 +272,11 @@ def load_dataset(config: Dict[str, Any]) -> List[ImageRecord]:
         voc_root = Path(ds.get("voc_root", "data/VOCdevkit"))
         if not voc_root.is_absolute():
             voc_root = project_root() / voc_root
-        records = _voc2007_dataset(voc_root, num_images, image_size, seed)
+        class_filter = ds.get("class_filter", None)
+        records = _voc2007_dataset(voc_root, num_images, image_size, seed,
+                                    class_filter=class_filter)
         if records:
             return records
-        # graceful fallback
         print(f"[datasets] VOC2007 not found at {voc_root}; falling back to synthetic.")
     elif name == "custom_folder":
         return _custom_folder_dataset(

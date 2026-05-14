@@ -17,12 +17,53 @@ def load_config(path: str | Path) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def resolve_device(spec: str) -> str:
-    """Resolve ``"auto"`` to "cuda" or "cpu" based on torch.cuda."""
+def resolve_device(spec: str, allow_cpu: bool = True) -> str:
+    """Resolve device spec to a concrete torch device string.
+
+    "auto" → "cuda" if available, else "mps" if available, else "cpu".
+    If CUDA is available but "cpu" was explicitly requested and allow_cpu=False,
+    a warning is printed so the caller can flag the downgrade.
+    """
     import torch
     if spec in (None, "auto"):
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            return "cuda"
+        try:
+            if torch.backends.mps.is_available():
+                return "mps"
+        except AttributeError:
+            pass
+        return "cpu"
+    if spec == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError(
+            "device='cuda' requested but torch.cuda.is_available()=False. "
+            "Use device='auto' or device='cpu'."
+        )
+    if spec == "cpu" and not allow_cpu:
+        import torch
+        if torch.cuda.is_available():
+            import warnings
+            warnings.warn(
+                "Training on CPU but CUDA is available. Pass allow_cpu=True to silence.",
+                stacklevel=2,
+            )
     return spec
+
+
+def device_audit(requested: str, resolved: str) -> dict:
+    """Return a dict describing the device environment for logging."""
+    import torch
+    info = {
+        "requested_device": requested,
+        "resolved_device": resolved,
+        "cuda_available": torch.cuda.is_available(),
+        "gpu_name": None,
+        "gpu_count": 0,
+    }
+    if torch.cuda.is_available():
+        info["gpu_name"] = torch.cuda.get_device_name(0)
+        info["gpu_count"] = torch.cuda.device_count()
+    return info
 
 
 def project_root() -> Path:

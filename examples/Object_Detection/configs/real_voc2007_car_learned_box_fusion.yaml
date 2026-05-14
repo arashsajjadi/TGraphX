@@ -1,0 +1,36 @@
+run_name: real_voc_car_learned_fusion
+seed: 42
+seeds: [0, 1, 2, 3, 4]
+device: auto
+
+dataset:
+  name: voc2007
+  num_classes: 1
+  class_names: [car]
+
+graph:
+  cluster_iou_threshold: 0.5
+  crop_size: 64
+  max_proposals_per_image: 48
+
+model:
+  hidden_dim: 64
+  crop_channels: 16
+  num_message_passing: 2
+  delta_cap_frac: 0.1
+
+training:
+  epochs: 30
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+  lambda_box: 1.0
+  lambda_giou: 1.0
+  lambda_tp50: 1.0
+  lambda_tp75: 2.0
+  lambda_iou: 0.5
+  lambda_delta_reg: 0.05
+
+evaluation:
+  iou_match_threshold: 0.5
+  ap_iou_thresholds: [0.5, 0.75]
+  class_agnostic: true

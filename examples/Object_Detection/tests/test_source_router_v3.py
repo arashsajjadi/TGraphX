@@ -39,9 +39,10 @@ def test_slot_agg_shape():
     cluster_of = torch.tensor([0, 0, 0, 0, 1, 1, 1, 1], dtype=torch.long)
     node_source_slot = torch.tensor([0, 1, 2, 3, 0, 1, 3, -1], dtype=torch.long)
     agg = SourceSlotAggregator(D, S)
-    slot_emb, slot_mask = agg(node_emb, cluster_of, node_source_slot, n_clusters=2)
+    slot_emb, slot_mask, slot_node_idx = agg(node_emb, cluster_of, node_source_slot, n_clusters=2)
     assert slot_emb.shape == (2, S, D)
     assert slot_mask.shape == (2, S)
+    assert slot_node_idx.shape == (2, S)
 
 
 def test_slot_agg_mask_absent_source():
@@ -51,7 +52,7 @@ def test_slot_agg_mask_absent_source():
     # Only slots 0 and 3 have nodes; others absent
     node_source_slot = torch.tensor([0, 0, 3, -1], dtype=torch.long)
     agg = SourceSlotAggregator(D, S)
-    slot_emb, slot_mask = agg(node_emb, cluster_of, node_source_slot, n_clusters=1)
+    slot_emb, slot_mask, slot_node_idx = agg(node_emb, cluster_of, node_source_slot, n_clusters=1)
     assert slot_mask[0, 0].item() == True
     assert slot_mask[0, 3].item() == True
     assert slot_mask[0, 1].item() == False  # no node for YOLOE

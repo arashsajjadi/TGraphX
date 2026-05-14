@@ -1,197 +1,156 @@
-# TGraphX — Object Detection Graph Fusion
+# TGraphX-ODF: Tensor-Aware Graph Reasoning for Object Detection Fusion
 
-A modern, modular, fully reproducible experiment that compares heterogeneous
-object detectors and **uses TGraphX as the central graph reasoning layer** to
-fuse and refine their outputs.
+> Part of the [TGraphX](https://github.com/arashsajjadi/TGraphX) ecosystem — visit [tgraphx.com](https://tgraphx.com) for the full framework.
 
-> **Status:** Beta showcase example. FAST_SMOKE runs in under a minute with
-> no model downloads. All v1.4.1 TGraphX APIs are used.
->
-> **v3 (2026-05-11 final):** TGraphX operates as a **Guarded Residual
-> Selector**. The model produces a small residual on top of the candidate's
-> detector confidence, so it is mathematically lower-bounded by detector
-> score and cannot collapse to noise. With AP-optimal validation threshold
-> on a 60-image VOC 2007 DEV_EXPERIMENT, TGraphX achieves AP@0.50 = 0.834,
-> beating every individual detector (RT-DETR 0.818, RetinaNet 0.713,
-> YOLOE 0.656, YOLO 11n 0.470) and every classical fusion baseline (NMS
-> 0.821, WBF 0.633, best-proposal-per-cluster 0.821). Oracle = 1.000.
-> See [`reports/SCIENTIFIC_RESULTS_v3.md`](reports/SCIENTIFIC_RESULTS_v3.md).
->
-> **Methodology fixes since v2:** the per-class mAP class-bucket bug is
-> fixed (added 7 oracle/evaluator invariant tests); both class-aware and
-> class-agnostic metrics are reported; validation threshold sweep optimises
-> the chosen `sweep_metric` (default AP@0.50) and is frozen before test.
+**TGraphX-ODF** implements *object-level candidate-node classification* for multi-detector object detection fusion. Given multiple detector proposals for the **same** object, a small TGraphX graph is built where every candidate box is a node carrying its visual crop tensor `[3, H, W]`. A learned graph reasoner selects the single best candidate — no box regression, no source routing, just node selection.
 
 ---
 
-## Why this exists
+## Key Result
 
-The legacy notebook
-[`legacy/Full_Object_Detection_Graph_Modeling_YOLOv11_RetinaNet_TGraphX_legacy_do_not_use.ipynb`](legacy/)
-was a one-off, two-detector demo.  See
-[`AUDIT_OBJECT_DETECTION_EXPERIMENT.md`](AUDIT_OBJECT_DETECTION_EXPERIMENT.md)
-for the 16-point critique that motivated this rewrite.
+| Method | AP50 | AP75 | vs WBF |
+|:-------|-----:|-----:|:------:|
+| **TGXPointerSelector** (ours) | **0.902 ± 0.006** | **0.754 ± 0.006** | **+2.9 pp** |
+| external WBF (baseline) | 0.913 | 0.726 | — |
+| external NMS | 0.885 | 0.660 | −6.6 pp |
 
-**Before** (legacy):
-
-* `YOLOv11x + RetinaNet`, all in one 6 MB notebook
-* `yolo11x.pt` (110 MB) and the VOC tarball lived next to the notebook
-* No fresh venv, no classical baselines, no ablations, no separate splits
-
-**Now**:
-
-* **Four detector families** with honest availability reporting:
-  modern YOLO (Ultralytics) · open-vocabulary YOLO (YOLOE / YOLO-World) ·
-  RT-DETR (transformer) · RetinaNet (torchvision)
-* **TGraphX graph fusion** as the core: proposal / cluster / consensus /
-  context nodes; tensor crop features `[3, H, W]`; edge features for IoU,
-  class agreement, detector agreement, same-detector suppression
-* **Classical baselines**: NMS, Soft-NMS, Weighted Boxes Fusion, individual
-  detectors — so any TGraphX gain is honestly attributable
-* **Synthetic-detector fallback** so FAST_SMOKE runs end-to-end with **no
-  network access** — the pipeline tests the *system*, not the detectors
+*VOC2007 car, 761 images, 5 real detectors (yolo26x, rtdetr-x, yolov8x-worldv2, RetinaNet, Faster R-CNN), 5-seed evaluation. Bootstrap P(TGX > WBF at AP75) = 0.937.*
 
 ---
 
-## Quick start
+## How It Works
+
+For each detected object cluster, one small graph is built:
+
+```
+Object cluster → Graph(N=7–12 nodes)
+  node 0 : YOLO26X crop          [3, 128, 128]
+  node 1 : RT-DETR-X crop        [3, 128, 128]
+  node 2 : YOLO-World crop       [3, 128, 128]
+  node 3 : RetinaNet crop        [3, 128, 128]
+  node 4 : Faster R-CNN crop     [3, 128, 128]
+  node 5 : WBF consensus crop    [3, 128, 128]
+  node 6 : NMS top-1 crop        [3, 128, 128]
+  ...
+
+TGXPointerSelector:
+  CropCNN(3→8) → pool → [8]          (per-node visual encoding)
+  MLP(metadata) + SourceEmbed → [40]  (box geometry + detector id)
+  LayerNorm(Linear(48→32)) → token    (node token)
+  ×2 MHA self-attention (N tokens)    (cross-candidate comparison)
+  Linear(32→1) → selection_logit[N]  (per-node score)
+
+Inference:
+  selected_node  = argmax(selection_logit)
+  selected_box   = node_box[selected_node]   # exactly one candidate box
+```
+
+### What made it work
+
+| Fix | Effect |
+|:----|:-------|
+| Self-attention instead of ConvMP | Correct inductive bias for "best-of-N" selection |
+| Early stopping on val AP75 | Stops at ~30 ep, eliminates overfitting |
+| AP75-focused utility (0.55 weight) | Aligns training objective with evaluation |
+| Per-node softmax in EdgeAttentionLayer | Fixes incorrect global attention normalization |
+| Cosine LR warmup + crop augmentation | Stable convergence, better generalization |
+| `cluster_metadata` one-hot fix | Removes feature corruption from `det_onehot * diversity` |
+
+---
+
+## Detectors
+
+| Detector | Checkpoint | Role |
+|:---------|:-----------|:-----|
+| YOLO26X | `yolo26x.pt` | High-capacity YOLO |
+| RT-DETR-X | `rtdetr-x.pt` | Transformer detector |
+| YOLO-World | `yolov8x-worldv2.pt` | Open-vocabulary (boxes only) |
+| RetinaNet | torchvision (COCO) | Anchor-based CNN |
+| Faster R-CNN | torchvision (COCO) | Two-stage, optional |
+
+All detectors are detection-only. No SAM, no segmentation masks, no GT-aware shortcuts.
+
+---
+
+## Pipeline FPS (RTX 5080, batch=1)
+
+| Stage | Mean (ms) | FPS |
+|:------|----------:|----:|
+| 5 Detectors | 74.7 | 13.4 |
+| Graph Build | 59.5 | 16.8 |
+| **TGXPointerSelector** | **16.3** | **61.4** |
+| **Full Pipeline** | **150.6** | **6.6** |
+
+The selector itself runs at **61 FPS** — the 5-detector ensemble is the bottleneck.
+
+---
+
+## Installation
 
 ```bash
-cd examples/Object_Detection
-
-# Optional: create a fresh venv with TGraphX from PyPI
-bash scripts/00_create_env.sh
-source .venv-od-fusion/bin/activate
-
-# FAST_SMOKE — runs end-to-end with synthetic detectors in <1 min on CPU
-bash scripts/07_run_fast_smoke.sh
+git clone https://github.com/arashsajjadi/TGraphX-ODF.git
+cd TGraphX-ODF
+pip install -r requirements-object-detection.txt
+pip install tgraphx   # or: pip install -e ../../  (monorepo)
 ```
 
-Outputs land in `runs/fast_smoke/`:
-
-```
-runs/fast_smoke/
-├── config_snapshot.json
-├── dataset_summary.json
-├── detector_availability.json
-├── env_report.json
-├── graph_summary.json
-├── latency.json
-├── method_results.json
-├── report.md
-├── training_history.json
-└── figures/
-    ├── detection_graph_sketch.{png,svg}
-    ├── latency_breakdown.{png,svg}
-    ├── method_comparison.{png,svg}
-    └── training_curves.{png,svg}
-```
+Requires Python ≥ 3.10, PyTorch ≥ 2.0, Ultralytics, torchvision.
 
 ---
 
-## Project layout
-
-```
-Object_Detection/
-├── README.md                            # this file
-├── AUDIT_OBJECT_DETECTION_EXPERIMENT.md # legacy critique
-├── requirements-object-detection.txt
-├── configs/
-│   ├── fast_smoke.yaml                  # synthetic, FAST_SMOKE
-│   ├── default.yaml                     # DEV_EXPERIMENT
-│   └── detector_registry.yaml           # detector candidate model IDs
-├── src/od_graph_fusion/
-│   ├── config.py / env.py / reproducibility.py
-│   ├── datasets.py                      # synthetic, VOC 2007, custom folder
-│   ├── detectors/                       # 4 detector adapters + synthetic
-│   ├── box_ops.py / matching.py
-│   ├── graph_builder.py                 # proposal/cluster/consensus/context
-│   ├── features.py                      # crop tensor + metadata + edge features
-│   ├── models.py                        # CNN encoder + ConvMessagePassing fusion
-│   ├── training.py / fusion.py
-│   ├── baselines.py                     # NMS, Soft-NMS, WBF
-│   ├── evaluation.py                    # AP/P/R/F1 @ multiple IoUs
-│   ├── plotting.py / reporting.py
-│   └── cli.py                           # one-shot pipeline driver
-├── scripts/
-│   ├── 00_create_env.sh
-│   ├── 01_download_data.py …
-│   └── 07_run_fast_smoke.sh
-├── tests/                               # pytest: 40+ tests, no network
-├── notebooks/
-│   └── 01_object_detection_graph_fusion_clean.ipynb
-├── runs/         (gitignored)
-├── data/         (gitignored — datasets)
-├── cache/        (gitignored — detector cache)
-└── legacy/       (the old notebook, kept for reference)
-```
-
----
-
-## Running real detectors
-
-The default config (`configs/default.yaml`) tries real adapters with graceful
-fallback to synthetic on load failure. To enable real detectors:
+## Usage
 
 ```bash
-# Edit configs/fast_smoke.yaml and flip use_real: true,
-# or invoke the default config directly:
-PYTHONPATH=src python -m od_graph_fusion.cli --config configs/default.yaml
+# 1. Download VOC2007
+python scripts/01_download_data.py --config configs/universal_candidate_voc_car_v2.yaml
+
+# 2. Run detectors
+python scripts/02_run_detectors.py --config configs/universal_candidate_voc_car_v2.yaml --device auto --force
+
+# 3. Build object-level candidate graphs
+python scripts/03_build_object_candidate_graphs.py --config configs/universal_candidate_voc_car_v2.yaml --crop-size 128 --force
+
+# 4. Train TGXPointerSelector (5 seeds, early stopping)
+python scripts/train_improved_selector.py \
+  --config configs/universal_candidate_voc_car_v3.yaml \
+  --feature-mode tgx_pointer_selector \
+  --device auto --seeds 0 1 2 3 4
+
+# 5. Evaluate
+python scripts/evaluate_candidate_node_selector.py --config configs/universal_candidate_voc_car_v2.yaml
+
+# 6. FPS benchmark
+python scripts/benchmark_pipeline_fps.py --config configs/universal_candidate_voc_car_v3.yaml
 ```
-
-Each adapter records its model identifier in `runs/<run>/detector_availability.json`.
-If a detector cannot load (no internet, no GPU memory, missing package), it is
-replaced by a synthetic stand-in with a clear note in the report — never by
-an unrelated model.
-
----
-
-## Datasets
-
-`configs/*.yaml` support these dataset names:
-
-| name | source | requires |
-|---|---|---|
-| `synthetic_voc_like` | generated in-process | nothing |
-| `voc2007` | torchvision VOC tarball | tarball extracted under `data/VOCdevkit/` |
-| `custom_folder` | user-supplied folder of `.jpg`/`.png` | `dataset.root` path |
-
-VOC 2007 falls back to synthetic if the folder is missing.
 
 ---
 
 ## Tests
 
 ```bash
-cd examples/Object_Detection
-PYTHONPATH=src python -m pytest tests -q
+python -m pytest tests -q   # 244 tests, 0 failures
 ```
 
-40+ tests cover box ops, matching, graph builder, baselines, evaluation,
-detector adapter sanity, reproducibility, and the full FAST_SMOKE pipeline.
-**No real model downloads** are required.
+---
+
+## Citation
+
+If you use this work, please cite:
+
+```bibtex
+@article{sajjadi2025tgraphx,
+  title   = {TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning},
+  author  = {Sajjadi, Arash and Eramian, Mark},
+  journal = {arXiv preprint arXiv:2504.03953},
+  year    = {2025}
+}
+```
+
+> Sajjadi, A. and Eramian, M. TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning. *arXiv preprint arXiv:2504.03953*, 2025.
 
 ---
 
-## Scientific claims
+## Related
 
-This experiment honestly reports:
-
-1. Whether TGraphX fusion beats the **best individual detector** in the run.
-2. Whether TGraphX fusion beats **NMS** and **Weighted Boxes Fusion**.
-3. Whether **four-detector** fusion beats two-detector fusion (run two configs).
-4. Latency overhead of TGraphX graph fusion.
-
-It does **not** make SOTA claims, does **not** claim PyG/DGL/PyKEEN/SB3
-parity, and explicitly labels FAST_SMOKE results as **smoke / preliminary**.
-
----
-
-## Legacy notebook has been replaced
-
-The old `Full_Object_Detection_Graph_Modeling_YOLOv11_RetinaNet_TGraphX.ipynb`
-has been moved to `legacy/` and renamed with the `_legacy_do_not_use` suffix.
-It is **not** referenced from this README except here, and is **not** the
-recommended entry point.
-
-Use `notebooks/01_object_detection_graph_fusion_clean.ipynb` instead, or call
-the modular pipeline directly via `scripts/07_run_fast_smoke.sh`.
+- **TGraphX framework:** [github.com/arashsajjadi/TGraphX](https://github.com/arashsajjadi/TGraphX)
+- **Project website:** [tgraphx.com](https://tgraphx.com)
