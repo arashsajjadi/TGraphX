@@ -93,3 +93,4 @@ reports/benchmarks/v*_*.json
 # Git submodules or temp git folders
 # ------------------------------
 **/.git
+examples/Object_Detection/
