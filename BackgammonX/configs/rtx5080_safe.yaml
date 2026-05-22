@@ -1,0 +1,34 @@
+# RTX 5080 — safe config for shared-GPU environments (other processes present)
+device: cuda
+seed: 42
+mixed_precision: true
+compile_model: false
+rollout_mode: single          # use multiprocess only when GPU is exclusive
+state_dim: 256
+act_dim: 256
+n_point_residual: 4
+n_action_residual: 3
+encoder_version: v2
+rollout_games_per_update: 64
+total_games: 5_000_000
+gamma: 0.999
+gae_lambda: 0.95
+clip_range: 0.2
+value_coef: 0.5
+entropy_coef: 0.005
+max_grad_norm: 1.0
+update_epochs: 4
+minibatch_size: 512
+target_kl: 0.03
+learning_rate: 0.00015
+weight_decay: 0.00001
+lr_schedule: cosine
+log_interval: 10
+checkpoint_interval: 50000
+runs_dir: runs
+tensorboard: false
+# League (disabled by default; enable when GPU is exclusive)
+# league:
+#   enabled: true
+#   checkpoint_pool_size: 10
+#   eval_interval: 100000

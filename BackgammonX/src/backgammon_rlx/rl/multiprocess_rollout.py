@@ -210,7 +210,7 @@ class _InferenceThread(threading.Thread):
 
             with torch.no_grad():
                 with torch.amp.autocast("cuda", enabled=self.use_amp and self.device.type == "cuda"):
-                    logits, values = self.model(obs_t, act_t, mask=mask_t)
+                    logits, values, _ = self.model(obs_t, act_t, mask=mask_t)
 
             log_probs = torch.log_softmax(logits, dim=-1)
             probs     = log_probs.exp()

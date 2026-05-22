@@ -42,7 +42,7 @@ def benchmark_inference_throughput(
         for _ in range(n_iters):
             with torch.no_grad():
                 with torch.amp.autocast("cuda", enabled=use_amp and device.type == "cuda"):
-                    logits, values = model(obs_t, act_t)
+                    logits, values, _ = model(obs_t, act_t)
         if device.type == "cuda":
             torch.cuda.synchronize()
         elapsed = time.perf_counter() - t0

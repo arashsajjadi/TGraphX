@@ -114,7 +114,7 @@ class PPOTrainer:
                 mb_old_v  = old_values[mb_idx]
 
                 with autocast("cuda", enabled=self.use_amp):
-                    logits, values = self.model(mb_obs, mb_act, mask=mb_mask)
+                    logits, values, _aux = self.model(mb_obs, mb_act, mask=mb_mask)
                     # log probs for chosen actions
                     log_probs = F.log_softmax(logits, dim=-1)
                     probs     = log_probs.exp()

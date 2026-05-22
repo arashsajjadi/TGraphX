@@ -1,0 +1,49 @@
+# RTX 5080 — full config for exclusive GPU use (maximum throughput)
+device: cuda
+seed: 42
+mixed_precision: true
+compile_model: false
+rollout_mode: multiprocess
+num_self_play_workers: 12
+inference_batch_size: 256
+inference_max_wait_ms: 5.0
+state_dim: 256
+act_dim: 256
+n_point_residual: 6
+n_action_residual: 4
+encoder_version: v2
+model:
+  use_transformer: false
+  use_auxiliary_heads: false
+rollout_games_per_update: 128
+total_games: 10_000_000
+gamma: 0.999
+gae_lambda: 0.95
+clip_range: 0.2
+value_coef: 0.5
+entropy_coef: 0.005
+max_grad_norm: 1.0
+update_epochs: 6
+minibatch_size: 1024
+target_kl: 0.03
+learning_rate: 0.00015
+weight_decay: 0.00001
+lr_schedule: cosine
+pin_memory: true
+strict_invariants: false
+log_interval: 5
+checkpoint_interval: 50000
+runs_dir: runs
+tensorboard: false
+league:
+  enabled: true
+  checkpoint_pool_size: 10
+  eval_interval: 200000
+  opponent_sampling:
+    current_policy_prob: 0.6
+    recent_checkpoint_prob: 0.3
+    older_checkpoint_prob: 0.1
+  promotion:
+    eval_games: 100
+    min_win_rate_vs_random: 0.90
+    min_win_rate_vs_greedy: 0.60

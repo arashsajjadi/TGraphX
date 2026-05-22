@@ -154,7 +154,7 @@ def main() -> None:
                 continue
             obs_t, act_t, mask_t, ai_t, val_t = result
 
-            logits, values = model(obs_t, act_t, mask=mask_t)
+            logits, values, _ = model(obs_t, act_t, mask=mask_t)
             pi_loss = F.cross_entropy(logits, ai_t)
             loss    = pi_loss
             if val_t is not None:

@@ -1,10 +1,14 @@
-"""Symmetric self-play training loop.
+"""Symmetric self-play training loop with optional league opponents.
 
-Supports two rollout modes:
-  "single"       – synchronous single-process (default for CPU/debug)
-  "multiprocess" – N worker processes + GPU inference thread (for RTX 5080)
+Rollout modes:
+  "single"       – synchronous single-process (default; CPU/debug)
+  "multiprocess" – N workers + GPU inference thread (RTX 5080)
 
-The mode is selected via config["rollout_mode"].
+League mode (cfg["league"]["enabled"] = true):
+  - Periodic checkpoint pool maintenance.
+  - Opponent sampling: current policy vs pool checkpoints.
+  - Evaluation-gated promotion to pool.
+  - Elo tracking in runs/<run_id>/league/.
 """
 from __future__ import annotations
 
@@ -12,13 +16,14 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import torch
 import numpy as np
+import torch
 
 from ..env.encoding import ObservationEncoder, ActionEncoder
 from ..rl.buffer import RolloutBuffer
 from ..rl.rollout import collect_rollouts
 from ..rl.ppo import PPOTrainer
+from ..rl.league import LeagueManager
 from ..utils.checkpoint import save_checkpoint
 from ..utils.logging import TrainingLogger
 
@@ -69,9 +74,21 @@ class SelfPlayTrainer:
         self.global_step   = 0
         self.games_played  = 0
         self.update_count  = 0
-
-        # Multiprocess collector (lazy-init)
         self._mp_collector = None
+
+        # League
+        league_cfg = config.get("league", {})
+        self.league_enabled = league_cfg.get("enabled", False)
+        self.league: Optional[LeagueManager] = None
+        if self.league_enabled:
+            self.league = LeagueManager(run_dir / "league", config)
+            self._league_eval_interval = league_cfg.get("eval_interval", 50_000)
+            self._last_league_eval = 0
+            print(f"[train] league enabled  pool_size={self.league.pool_size}")
+
+    # ------------------------------------------------------------------
+    # Multiprocess collector (lazy-init)
+    # ------------------------------------------------------------------
 
     def _get_mp_collector(self):
         if self._mp_collector is None:
@@ -93,6 +110,40 @@ class SelfPlayTrainer:
             self._mp_collector.start()
         return self._mp_collector
 
+    # ------------------------------------------------------------------
+    # League helpers
+    # ------------------------------------------------------------------
+
+    def _maybe_league_checkpoint(self) -> None:
+        """Evaluate model and add to pool if it passes promotion gate."""
+        if self.league is None:
+            return
+        print(f"[league] evaluating for promotion at {self.games_played} games...")
+        try:
+            result = self.league.evaluate_for_promotion(
+                self.model, self.obs_enc, self.act_enc, self.device
+            )
+        except Exception as e:
+            print(f"[league] evaluation error: {e}")
+            return
+
+        wr_r = result.get("win_rate_vs_random", 0)
+        wr_g = result.get("win_rate_vs_greedy", 0)
+        promoted = result.get("promoted", False)
+        print(f"[league] wr_random={wr_r:.3f}  wr_greedy={wr_g:.3f}  "
+              f"promoted={'yes' if promoted else 'no'}")
+
+        if promoted:
+            ckpt_path = self.league.add_checkpoint(self.model, self.games_played)
+            print(f"[league] added to pool: {ckpt_path.name}  "
+                  f"pool_size={self.league.pool_size_current()}")
+
+        self._last_league_eval = self.games_played
+
+    # ------------------------------------------------------------------
+    # Main training loop
+    # ------------------------------------------------------------------
+
     def train(self, total_games: int) -> None:
         rollout_mode     = self.cfg.get("rollout_mode", "single")
         games_per_update = self.cfg.get("rollout_games_per_update", 64)
@@ -107,7 +158,6 @@ class SelfPlayTrainer:
                     collector = self._get_mp_collector()
                     self.buffer, stats = collector.collect(games_per_update)
                 else:
-                    # single-process fallback
                     self.buffer.clear()
                     stats = collect_rollouts(
                         model=self.model,
@@ -130,6 +180,12 @@ class SelfPlayTrainer:
                 if self.scheduler is not None:
                     self.scheduler.step()
 
+                # --- league evaluation ---
+                if (self.league_enabled and self.league is not None and
+                        self.games_played - self._last_league_eval
+                        >= self._league_eval_interval):
+                    self._maybe_league_checkpoint()
+
                 # --- log ---
                 if self.update_count % log_interval == 0:
                     elapsed = time.time() - t0
@@ -142,6 +198,8 @@ class SelfPlayTrainer:
                         "mean_score":   stats.get("mean_score", 0),
                         "gps":          gps,
                         "rollout_mode": rollout_mode,
+                        "league_pool":  self.league.pool_size_current()
+                                        if self.league else 0,
                         **metrics,
                     }
                     self.logger.log(record)

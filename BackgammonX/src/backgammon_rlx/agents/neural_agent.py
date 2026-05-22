@@ -66,7 +66,7 @@ class NeuralAgent:
         act_t = torch.tensor(act_feats, dtype=torch.float32,
                              device=self.device).unsqueeze(0)  # [1, N, A]
 
-        logits, _ = self.model(obs, act_t)   # logits: [1, N]
+        logits, _, _aux = self.model(obs, act_t)
         logits = logits.squeeze(0)           # [N]
 
         if self.deterministic:
@@ -96,7 +96,7 @@ class NeuralAgent:
         act_t = torch.tensor(act_feats, dtype=torch.float32,
                              device=self.device).unsqueeze(0)
 
-        logits, value = self.model(obs, act_t)
+        logits, value, _aux = self.model(obs, act_t)
         logits = logits.squeeze(0)
         log_probs = torch.log_softmax(logits, dim=-1).cpu().numpy()
         v = float(value.squeeze().item())

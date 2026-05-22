@@ -68,7 +68,7 @@ def collect_rollouts(
             act_t = torch.tensor(act_arr, dtype=torch.float32,
                                   device=device).unsqueeze(0)   # [1, N, A]
 
-            logits, value_t = model(obs_t, act_t)
+            logits, value_t, _ = model(obs_t, act_t)
             logits  = logits.squeeze(0)               # [N]
             value_v = float(value_t.squeeze().item())
 

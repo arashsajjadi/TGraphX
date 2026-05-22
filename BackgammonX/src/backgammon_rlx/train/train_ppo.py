@@ -25,12 +25,21 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def build_model(cfg: dict, device: torch.device) -> BackgammonPolicyValueNet:
+def build_model(cfg: dict, device: torch.device,
+                obs_dim: int = None, act_feat_dim: int = None) -> BackgammonPolicyValueNet:
+    model_cfg = cfg.get("model", {})
     model = BackgammonPolicyValueNet(
         state_dim=cfg.get("state_dim", 256),
         act_dim=cfg.get("act_dim", 256),
         n_point_res=cfg.get("n_point_residual", 4),
         n_action_res=cfg.get("n_action_residual", 3),
+        use_transformer=model_cfg.get("use_transformer", False),
+        transformer_layers=model_cfg.get("transformer_layers", 2),
+        transformer_heads=model_cfg.get("transformer_heads", 4),
+        dropout=model_cfg.get("dropout", 0.0),
+        use_auxiliary_heads=model_cfg.get("use_auxiliary_heads", False),
+        obs_dim=obs_dim,
+        act_feat_dim=act_feat_dim,
     )
     if cfg.get("compile_model", False):
         try:
@@ -63,10 +72,12 @@ def main() -> None:
     (run_dir / "config.yaml").write_text(yaml.dump(cfg))
     print(f"[train] run_dir={run_dir}")
 
-    obs_enc = ObservationEncoder()
-    act_enc = ActionEncoder()
+    enc_version = cfg.get("encoder_version", "v1")
+    obs_enc = ObservationEncoder(version=enc_version)
+    act_enc = ActionEncoder(version=enc_version)
+    print(f"[train] encoder={enc_version}  obs_dim={obs_enc.dim}  act_dim={act_enc.dim}")
 
-    model = build_model(cfg, device)
+    model = build_model(cfg, device, obs_dim=obs_enc.dim, act_feat_dim=act_enc.dim)
     print(f"[train] parameters={model.parameter_count():,}")
 
     optimizer = torch.optim.AdamW(

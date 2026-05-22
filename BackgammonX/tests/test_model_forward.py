@@ -21,7 +21,7 @@ class TestModelForward:
         model = small_model()
         obs = torch.randn(2, OBS_DIM)
         act = torch.randn(2, 5, ACT_DIM)
-        logits, values = model(obs, act)
+        logits, values, _ = model(obs, act)
         assert logits.shape == (2, 5)
         assert values.shape == (2,)
 
@@ -29,7 +29,7 @@ class TestModelForward:
         model = small_model()
         obs = torch.randn(4, OBS_DIM)
         act = torch.randn(4, 10, ACT_DIM)
-        logits, values = model(obs, act)
+        logits, values, _ = model(obs, act)
         assert torch.all(torch.isfinite(logits)), "NaN/Inf in logits"
         assert torch.all(torch.isfinite(values)), "NaN/Inf in values"
 
@@ -41,7 +41,7 @@ class TestModelForward:
         mask = torch.ones(1, 5, dtype=torch.bool)
         mask[0, 3] = False  # mask out action 3
 
-        logits, _ = model(obs, act, mask=mask)
+        logits, _val, _ = model(obs, act, mask=mask)
         log_probs = torch.log_softmax(logits, dim=-1)
         probs = log_probs.exp()
         assert probs[0, 3].item() < 1e-6, "Masked action should have ~0 probability"
@@ -59,7 +59,7 @@ class TestModelForward:
         mask[1, :6] = True  # 6 actions
         mask[2, :8] = True  # 8 actions
 
-        logits, values = model(obs, act, mask=mask)
+        logits, values, _ = model(obs, act, mask=mask)
         log_probs = torch.log_softmax(logits, dim=-1)
         probs = log_probs.exp()
 
@@ -78,7 +78,7 @@ class TestModelForward:
         mask = torch.ones(2, 5, dtype=torch.bool)
         mask[0, 3:] = False  # 3 valid for sample 0, 5 for sample 1
 
-        logits, _ = model(obs, act, mask=mask)
+        logits, _val, _ = model(obs, act, mask=mask)
         log_probs = torch.log_softmax(logits, dim=-1)
         probs = log_probs.exp()
         safe_lp = log_probs.nan_to_num(0.0)
@@ -109,7 +109,7 @@ class TestModelForward:
         act = torch.tensor(act_arr, dtype=torch.float32).unsqueeze(0)
 
         with torch.no_grad():
-            logits, values = model(obs, act)
+            logits, values, _ = model(obs, act)
 
         assert logits.shape == (1, len(turns))
         assert values.shape == (1,)
@@ -129,7 +129,7 @@ class TestModelForward:
 
         with torch.no_grad():
             with torch.amp.autocast("cuda"):
-                logits, values = model(obs, act, mask=mask)
+                logits, values, _ = model(obs, act, mask=mask)
 
         log_probs = torch.log_softmax(logits.float(), dim=-1)
         probs = log_probs.exp()

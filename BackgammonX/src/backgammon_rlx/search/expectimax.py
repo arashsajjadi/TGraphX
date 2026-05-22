@@ -57,7 +57,7 @@ def _leaf_value(
     act_arr = np.stack([act_enc.encode(t, canon) for t in turns_for_enc], 0)
     act_t   = torch.tensor(act_arr, dtype=torch.float32,
                              device=device).unsqueeze(0)
-    _, value = model(obs, act_t)
+    _, value, _aux = model(obs, act_t)
     return float(value.squeeze().item())
 
 

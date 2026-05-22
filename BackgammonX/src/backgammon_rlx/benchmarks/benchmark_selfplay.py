@@ -40,7 +40,7 @@ def benchmark_neural_inference(
 
     t0 = time.perf_counter()
     with torch.no_grad():
-        logits, values = model(obs_t, act_t)
+        logits, values, _ = model(obs_t, act_t)
     if device.type == "cuda":
         torch.cuda.synchronize()
     elapsed = time.perf_counter() - t0
