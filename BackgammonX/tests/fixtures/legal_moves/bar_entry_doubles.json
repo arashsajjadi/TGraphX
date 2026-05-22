@@ -1,0 +1,17 @@
+{
+  "id": "bar_entry_doubles",
+  "description": "Player 0 has 2 checkers on bar, doubles [3,3,3,3]. Entry point 22 (25-3=22) is open. Must enter both, then can use remaining 2 dice to move.",
+  "board": [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ],
+  "bar": [2, 0],
+  "borne_off": [0, 0],
+  "current_player": 0,
+  "dice": [3, 3, 3, 3],
+  "expected_num_turns": 2,
+  "expected_turns": ["bar/22(2) 22/19 19/16", "bar/22(2) 22/19(2)"],
+  "forbidden_turns": [],
+  "notes": "Both bar checkers enter on 22. Then 2 remaining dice move from 22 and 19. Maximum 4 moves.",
+  "source": "hand-crafted"
+}

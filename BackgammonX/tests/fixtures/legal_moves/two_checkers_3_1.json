@@ -1,0 +1,11 @@
+{
+  "id": "two_checkers_3_1",
+  "description": "Player 0 checkers at 8 and 12. Dice [3,1]. Four distinct final states.",
+  "board": [0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [0,0], "current_player": 0, "dice": [3,1],
+  "expected_num_turns": 4,
+  "expected_turns": ["12/9 8/7", "12/9 9/8", "8/5 12/11"],
+  "forbidden_turns": [],
+  "notes": "Two separate checkers allow splitting or stacking; four distinct final positions.",
+  "source": "hand-crafted"
+}

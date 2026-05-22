@@ -1,0 +1,17 @@
+{
+  "id": "dedup_same_point",
+  "description": "Two identical checkers at point 13, dice [3,2]. Moving different checkers with different dice can produce the same or different final states. Only 2 distinct final states exist.",
+  "board": [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ],
+  "bar": [0, 0],
+  "borne_off": [0, 0],
+  "current_player": 0,
+  "dice": [3, 2],
+  "expected_num_turns": 2,
+  "expected_turns": ["13/10 10/8", "13/10 13/11"],
+  "forbidden_turns": [],
+  "notes": "Moving same checker twice (13→10→8) vs splitting (13→10, 13→11). Both valid and distinct. Two orderings of same-die moves deduplicate to 1.",
+  "source": "hand-crafted"
+}

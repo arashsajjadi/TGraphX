@@ -1,0 +1,17 @@
+{
+  "id": "all_bar_blocked_pass",
+  "description": "Player 0 has checker on bar; both entry points (die-3→22, die-5→20) are blocked. Forced pass.",
+  "board": [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, -2, 0, -2, 0, 0
+  ],
+  "bar": [1, 0],
+  "borne_off": [0, 0],
+  "current_player": 0,
+  "dice": [3, 5],
+  "expected_num_turns": 1,
+  "expected_turns": ["(pass)"],
+  "forbidden_turns": ["bar/22", "bar/20"],
+  "notes": "Points 22 (die-3 entry) and 20 (die-5 entry) both blocked by 2 opponent checkers.",
+  "source": "hand-crafted"
+}

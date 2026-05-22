@@ -1,0 +1,11 @@
+{
+  "id": "bar_entry_hit",
+  "description": "Player 1 on bar. Dice [3,2]. Point 3 has player 0 blot (die-3 entry can hit). Point 2 open.",
+  "board": [0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,1], "borne_off": [0,0], "current_player": 1, "dice": [3,2],
+  "expected_num_turns": 2,
+  "expected_turns": ["bar/3* 3/5", "bar/2 2/5"],
+  "forbidden_turns": [],
+  "notes": "Player 1 can hit blot on point 3 (die-3) or enter on point 2 (die-2). After entering, remaining die moves forward.",
+  "source": "hand-crafted"
+}

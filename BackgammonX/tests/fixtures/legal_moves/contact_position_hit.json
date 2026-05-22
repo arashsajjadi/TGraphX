@@ -1,0 +1,11 @@
+{
+  "id": "contact_position_hit",
+  "description": "Player 0 at 5 and 7. Player 1 blot at 9, prime at 11. Dice [2,1]. Can hit the blot at 9 indirectly via 7→5→... No direct die to hit 9. 3 distinct final states.",
+  "board": [0,0,0,0,1,0,1,0,-1,0,-2,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [0,0], "current_player": 0, "dice": [2,1],
+  "expected_num_turns": 3,
+  "expected_turns": ["5/3 3/2", "5/3 7/6", "7/5 5/4"],
+  "forbidden_turns": ["7/4"],
+  "notes": "Die-2 from 7→5 (open), die-1 from 5→4. Or die-1 from 5→4 first. Cannot reach blot at 9 (would need die-4 or die-2 from 7 goes to 5, not 9). 11 is blocked.",
+  "source": "hand-crafted"
+}

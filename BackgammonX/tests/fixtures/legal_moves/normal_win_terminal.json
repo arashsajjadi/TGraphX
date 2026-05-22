@@ -1,0 +1,14 @@
+{
+  "id": "normal_win_terminal",
+  "description": "Player 0 wins normally. Player 1 has 5 checkers borne off (rest at point 12). Score = 1.",
+  "board": [0,0,0,0,0,0,0,0,0,0,0,-10,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [15,5], "current_player": 0, "dice": [],
+  "expected_num_turns": null,
+  "expected_turns": [],
+  "forbidden_turns": [],
+  "notes": "Terminal: loser has 5 borne off → normal win (score=1, not gammon).",
+  "is_terminal": true,
+  "expected_score": 1,
+  "expected_winner": 0,
+  "source": "hand-crafted"
+}

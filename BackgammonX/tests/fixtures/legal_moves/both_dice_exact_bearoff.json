@@ -1,0 +1,11 @@
+{
+  "id": "both_dice_exact_bearoff",
+  "description": "Player 0 bearing off: checkers at 4 and 2. Dice [4,2]. Each die matches a checker exactly.",
+  "board": [0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [13,0], "current_player": 0, "dice": [4,2],
+  "expected_num_turns": 2,
+  "expected_turns": ["4/off 2/off", "4/2 2/off"],
+  "forbidden_turns": [],
+  "notes": "Die-4 can bear off from 4 (exact) or move 4→2. Die-2 can bear off from 2 (exact). Two distinct final states.",
+  "source": "hand-crafted"
+}

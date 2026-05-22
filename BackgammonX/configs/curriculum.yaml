@@ -1,0 +1,30 @@
+# Curriculum learning configuration
+device: cuda
+seed: 42
+
+# Stages: bear_off → racing → full_game
+curriculum_enabled: true
+stages:
+  - sampler: bear_off
+    promote_win_rate: 0.90
+  - sampler: racing
+    promote_win_rate: 0.80
+  - sampler: full_game
+    promote_win_rate: 1.0   # final stage, no promotion
+
+# Inherit PPO settings from rtx5080.yaml or default.yaml
+state_dim: 256
+act_dim: 256
+rollout_games_per_update: 64
+total_games: 5_000_000
+gamma: 0.995
+gae_lambda: 0.95
+clip_range: 0.2
+value_coef: 0.5
+entropy_coef: 0.01
+max_grad_norm: 1.0
+update_epochs: 4
+minibatch_size: 512
+mixed_precision: true
+learning_rate: 3.0e-4
+weight_decay: 0.00001

@@ -1,0 +1,11 @@
+{
+  "id": "doubles_full_4of4",
+  "description": "Player 0, checker at 20, doubles [5,5,5,5]. All 4 moves possible: 20→15→10→5→off (entering home and bearing off).",
+  "board": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],
+  "bar": [0,0], "borne_off": [0,0], "current_player": 0, "dice": [5,5,5,5],
+  "expected_num_turns": 1,
+  "expected_turns": ["20/15 15/10 10/5 5/off"],
+  "forbidden_turns": [],
+  "notes": "Checker at 20 moves four times with die-5. At point 5 (in home, all in home after 20→15→10→5), bear off on 4th move.",
+  "source": "hand-crafted"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "hitting_during_bearoff",
+  "description": "Player 0 bearing off: 2 checkers at point 3, 3 checkers at point 5 (10 already borne off). Player 1 has a blot on point 2. Dice [1,3].",
+  "board": [
+    0, -1, 2, 0, 3, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ],
+  "bar": [0, 0],
+  "borne_off": [10, 0],
+  "current_player": 0,
+  "dice": [1, 3],
+  "expected_num_turns": 6,
+  "expected_turns": ["3/2* 3/off", "5/4 3/off", "5/4 4/1"],
+  "forbidden_turns": [],
+  "notes": "Player 0 can hit the blot at 2 while bearing off. Bearing off is still active because all checkers remain in home board (hitting doesn't remove them from home). After hitting, bear-off continues if player 0 doesn't re-enter from bar.",
+  "source": "hand-crafted"
+}

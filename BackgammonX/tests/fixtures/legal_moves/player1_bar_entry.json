@@ -1,0 +1,11 @@
+{
+  "id": "player1_bar_entry",
+  "description": "Player 1 has 1 checker on bar. Dice [4,2]. Entry for P1: die-4→point 4, die-2→point 2. Board is empty.",
+  "board": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,1], "borne_off": [0,0], "current_player": 1, "dice": [4,2],
+  "expected_num_turns": 1,
+  "expected_turns": ["bar/4 4/6"],
+  "forbidden_turns": [],
+  "notes": "P1 enters on die-4→point 4, then uses die-2 to move 4→6.",
+  "source": "hand-crafted"
+}

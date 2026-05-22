@@ -1,0 +1,11 @@
+# Imitation learning pretraining configuration
+device: cuda
+seed: 42
+state_dim: 256
+act_dim: 256
+
+learning_rate: 1.0e-3
+weight_decay: 0.00001
+n_epochs: 20
+batch_size: 512
+value_coef: 0.5

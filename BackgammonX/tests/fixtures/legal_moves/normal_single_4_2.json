@@ -1,0 +1,11 @@
+{
+  "id": "normal_single_4_2",
+  "description": "Single checker at point 13, dice [4,2]. Must chain both moves through point 9.",
+  "board": [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [0,0], "current_player": 0, "dice": [4,2],
+  "expected_num_turns": 1,
+  "expected_turns": ["13/9 9/7"],
+  "forbidden_turns": ["13/7"],
+  "notes": "Only one path: 13→9→7 using die-4 then die-2. Direct 13→7 requires die 6.",
+  "source": "hand-crafted"
+}

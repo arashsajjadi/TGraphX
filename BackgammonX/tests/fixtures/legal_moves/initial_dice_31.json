@@ -1,0 +1,17 @@
+{
+  "id": "initial_dice_31",
+  "description": "Standard opening position, dice [3,1].  Classic move is 8/5 6/5 (making the 5-point).",
+  "board": [
+    -2, 0, 0, 0, 0, 5, 0, 3, 0, 0, 0, -5,
+     5, 0, 0, 0, -3, 0, -5, 0, 0, 0, 0, 2
+  ],
+  "bar": [0, 0],
+  "borne_off": [0, 0],
+  "current_player": 0,
+  "dice": [3, 1],
+  "expected_num_turns": 16,
+  "expected_turns": ["8/5 6/5", "8/5 5/4", "6/3 8/7", "24/21 8/7"],
+  "forbidden_turns": ["13/12"],
+  "notes": "13→12 is blocked by 5 player-1 checkers.  8/5 6/5 makes the 5-point.",
+  "source": "hand-crafted"
+}

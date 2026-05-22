@@ -1,0 +1,17 @@
+{
+  "id": "bearoff_forbidden_outer",
+  "description": "Player 0 has checker at point 3 (home) and checker at point 8 (outer board). 13 borne off. Bearing off is forbidden because not all checkers are in home board.",
+  "board": [
+    0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ],
+  "bar": [0, 0],
+  "borne_off": [13, 0],
+  "current_player": 0,
+  "dice": [3, 1],
+  "expected_num_turns": 2,
+  "expected_turns": ["8/5 3/2", "8/5 5/4"],
+  "forbidden_turns": ["3/off", "8/5 3/off"],
+  "notes": "Checker at point 8 prevents bearing off. Must move into home board first.",
+  "source": "hand-crafted"
+}

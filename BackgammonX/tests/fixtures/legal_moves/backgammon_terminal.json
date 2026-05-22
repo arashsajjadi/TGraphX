@@ -1,0 +1,14 @@
+{
+  "id": "backgammon_terminal",
+  "description": "Player 0 wins, player 1 has checker on bar and 0 borne off. Backgammon (score=3).",
+  "board": [0,0,0,0,0,0,0,0,0,0,0,-14,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,1], "borne_off": [15,0], "current_player": 0, "dice": [],
+  "expected_num_turns": null,
+  "expected_turns": [],
+  "forbidden_turns": [],
+  "notes": "Terminal: is_terminal=True, winner=0, score=3 (backgammon - loser has checker on bar).",
+  "is_terminal": true,
+  "expected_score": 3,
+  "expected_winner": 0,
+  "source": "hand-crafted"
+}

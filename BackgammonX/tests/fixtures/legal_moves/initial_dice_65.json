@@ -1,0 +1,17 @@
+{
+  "id": "initial_dice_65",
+  "description": "Standard opening, dice [6,5]. Only runner moves from 24 are possible (18 and 19 blocked).",
+  "board": [
+    -2, 0, 0, 0, 0, 5, 0, 3, 0, 0, 0, -5,
+     5, 0, 0, 0, -3, 0, -5, 0, 0, 0, 0, 2
+  ],
+  "bar": [0, 0],
+  "borne_off": [0, 0],
+  "current_player": 0,
+  "dice": [6, 5],
+  "expected_num_turns": 7,
+  "expected_turns": ["24/18 13/8", "24/18 8/3", "13/7 13/8"],
+  "forbidden_turns": ["24/19", "24/13"],
+  "notes": "19 and 20 are blocked by player-1.  The only legal moves for die-6 from 24 is 24/18, die-5 from 24 is 24/19 (blocked).  From 13: 13/7 (die 6), 13/8 (die 5).",
+  "source": "hand-crafted"
+}

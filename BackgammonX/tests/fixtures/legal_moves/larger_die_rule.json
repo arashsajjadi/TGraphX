@@ -1,0 +1,17 @@
+{
+  "id": "larger_die_rule",
+  "description": "Single checker at point 20.  Die 5 → 20/15 open, then die 3 → 15/12 blocked (1 move). Die 3 → 20/17 open, then die 5 → 17/12 blocked (1 move). Both individually work, not together → must use larger die (5).",
+  "board": [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2,
+    0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0
+  ],
+  "bar": [0, 0],
+  "borne_off": [0, 0],
+  "current_player": 0,
+  "dice": [5, 3],
+  "expected_num_turns": 1,
+  "expected_turns": ["20/15"],
+  "forbidden_turns": ["20/17"],
+  "notes": "Larger-die rule: when only 1 die can be used and both dice individually work, must use the larger (5, not 3). 12 is blocked.",
+  "source": "hand-crafted"
+}

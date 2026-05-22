@@ -1,0 +1,11 @@
+{
+  "id": "only_larger_die_blocked",
+  "description": "Checker at 11, dice [6,2]. Point 5 (die-6 destination: 11-6=5) is blocked. Only die-2 can start; 2-move sequence results, so no larger-die filter.",
+  "board": [0,0,0,0,-2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [0,0], "current_player": 0, "dice": [6,2],
+  "expected_num_turns": 1,
+  "expected_turns": ["11/9 9/3"],
+  "forbidden_turns": ["11/5"],
+  "notes": "Die-6: 11→5 blocked. Die-2: 11→9 open, then 9→3 open. 2-move sequence. max_moves=2, so no larger-die filter. Smaller die used.",
+  "source": "hand-crafted"
+}

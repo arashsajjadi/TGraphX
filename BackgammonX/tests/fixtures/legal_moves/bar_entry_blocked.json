@@ -1,0 +1,12 @@
+{
+  "id": "bar_entry_blocked",
+  "description": "Player 0 on bar; die-3 entry blocked; die-5 entry open",
+  "board": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2, 0, 0, 0],
+  "bar": [1, 0],
+  "borne_off": [0, 0],
+  "current_player": 0,
+  "dice": [3, 5],
+  "forbidden_turns": [],
+  "notes": "point 22 (index 21) blocked by 2 opponent checkers; die-3 entry (25-3=22) impossible",
+  "source": "hand-crafted"
+}

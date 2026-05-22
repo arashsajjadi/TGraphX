@@ -1,0 +1,11 @@
+{
+  "id": "larger_die_used_when_smaller_blocked",
+  "description": "Checker at 11, dice [6,2]. Point 3 (destinations for both second moves) is blocked. Both dice individually give 1 move; larger die (6) must be used.",
+  "board": [0,0,-2,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [0,0], "current_player": 0, "dice": [6,2],
+  "expected_num_turns": 1,
+  "expected_turns": ["11/5"],
+  "forbidden_turns": ["11/9"],
+  "notes": "Die-6: 11→5 open, then die-2: 5→3 blocked (1 move). Die-2: 11→9 open, then die-6: 9→3 blocked (1 move). Both individually work, not together. Larger die (6) wins: 11/5.",
+  "source": "hand-crafted"
+}

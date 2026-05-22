@@ -1,0 +1,35 @@
+# Fast debug config — verifies the full pipeline quickly on CPU
+device: cpu
+seed: 0
+mixed_precision: false
+compile_model: false
+
+# Small model
+state_dim: 64
+act_dim: 64
+n_point_residual: 2
+n_action_residual: 1
+
+# Few games
+rollout_games_per_update: 4
+total_games: 200
+
+# PPO
+gamma: 0.99
+gae_lambda: 0.95
+clip_range: 0.2
+value_coef: 0.5
+entropy_coef: 0.05
+max_grad_norm: 1.0
+update_epochs: 2
+minibatch_size: 64
+
+# Optimizer
+learning_rate: 3.0e-4
+weight_decay: 0.0
+lr_schedule: none
+
+# Logging
+log_interval: 1
+checkpoint_interval: 100
+runs_dir: runs_debug

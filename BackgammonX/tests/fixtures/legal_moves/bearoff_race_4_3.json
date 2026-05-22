@@ -1,0 +1,11 @@
+{
+  "id": "bearoff_race_4_3",
+  "description": "Player 0 bearing off from a race position: 3 each at points 4,5,6. Dice [4,3]. 9 distinct final states.",
+  "board": [0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [6,0], "current_player": 0, "dice": [4,3],
+  "expected_num_turns": 9,
+  "expected_turns": ["4/off 4/1", "5/1 4/1"],
+  "forbidden_turns": [],
+  "notes": "Pure race: all P0 checkers in home board. 9 distinct final states from bearing off and moving combinations.",
+  "source": "hand-crafted"
+}

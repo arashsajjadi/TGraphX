@@ -1,0 +1,14 @@
+{
+  "id": "gammon_terminal",
+  "description": "Player 0 has borne off all 15. Player 1 has 0 borne off, checkers at point 12 (not in winner's home, no bar). Gammon.",
+  "board": [0,0,0,0,0,0,0,0,0,0,0,-15,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [15,0], "current_player": 0, "dice": [],
+  "expected_num_turns": null,
+  "expected_turns": [],
+  "forbidden_turns": [],
+  "notes": "Terminal state validation: is_terminal=True, winner=0, score=2 (gammon). No legal actions (game over).",
+  "is_terminal": true,
+  "expected_score": 2,
+  "expected_winner": 0,
+  "source": "hand-crafted"
+}

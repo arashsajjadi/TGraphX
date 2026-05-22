@@ -1,0 +1,6 @@
+# Benchmark configuration
+device: auto
+state_dim: 256
+act_dim: 256
+n_point_residual: 4
+n_action_residual: 3

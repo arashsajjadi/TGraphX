@@ -1,0 +1,17 @@
+{
+  "id": "doubles_4checkers_max_moves",
+  "description": "4 checkers at point 13, doubles [3,3,3,3]. All 4 moves can be played. 5 distinct final states.",
+  "board": [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ],
+  "bar": [0, 0],
+  "borne_off": [0, 0],
+  "current_player": 0,
+  "dice": [3, 3, 3, 3],
+  "expected_num_turns": 5,
+  "expected_turns": ["13/10(4)", "13/10(3) 10/7", "13/10(2) 10/7(2)"],
+  "forbidden_turns": [],
+  "notes": "Doubles with 4 identical checkers: 5 distinct final states from spreading checkers differently. Maximum 4 moves must be played.",
+  "source": "hand-crafted"
+}

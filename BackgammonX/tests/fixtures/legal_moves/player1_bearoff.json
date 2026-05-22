@@ -1,0 +1,11 @@
+{
+  "id": "player1_bearoff",
+  "description": "Player 1 with 1 checker at point 23 (all borne off except this). Dice [2,1]. 23+2=25=off exact (die-2). 23+1=24 then 24+1=25=off.",
+  "board": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0],
+  "bar": [0,0], "borne_off": [0,14], "current_player": 1, "dice": [2,1],
+  "expected_num_turns": 1,
+  "expected_turns": ["23/24 24/off"],
+  "forbidden_turns": [],
+  "notes": "Player 1 bears off: 25-2=23 so die 2 is exact for point 23. But die 1: 23+1=24 then 24+1=25=off. Sequence [23→24→off] uses both dice.",
+  "source": "hand-crafted"
+}

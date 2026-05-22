@@ -1,0 +1,11 @@
+{
+  "id": "doubles_partial_3of4",
+  "description": "Checker at point 12, doubles [3,3,3,3]. Point 3 (=12-3-3-3) blocked. Exactly 3 of 4 moves playable.",
+  "board": [0,0,-2,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [0,0], "current_player": 0, "dice": [3,3,3,3],
+  "expected_num_turns": 1,
+  "expected_turns": ["12/9 9/6"],
+  "forbidden_turns": [],
+  "notes": "12→9→6→3(blocked). Maximum 2 moves, not 3. Wait - 12-3=9, 9-3=6 (2 moves). Need to check if 6→3 is blocked. Yes: board[2]=-2 = point 3 blocked.",
+  "source": "hand-crafted"
+}

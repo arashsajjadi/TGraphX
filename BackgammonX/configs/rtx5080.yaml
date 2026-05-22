@@ -1,0 +1,54 @@
+# Optimized config for RTX 5080 (16 GB VRAM) + i7-14700F (20 cores / 28 threads) + 64 GB RAM
+device: cuda
+seed: 42
+mixed_precision: true
+
+# torch.compile gives 10-30% speedup on PyTorch 2.x with CUDA 13+
+compile_model: false
+
+# Rollout: multiprocess uses 12 workers + GPU inference thread
+rollout_mode: multiprocess          # "single" | "multiprocess"
+num_self_play_workers: 12           # adjust to core count
+inference_batch_size: 256           # GPU inference batch size
+inference_max_wait_ms: 5.0          # max wait before dispatching GPU batch
+
+# Model — 256 default, 512 if GPU is lightly loaded
+state_dim: 256
+act_dim: 256
+n_point_residual: 6
+n_action_residual: 4
+
+# Rollout volume (256 games with 12 workers → ~25K steps/update)
+rollout_games_per_update: 128
+total_games: 10_000_000
+
+# PPO hyperparameters — minibatch_size conservatively sized for shared VRAM
+gamma: 0.999
+gae_lambda: 0.95
+clip_range: 0.2
+value_coef: 0.5
+entropy_coef: 0.005
+max_grad_norm: 1.0
+update_epochs: 6
+minibatch_size: 1024               # 4096 requires exclusive GPU; 1024 safe for shared
+target_kl: 0.03                    # KL early stopping
+
+# Optimizer
+learning_rate: 0.00015
+weight_decay: 0.00001
+lr_schedule: cosine
+
+# Memory
+pin_memory: true
+
+# Invariant checking
+strict_invariants: false
+eval_strict_invariants: true
+
+# Logging / checkpoints
+log_interval: 5
+checkpoint_interval: 50_000
+evaluation_interval: 200_000
+tensorboard: false
+runs_dir: runs
+benchmark_before_training: false

@@ -1,0 +1,36 @@
+# BackgammonX default training configuration
+device: auto            # "cuda", "cpu", or "auto"
+seed: 42
+
+# Model
+state_dim: 256
+act_dim: 256
+n_point_residual: 4
+n_action_residual: 3
+compile_model: false    # torch.compile (PyTorch 2.x); set true when stable
+
+# Rollout
+rollout_games_per_update: 64
+total_games: 2_000_000
+
+# PPO
+gamma: 0.995
+gae_lambda: 0.95
+clip_range: 0.2
+value_coef: 0.5
+entropy_coef: 0.01
+max_grad_norm: 1.0
+update_epochs: 4
+minibatch_size: 512
+mixed_precision: true
+
+# Optimizer
+learning_rate: 3.0e-4
+weight_decay: 0.00001
+lr_schedule: cosine
+
+# Logging / checkpointing
+log_interval: 10
+checkpoint_interval: 10_000
+evaluation_interval: 50_000
+runs_dir: runs

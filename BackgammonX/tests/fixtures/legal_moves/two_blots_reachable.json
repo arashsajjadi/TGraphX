@@ -1,0 +1,11 @@
+{
+  "id": "two_blots_reachable",
+  "description": "Player 0 at 13. Player 1 blots at 10 (die-3) and 8 (die-5). Dice [3,5]. Both blots can be hit independently.",
+  "board": [0,0,0,0,0,0,0,-1,0,-1,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+  "bar": [0,0], "borne_off": [0,0], "current_player": 0, "dice": [3,5],
+  "expected_num_turns": 2,
+  "expected_turns": ["13/10* 10/5", "13/8* 8/5"],
+  "forbidden_turns": [],
+  "notes": "Die-3 hits blot at 10, then die-5 from 10 to 5. Or die-5 hits blot at 8, then die-3 from 8 to 5. Both valid.",
+  "source": "hand-crafted"
+}

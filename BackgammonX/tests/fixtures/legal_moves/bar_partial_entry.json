@@ -1,0 +1,11 @@
+{
+  "id": "bar_partial_entry",
+  "description": "Player 0 on bar, dice [4,2]. Die-4 entry point 21 (25-4=21) is blocked. Die-2 entry point 23 (25-2=23) open. Must enter with die-2, then use die-4.",
+  "board": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-2,0,0,0],
+  "bar": [1,0], "borne_off": [0,0], "current_player": 0, "dice": [4,2],
+  "expected_num_turns": 1,
+  "expected_turns": ["bar/23 23/19"],
+  "forbidden_turns": ["bar/21"],
+  "notes": "Only die-2 can enter (onto 23). Then die-4 moves from 23 to 19. Larger die (4) is blocked for entry.",
+  "source": "hand-crafted"
+}
