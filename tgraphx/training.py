@@ -280,6 +280,12 @@ def _unpack_batch(batch: Any, device: torch.device):
 
     if isinstance(batch, GraphBatch):
         nf = batch.node_features.to(device)
+        if batch.edge_index is None:
+            raise ValueError(
+                "GraphBatch.edge_index is None. The default training loop "
+                "expects a connected batch; build a custom loop for no-edge "
+                "batches or pass an empty edge_index of shape [2, 0]."
+            )
         ei = batch.edge_index.to(device)
         kw: Dict[str, Any] = {}
         if batch.edge_features is not None:

@@ -39,7 +39,7 @@ CPU-only environments.
 
 ## Code style
 
-- Python 3.9+, no f-strings with complex walrus operators.
+- Python 3.10+ (matches `pyproject.toml`'s `requires-python = ">=3.10"`).
 - Type hints on all public functions.
 - No bare `except:` — catch specific exceptions.
 - Docstrings on all public functions and classes.
@@ -67,11 +67,16 @@ CPU-only environments.
 
 Please do not add documentation or comments that overclaim:
 
-- Do not claim `train_epoch / evaluate / fit` exist — they don't.
-- Do not claim `TensorBoardLogger / MLflowLogger` exist — they don't.
+- Do not claim public APIs exist unless they are actually exported in
+  `tgraphx/__init__.py` (or `tgraphx.ux`/`tgraphx.kg`/...) and have tests.
+- `train_epoch`, `evaluate`, `fit`, `TensorBoardLogger`, and `MLflowLogger`
+  are currently exported and tested; if you remove or rename one, also
+  update `docs/api_stability.md` and add deprecation aliases.
 - Do not claim universal `torch.compile` speedup.
 - Do not claim full AMP support for all devices and layers.
 - Do not claim GAT / SAGE / GIN chunking unless implemented.
+- Do not claim "SOTA" or "parity with PyG/DGL/PyKEEN/SB3/RLlib"; TGraphX is
+  tensor-native research code, not a replacement for those frameworks.
 
 ## Pull request checklist
 

@@ -18,7 +18,9 @@ g = Graph(
     y=y,                   # optional: labels (alias: labels, node_labels)
     edge_attr=edge_attr,   # optional: Tensor[E, ...] (alias: edge_features)
     edge_weight=w,         # optional: Tensor[E]
-    graph_features=gl,     # optional: graph-level label (alias: graph_label)
+    graph_label=gy,        # optional: graph-level target/label
+    graph_features=gf,     # optional: graph-level INPUT feature tensor
+                           #           (distinct from graph_label)
     train_mask=mask,       # optional: BoolTensor[N]
     metadata={},           # optional: dict
 )
@@ -81,7 +83,8 @@ Legacy tuple unpacking still works: `for subgraph, seeds in loader: ...`
 ## 3. Labels
 
 - **Node labels** are stored in `Graph.node_labels` (also accessible as `.y` and `.labels`).
-- **Graph labels** are stored in `Graph.graph_label` (also accessible as `.graph_features`).
+- **Graph labels** are stored in `Graph.graph_label` — the graph-level target.
+- **Graph features** are stored in `Graph.graph_features` — a *distinct* graph-level **input feature** tensor (e.g. global metadata or pooled summary). It is not an alias of `graph_label`.
 - **Edge labels** are stored in `Graph.edge_labels`.
 - The `GraphMiniBatch.seed_y` property extracts labels for seed nodes.
 

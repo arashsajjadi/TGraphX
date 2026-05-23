@@ -351,15 +351,30 @@ def test_nb35_mutag_workflow_with_edge_attr() -> None:
 
 def test_pyg_singleton_graph_label_normalized() -> None:
     """Regression: PyG MUTAG stores graph label as tensor([1]) (shape [1]).
-    from_pyg_data should normalize this to scalar so cross_entropy works after batching."""
+    from_pyg_data should normalize this to scalar so cross_entropy works after batching.
+
+    This test only runs when MUTAG is already cached locally; it never
+    initiates a network download from the test suite. Set the env var
+    ``TGRAPHX_TESTS_ALLOW_NETWORK=1`` to opt back in to downloads.
+    """
     import importlib
+    import os
     pyg = importlib.util.find_spec("torch_geometric")
     if pyg is None:
         pytest.skip("torch_geometric not installed")
     from tgraphx.datasets import PyGTUDatasetAdapter
+    from tgraphx.datasets.cache import resolve_dataset_root
     from tgraphx import GraphDataLoader
 
-    ds = PyGTUDatasetAdapter(name="MUTAG", download=True)
+    allow_net = os.environ.get("TGRAPHX_TESTS_ALLOW_NETWORK") == "1"
+    cached_root = resolve_dataset_root(None, "pyg/TUDataset") / "MUTAG"
+    has_raw = (cached_root / "raw").exists() or (cached_root / "processed").exists()
+    if not has_raw and not allow_net:
+        pytest.skip(
+            "MUTAG raw files not cached locally and "
+            "TGRAPHX_TESTS_ALLOW_NETWORK!=1; skipping to avoid network."
+        )
+    ds = PyGTUDatasetAdapter(name="MUTAG", download=allow_net)
     g = ds.get(0)
     # graph_label must be scalar tensor (shape []), not [1]
     assert g.graph_label.dim() == 0, (

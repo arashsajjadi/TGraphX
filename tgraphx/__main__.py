@@ -59,6 +59,11 @@ def main() -> None:
         print(f"Version: {report['tgraphx_version']}")
         print(f"Torch: {report['torch_version']}")
         print(f"CUDA: {report['cuda_available']} (devices: {report['cuda_device_count']})")
+        required = report.get("required_dependencies")
+        if required:
+            print("\nRequired dependencies:")
+            for pkg, ver in required.items():
+                print(f"  {pkg}: {ver}")
         print("\nOptional dependencies:")
         for pkg, ver in report.get("optional_dependencies", {}).items():
             print(f"  {pkg}: {ver}")

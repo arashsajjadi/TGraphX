@@ -175,7 +175,7 @@ def _register_synthetic() -> None:
 
 
 def _register_torchvision() -> None:
-    common_meta = {"requires": "torchvision  (pip install tgraphx[vision])"}
+    common_meta = {"requires": "torchvision (base dependency; reinstall with `pip install --force-reinstall torchvision` if missing)"}
     register_dataset(
         "torchvision:mnist_patch", MNISTPatchGraphDataset,
         tags=["torchvision", "vision"],

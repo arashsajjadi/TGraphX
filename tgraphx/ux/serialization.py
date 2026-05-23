@@ -40,8 +40,12 @@ def _graph_to_payload(graph: Any) -> dict:
         payload["edge_features"] = graph.edge_features.detach().cpu()
     if getattr(graph, "node_labels", None) is not None:
         payload["node_labels"] = graph.node_labels.detach().cpu()
+    if getattr(graph, "edge_labels", None) is not None:
+        payload["edge_labels"] = graph.edge_labels.detach().cpu()
     if getattr(graph, "graph_label", None) is not None:
         payload["graph_label"] = graph.graph_label.detach().cpu()
+    if getattr(graph, "graph_features", None) is not None:
+        payload["graph_features"] = graph.graph_features.detach().cpu()
     for m in ("train_mask", "val_mask", "test_mask"):
         v = getattr(graph, m, None)
         if v is not None and isinstance(v, torch.Tensor):
@@ -63,8 +67,12 @@ def _payload_to_graph(payload: dict) -> Any:
         kwargs["edge_features"] = payload["edge_features"]
     if "node_labels" in payload:
         kwargs["node_labels"] = payload["node_labels"]
+    if "edge_labels" in payload:
+        kwargs["edge_labels"] = payload["edge_labels"]
     if "graph_label" in payload:
         kwargs["graph_label"] = payload["graph_label"]
+    if "graph_features" in payload:
+        kwargs["graph_features"] = payload["graph_features"]
     for m in ("train_mask", "val_mask", "test_mask"):
         if m in payload:
             kwargs[m] = payload[m]
@@ -140,18 +148,40 @@ def save_tgraphx(obj: Any, path: Union[str, Path]) -> str:
     return str(path)
 
 
-def load_tgraphx(path: Union[str, Path], map_location: str = "cpu") -> Any:
+def load_tgraphx(
+    path: Union[str, Path],
+    map_location: str = "cpu",
+    *,
+    trust_source: bool = True,
+) -> Any:
     """Load a Graph or KnowledgeGraph from a `.tgx` file.
 
     Args:
         path: Path to a file written by :func:`save_tgraphx`.
         map_location: torch.load map_location; defaults to "cpu" for portability.
+        trust_source: ``.tgx`` bundles are pickled via :func:`torch.save` and
+            can contain arbitrary Python objects in their ``metadata`` field.
+            Loading such files executes pickle code, so only load bundles from
+            trusted sources. Defaults to ``True`` to preserve backwards
+            compatibility with existing bundles; set ``False`` to refuse the
+            load and require manual review.
 
     Returns:
         A :class:`Graph` or :class:`KnowledgeGraph` instance.
+
+    Security:
+        See :func:`torch.load` docs — TGraphX bundles include user metadata,
+        so ``weights_only=True`` would reject them. Only load ``.tgx`` files
+        that you produced yourself or received from a trusted collaborator.
     """
     if not os.path.exists(str(path)):
         raise FileNotFoundError(f"TGraphX bundle not found: {path}")
+    if not trust_source:
+        raise TGraphXSerializationError(
+            f"Refusing to load {path}: trust_source=False. "
+            "TGraphX bundles can execute arbitrary pickle code; "
+            "review the file and re-call with trust_source=True if safe."
+        )
     try:
         bundle = torch.load(str(path), map_location=map_location, weights_only=False)
     except Exception as exc:
