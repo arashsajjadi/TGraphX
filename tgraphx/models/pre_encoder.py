@@ -1,7 +1,6 @@
 # File: models/pre_encoder.py
 import logging
 import torch.nn as nn
-import torchvision.models as models
 
 _log = logging.getLogger(__name__)
 
@@ -15,6 +14,10 @@ class PreEncoder(nn.Module):
         super().__init__()
         self.out_channels = out_channels  # Save the output channel count.
         if use_pretrained:
+            # Lazy-import torchvision so `import tgraphx` does not pay the
+            # torchvision.models cost (a few hundred MB of optional code paths)
+            # when users never touch the pretrained ResNet path.
+            import torchvision.models as models
             _log.info("Loading pretrained ResNet-18 weights.")
             resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
 

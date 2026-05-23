@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "1.4.1"
+__version__ = "1.4.2"
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -278,10 +278,15 @@ __all__ = [
     "debug_batch", "batch_summary", "assert_batch_consistent",
     "dataset_card", "model_card", "benchmark_card",
     "audit_package_readiness", "WorkflowResult",
-    "generate_graph", "graph_generator", "evaluate_generated_graphs",
-    "optimize_graph", "evolve_graph",
-    "train_graph_rl", "graph_rl",
+    "generate_graph", "graph_generator", "generate",
+    "evaluate_generated_graphs", "graph_generation_report",
+    "compare_generated_graphs", "generation_metrics",
+    "optimize_graph", "evolve_graph", "graph_evolution", "run_evolution",
+    "train_graph_rl", "graph_rl", "run_rl",
     "audit_generation_run", "audit_evolution_run", "audit_rl_run",
+    # v1.4.x knowledge-graph + experimental top-level aliases
+    "KnowledgeGraph", "KGTrainer", "KGTrainingConfig",
+    "run_graph_generation", "run_evolutionary_optimization", "run_graph_rl",
     # Core
     "Graph",
     "GraphBatch",

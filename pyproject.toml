@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tgraphx"
 # Keep this in sync with tgraphx/__init__.py::__version__
-version = "1.4.1"
+version = "1.4.2"
 description = "Tensor-aware graph neural networks preserving spatial node feature layouts"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -96,7 +96,8 @@ tgraphx-doctor = "tgraphx.__main__:main"
 tgraphx-info = "tgraphx.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/arashsajjadi/TGraphX"
+Homepage = "https://tgraphx.com"
+Source = "https://github.com/arashsajjadi/TGraphX"
 Repository = "https://github.com/arashsajjadi/TGraphX"
 Documentation = "https://github.com/arashsajjadi/TGraphX/tree/main/docs"
 Issues = "https://github.com/arashsajjadi/TGraphX/issues"

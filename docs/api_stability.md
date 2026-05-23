@@ -195,6 +195,50 @@ Tested and documented. API may expand but not break within the v1.x series.
 ### OGB / TGB wrappers (Optional)
 - `OGBNodeEvaluatorWrapper`, `OGBLinkEvaluatorWrapper`, `OGBGraphEvaluatorWrapper`
 
+### UX ergonomics layer *(v1.4.0+)*
+The `tgraphx.ux` package and its top-level re-exports ship as **beta**:
+the APIs are tested and documented, but their surface (kwarg names,
+return-value extras) may expand in future v1.4.x / v1.5.x releases.
+
+- Validation & inspection: `validate_graph`, `assert_tensor_native`,
+  `check_graph_invariants`, `describe`, `summary`.
+- Reproducibility: `reproducible`, `seeded`, `reproducibility_state`.
+- Leakage / split policy: `check_leakage`, `leakage_report`,
+  `validate_split_policy`.
+- Native I/O: `save`, `load`, `save_tgraphx`, `load_tgraphx`,
+  `Graph.save`, `Graph.load`.
+- Graph builders: `knn_graph`, `build_class_prototypes`,
+  `build_prototype_graph`, `image_to_patch_graph`.
+- Workflow & comparison: `workflow`, `run_workflow`, `list_workflow_tasks`,
+  `compare`.
+- Public API registry: `public_api`, `api_status`, `list_aliases`.
+- Dashboard audit: `audit_run_dir`, `dashboard_audit`.
+
+### UX one-call helpers *(v1.4.1+)*
+Beta wrappers over stable underlying APIs. They reduce boilerplate but do
+not hide mathematical semantics; aliases are documented in
+`tgraphx.ux.list_aliases(...)`.
+
+- Tensor node classification: `classify_nodes` (aliases
+  `node_classification`, `fit_node_classifier`, `train_node_classifier`).
+- KG completion: `kg_completion` (aliases `fit_kg`, `train_kg`).
+- Unified graph construction: `make_graph` (aliases `build_graph`,
+  `tgx.graph`).
+- Diagnostics: `explain_error` / `troubleshoot_error`, `debug_batch`
+  (aliases `batch_summary`, `assert_batch_consistent`),
+  `audit_package_readiness`.
+- Reporting: `dataset_card`, `model_card`, `benchmark_card`,
+  `WorkflowResult`.
+- Generation/optimization/RL convenience wrappers (experimental — surfaces
+  may still evolve):
+  - `generate_graph` (aliases `graph_generator`, `generate`)
+  - `evaluate_generated_graphs` (aliases `graph_generation_report`,
+    `compare_generated_graphs`, `generation_metrics`)
+  - `optimize_graph` (aliases `evolve_graph`, `graph_evolution`,
+    `run_evolution`)
+  - `train_graph_rl` (aliases `graph_rl`, `run_rl`)
+  - `audit_generation_run`, `audit_evolution_run`, `audit_rl_run`.
+
 ---
 
 ## Experimental (v1.0.1+)

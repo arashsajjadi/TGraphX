@@ -5,6 +5,143 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.4.2] — 2026-05-23
+
+Audit-fix and release-hardening patch. **No breaking API changes.** All
+v1.3.x, v1.4.0, and v1.4.1 syntax is preserved.
+
+### Fixed
+
+- `tgx.make_graph(networkx_graph=G, x=..., labels=..., ...)` no longer
+  silently discards external node features, labels, or graph kwargs.
+  Topology now comes from the NetworkX graph, and supplied tensor fields
+  are attached and re-validated; mismatched row counts raise a clear
+  `ValueError` instead of producing a zero-filled placeholder graph.
+  *(Codex/Composer TGX-AUDIT-002 / 001.)*
+- `tgraphx.ux.serialization` now round-trips `Graph.edge_labels` and
+  `Graph.graph_features` through `.tgx` bundles; older bundles without
+  these keys still load unchanged. *(Codex TGX-AUDIT-009.)*
+- `tgraphx.training._unpack_batch` raises a descriptive `ValueError` when
+  `GraphBatch.edge_index` is `None`, instead of crashing on attribute
+  access. *(Codex TGX-AUDIT-010.)*
+- `Graph.num_classes` returns `0` for an empty integer label tensor
+  instead of raising a `RuntimeError` from `Tensor.max()` on an empty
+  tensor. *(Codex TGX-AUDIT-011.)*
+- `Graph.from_adjacency` now rejects non-square SciPy-sparse adjacency
+  with the same clear `ValueError` already used for dense adjacency.
+  *(Codex TGX-AUDIT-012.)*
+- `Graph.to(device)` also moves boolean/int mask tensors stored under
+  `metadata['masks']` (used by `graph.train_mask` / `val_mask` /
+  `test_mask`), so their device stays in sync with `node_features`.
+  *(Codex TGX-AUDIT-013.)*
+- `tgx.train_graph_rl(max_steps=...)` now actually forwards `max_steps`
+  into the environment through a fresh `GraphEnvConfig`, and records the
+  value on the returned RLResult's `.config` dict so callers can verify it
+  took effect. *(Codex TGX-AUDIT-016.)*
+- `tgraphx.audit_package_readiness()` reports `torch`, `torchvision`, and
+  `pyyaml` under `required_dependencies` and limits `optional_dependencies`
+  to genuinely optional packages, matching `pyproject.toml`.
+  *(Composer TGX-AUDIT-015.)*
+- `tgx.explain_error(...)` no longer suggests a non-existent
+  `pip install tgraphx[vision]` extra; torchvision is a base dependency,
+  so the message points users to plain `pip install torchvision` and to
+  real extras (`tgraphx[pyg]`, ...) for genuinely optional pieces.
+  *(Codex TGX-AUDIT-005.)*
+
+### Added — public-API discoverability
+
+- Top-level `tgraphx.__all__` now exposes the v1.4.1 helper aliases
+  `generate`, `graph_generation_report`, `compare_generated_graphs`,
+  `generation_metrics`, `graph_evolution`, `run_evolution`, `run_rl`, plus
+  the importable top-level KG / generation / evolution / RL entry points
+  `KnowledgeGraph`, `KGTrainer`, `KGTrainingConfig`,
+  `run_graph_generation`, `run_evolutionary_optimization`, `run_graph_rl`.
+  *(Codex TGX-AUDIT-003 / Composer TGX-AUDIT-004 / 010.)*
+- `tgraphx.ux.public_api`'s `_STABILITY` registry and `_ALIASES` table now
+  cover every v1.4.1 helper and its documented aliases, so
+  `tgx.api_status("classify_nodes")`, `tgx.api_status("make_graph")`,
+  `tgx.list_aliases("make_graph")`, etc., all resolve cleanly.
+  *(Codex TGX-AUDIT-001 / Composer TGX-AUDIT-005.)*
+
+### Packaging / Release metadata
+
+- Added official-website URL: `https://tgraphx.com` is now the package
+  `Homepage` in `pyproject.toml` `[project.urls]`, with the GitHub
+  repository tracked under `Source` / `Repository`, and the website is
+  cross-linked from the top of `README.md`.
+- Made `torchvision` import lazy: `import tgraphx` no longer eagerly loads
+  `torchvision.models`. The pretrained ResNet path in `PreEncoder` now
+  imports `torchvision.models` only when the pretrained branch is taken.
+  *(Composer TGX-AUDIT-003.)*
+- `Graph.load` / `tgraphx.ux.serialization.load_tgraphx` accepts an opt-in
+  `trust_source=False` kwarg that refuses pickle-backed loads, and the
+  docstring now explicitly documents that `.tgx` bundles can execute
+  pickle code (they include user metadata, so `weights_only=True` is not
+  applicable). Existing bundles continue to load with the default
+  `trust_source=True`. *(Codex TGX-AUDIT-014.)*
+
+### Documentation
+
+- README: replaced the misleading "no mandatory external dependencies"
+  wording with an accurate description ("base package does not require
+  PyG, DGL, OGB, PyKEEN, Stable-Baselines3, or RLlib; it depends only on
+  the PyTorch stack and the lightweight runtime utilities declared in
+  `pyproject.toml`"), and added the official website link near the top
+  and in Quick links. README intentionally remains a *current-state*
+  document, not a release-by-release changelog. *(Codex TGX-AUDIT-006 /
+  Composer TGX-AUDIT-011.)*
+- `docs/user_experience_api_contract.md`: corrected the `graph_features`
+  / `graph_label` contract — `graph_label` is the graph-level target,
+  `graph_features` is a *distinct* graph-level input feature tensor; the
+  two are not aliases. *(Codex TGX-AUDIT-004.)*
+- `docs/api_stability.md`: added a v1.4.0+ UX section and a v1.4.1+
+  one-call helper section so the stability document is in sync with what
+  is actually exported. *(Composer TGX-AUDIT-006.)*
+- `docs/hetero_gnns.md`: replaced "parity with reference implementations"
+  with a conservative description ("validated on small regression
+  fixtures … no claim of numerical or training-throughput parity"). The
+  module remains marked Experimental. *(Composer TGX-AUDIT-012.)*
+- `CONTRIBUTING.md`: bumped the documented minimum Python version from
+  3.9+ to 3.10+ to match `pyproject.toml`, and replaced the stale "do not
+  claim `train_epoch`/`evaluate`/`fit`/`TensorBoardLogger`/`MLflowLogger`
+  exist" rule with accurate guidance ("do not claim public APIs exist
+  unless they are exported and tested; these APIs are currently exported
+  and tested"). *(Codex TGX-AUDIT-015 / Composer TGX-AUDIT-002 / 008.)*
+- `environment.yml`: bumped `python=3.9` → `python=3.10`. *(Composer
+  TGX-AUDIT-008.)*
+- `tgraphx/datasets/__init__.py` and `tgraphx/datasets/torchvision_wrappers.py`:
+  install-hint text no longer references the non-existent
+  `tgraphx[vision]` extra. *(Codex TGX-AUDIT-005.)*
+
+### Tests
+
+- New `tests/test_audit_fixes_v142.py` adds 17 targeted regression tests:
+  `make_graph` × NetworkX feature/label preservation and shape-mismatch
+  error; `api_status` / `list_aliases` for the v1.4.1 helpers; `__all__`
+  top-level aliases; `.tgx` round-trip for `edge_labels` and
+  `graph_features` plus backward-compat load of old payloads;
+  `_unpack_batch` clear-error path; `num_classes` on empty labels;
+  `from_adjacency` non-square sparse rejection; `Graph.to` mask move;
+  `train_graph_rl` `max_steps` recorded on result; lazy-torchvision
+  import; `python -m tgraphx list-methods` CLI smoke; readiness
+  dependency classification; and explain_error not suggesting fake
+  extras.
+- `tests/test_advanced_notebook_workflows_v138.py::test_pyg_singleton_graph_label_normalized`
+  no longer attempts a MUTAG download in CI: it skips automatically when
+  the raw files are not already cached, and only opts in to a real
+  download when `TGRAPHX_TESTS_ALLOW_NETWORK=1`. *(Codex TGX-AUDIT-008.)*
+
+### Notes
+
+- No breaking API changes; every v1.3.x / v1.4.0 / v1.4.1 public name and
+  alias still resolves.
+- No SOTA, parity, AMP, or universal `torch.compile` claims have been
+  added.
+- Verification commands and exact pass/skip counts are reported in the
+  release report attached to the GitHub tag.
+
+---
+
 ## [1.4.1] — 2026-05-11
 
 Final usability hardening release. All v1.3.x and v1.4.0 syntax preserved.
