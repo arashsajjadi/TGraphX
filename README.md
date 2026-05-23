@@ -25,11 +25,13 @@
 
 **Preprint:** [TGraphX: Tensor-Aware Graph Neural Network for Multi-Dimensional Feature Learning](https://arxiv.org/abs/2504.03953) · *Sajjadi & Eramian, arXiv 2025*
 
-TGraphX is a **tensor-native graph intelligence framework** for research workflows that combine graph learning, graph mining, knowledge graphs, graph generation, evolutionary optimization, graph reinforcement learning, reproducibility, and dashboard-ready reporting — all in PyTorch, with no mandatory external dependencies.
+**Official website:** [https://tgraphx.com](https://tgraphx.com)
+
+TGraphX is a **tensor-native graph intelligence framework** for research workflows that combine graph learning, graph mining, knowledge graphs, graph generation, evolutionary optimization, graph reinforcement learning, reproducibility, and dashboard-ready reporting — all in PyTorch. The base package does not require PyG, DGL, OGB, PyKEEN, Stable-Baselines3, or RLlib; it depends only on the PyTorch stack and the lightweight runtime utilities declared in `pyproject.toml` (`torch`, `torchvision`, `pyyaml`).
 
 It preserves **multi-dimensional node/edge features** (`[C, H, W]`, `[C, D, H, W]`, `[D]`) through every message-passing step, supports scalable mini-batch samplers (GraphSAINT, Cluster-GCN), multimodal tensor-aware knowledge graphs, 13 graph RL algorithms, classical and neural graph generation, multi-objective evolutionary optimization, a local dashboard with offline HTML export, sklearn-like estimators, and a full benchmark + tutorial suite.
 
-**Quick links:** [Graph algorithms](docs/graph_algorithms.md) · [Graph mining](docs/graph_mining.md) · [Tensor GNNs](docs/vector_gnn.md) · [Sampling](docs/graphsaint.md) · [FeatureStore](docs/feature_store.md) · [KG](docs/knowledge_graphs.md) · [Dashboard](docs/dashboard.md) · [Easy Mode](docs/easy_mode.md) · [LLM guide](docs/llm_usage_guide.md)
+**Quick links:** [Official website](https://tgraphx.com) · [Graph algorithms](docs/graph_algorithms.md) · [Graph mining](docs/graph_mining.md) · [Tensor GNNs](docs/vector_gnn.md) · [Sampling](docs/graphsaint.md) · [FeatureStore](docs/feature_store.md) · [KG](docs/knowledge_graphs.md) · [Dashboard](docs/dashboard.md) · [Easy Mode](docs/easy_mode.md) · [LLM guide](docs/llm_usage_guide.md)
 
 ---
 

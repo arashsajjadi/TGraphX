@@ -43,5 +43,7 @@ projection are learned end-to-end.
 
 ## Stability
 
-Marked **Experimental** until the v0.5.x benchmark suite confirms
-parity with reference implementations.
+Marked **Experimental**. Behaviour is validated on small regression
+fixtures and unit tests for shape/gradient flow; no claim of numerical
+or training-throughput parity with reference HAN/HGT implementations
+is made until the v0.5.x benchmark suite is in place.

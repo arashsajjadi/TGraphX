@@ -347,10 +347,31 @@ def make_graph(
         )
 
     if networkx_graph is not None:
-        return Graph.from_networkx(
-            networkx_graph,
-            **({} if feat is None else {}),
-        )
+        # Build topology from the NetworkX object, then attach any user-supplied
+        # tensor fields (x, labels, edge_attr, masks, …).  Previously these
+        # were silently discarded — Codex/Composer TGX-AUDIT-002.
+        g = Graph.from_networkx(networkx_graph)
+        if feat is not None:
+            if feat.size(0) != g.num_nodes:
+                raise ValueError(
+                    f"make_graph: x has {feat.size(0)} rows but NetworkX graph has "
+                    f"{g.num_nodes} nodes."
+                )
+            g.node_features = feat
+        if y_val is not None:
+            if y_val.size(0) != g.num_nodes:
+                raise ValueError(
+                    f"make_graph: labels have {y_val.size(0)} entries but "
+                    f"NetworkX graph has {g.num_nodes} nodes."
+                )
+            g.node_labels = y_val
+        for k, v in graph_kwargs.items():
+            # Attach supplied graph kwargs (edge_attr, edge_weight,
+            # edge_labels, graph_label, graph_features, metadata, ...).
+            setattr(g, k, v)
+        # Re-validate so any inconsistency surfaces with a clear error.
+        g.validate()
+        return g
 
     if adjacency is not None:
         return Graph.from_adjacency(adjacency, node_features=feat,
@@ -409,8 +430,8 @@ _ERROR_MAP = {
     ),
     "missing optional": (
         "A required optional package is missing. Install it with:\n"
-        "  pip install tgraphx[vision]   # for torchvision\n"
-        "  pip install torch-geometric   # for PyG\n"
+        "  pip install torchvision       # already a base dependency; reinstall if missing\n"
+        "  pip install torch-geometric   # for PyG (tgraphx[pyg])\n"
         "  pip install networkx          # for NetworkX\n"
         "  pip install scipy             # for sparse adjacency"
     ),
@@ -618,9 +639,19 @@ def audit_package_readiness() -> Dict[str, Any]:
         "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
     }
 
-    # Optional deps
+    # Dependencies — torchvision and pyyaml are mandatory per pyproject.toml.
+    required = {}
+    for pkg in ("torch", "torchvision", "yaml"):
+        try:
+            m = __import__(pkg)
+            required[pkg] = getattr(m, "__version__", "installed")
+        except ImportError:
+            required[pkg] = "not installed"
+    report["required_dependencies"] = required
+
     optional = {}
-    for pkg in ("torchvision", "torch_geometric", "dgl", "scipy", "networkx", "pandas"):
+    for pkg in ("torch_geometric", "dgl", "scipy", "networkx", "pandas",
+                "tensorboard", "mlflow", "PIL", "ogb"):
         try:
             m = __import__(pkg)
             optional[pkg] = getattr(m, "__version__", "installed")

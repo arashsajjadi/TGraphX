@@ -382,6 +382,8 @@ class Graph:
             return None
         if self.node_labels.dim() != 1:
             return None
+        if self.node_labels.numel() == 0:
+            return 0
         return int(self.node_labels.max().item()) + 1
 
     # ----- NetworkX-style read-only methods (v1.4.0+) -------------------- #
@@ -478,7 +480,13 @@ class Graph:
         device: Optional[Union[str, torch.device]] = None,
         dtype: Optional[torch.dtype] = None,
     ) -> "Graph":
-        """Move all tensor fields. ``dtype`` only applies to floating tensors."""
+        """Move all tensor fields. ``dtype`` only applies to floating tensors.
+
+        Any boolean/int tensors stored under ``metadata['masks']`` (e.g.
+        ``train_mask``/``val_mask``/``test_mask``) are moved alongside the
+        primary fields so ``graph.train_mask.device`` stays in sync with
+        ``graph.node_features.device``.
+        """
         if isinstance(device, str):
             device = torch.device(device)
         self.node_features = _move(self.node_features, device=device, dtype=dtype)
@@ -489,6 +497,13 @@ class Graph:
         self.edge_labels = _move(self.edge_labels, device=device, dtype=dtype, allow_dtype=False)
         self.graph_label = _move(self.graph_label, device=device, dtype=dtype, allow_dtype=False)
         self.graph_features = _move(self.graph_features, device=device, dtype=dtype)
+        # Move tensors stored in metadata (e.g. masks under metadata['masks']).
+        if isinstance(self.metadata, dict):
+            masks = self.metadata.get("masks")
+            if isinstance(masks, dict):
+                for k, v in list(masks.items()):
+                    if isinstance(v, torch.Tensor):
+                        masks[k] = _move(v, device=device, dtype=dtype, allow_dtype=False)
         return self
 
     def cpu(self) -> "Graph":
@@ -729,6 +744,10 @@ class Graph:
                     f"got {type(adj).__name__}"
                 )
             coo = adj.tocoo()
+            if coo.shape[0] != coo.shape[1]:
+                raise ValueError(
+                    f"Sparse adjacency must be square [N, N]; got {coo.shape}"
+                )
             N = coo.shape[0]
             ei = torch.tensor([coo.row.tolist(), coo.col.tolist()], dtype=torch.long)
         if node_features is None:

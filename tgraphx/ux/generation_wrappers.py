@@ -458,6 +458,7 @@ def train_graph_rl(
         :class:`tgraphx.rl.RLResult`.
     """
     from tgraphx.rl import run_graph_rl
+    from tgraphx.rl.environments.base import GraphEnvConfig
 
     if fast_mode:
         episodes = min(episodes, 5)
@@ -473,12 +474,18 @@ def train_graph_rl(
     from .workflow import _resolve_device
     dev = _resolve_device(device)
 
-    # Only pass kwargs that run_graph_rl / make_graph_env know about
+    # Forward max_steps through a fresh GraphEnvConfig so it actually shapes
+    # the episode horizon (previously the wrapper dropped it).  Users may
+    # still supply their own config= via env_kwargs and it will be honoured.
     safe_kwargs = {k: v for k, v in env_kwargs.items()
                    if k not in ("episodes", "algorithm", "seed", "device",
                                 "fast_mode", "out_dir", "max_steps",
                                 "edge_density", "num_nodes")}
-    # max_steps → pass as hidden_dim-like param only if run_graph_rl accepts it
+    if isinstance(canonical_env, str) and "config" not in safe_kwargs:
+        safe_kwargs["config"] = GraphEnvConfig(
+            seed=seed, device=dev, max_steps=int(max_steps),
+        )
+
     try:
         result = run_graph_rl(
             env=canonical_env,
@@ -499,6 +506,13 @@ def train_graph_rl(
             device=dev,
             dashboard_dir=str(out_dir) if out_dir else None,
         )
+
+    # Record the effective max_steps so callers can verify it took effect.
+    try:
+        if hasattr(result, "config") and isinstance(result.config, dict):
+            result.config.setdefault("max_steps", int(max_steps))
+    except Exception:  # pragma: no cover — diagnostic only
+        pass
 
     if out_dir is not None:
         d = Path(out_dir); d.mkdir(parents=True, exist_ok=True)

@@ -44,8 +44,8 @@ __all__ = [
 
 
 _TORCHVISION_HINT = (
-    "Torchvision-backed datasets require torchvision. "
-    "Install with `pip install torchvision` (or `pip install tgraphx[vision]`)."
+    "Torchvision-backed datasets require torchvision (a base TGraphX dependency). "
+    "Install or reinstall with `pip install torchvision`."
 )
 
 
