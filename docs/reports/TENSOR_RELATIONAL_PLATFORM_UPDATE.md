@@ -229,10 +229,15 @@ artifacts.
 
 ## 9. Commits and release status
 
-- explicit dropout configuration and migration: `6d67adb`
-- SetTransformer + topology vocabulary + unified factory: `065b6ff`
-- tests, docs, examples: the commit introducing this report
-- version/changelog/release metadata: the commit carrying the `v1.5.0` tag
+- explicit dropout configuration and migration: `6ac6cff`
+- SetTransformer + topology vocabulary + unified factory: `26a8a14`
+- tests, docs, examples: `84c02bc` (the commit introducing this report)
+- version/changelog/release metadata: `b909ae2`
+- release merge (PR #2) and `v1.5.0` tag target: `fa7a9ff`
+
+(The same four logical commits exist in the maintainer's local working
+repository as `6d67adb`, `065b6ff`, `79a1113`, `8150ad4`; the public
+repository received them as the cherry-picks listed above.)
 
 Release: version 1.5.0 (semantic-version MINOR: backward-compatible
 family addition + loud configuration-semantics fix), tag `v1.5.0`,
