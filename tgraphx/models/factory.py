@@ -30,7 +30,7 @@ loaded with ``safe_load`` only.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional, Sequence, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -38,6 +38,8 @@ import torch.nn.functional as F
 
 from ..layers.factory import make_layer
 from .edge_predictor import EdgePredictor
+from .set_transformer import SetTransformerModel
+from .topology import topology_source_of
 
 try:
     import yaml as _yaml
@@ -51,6 +53,16 @@ _SUPPORTED_TASKS = (
     "graph_regression",
     "edge_prediction",
 )
+
+# Families dispatched at the model level (not per-layer via make_layer).
+_MODEL_LEVEL_FAMILIES = ("set_transformer",)
+
+
+def _tag_model(model: nn.Module, family: str, **layer_kwargs) -> nn.Module:
+    """Record the family and topology source on a factory-built model."""
+    model.model_family = family
+    model.topology_source = topology_source_of(family, **layer_kwargs)
+    return model
 
 
 # --------------------------------------------------------------------------- #
@@ -174,10 +186,10 @@ class _EdgePredictionModel(nn.Module):
 
 def build_model(
     task: str,
-    layer: str,
-    in_shape,
-    hidden_shape,
-    num_layers: int,
+    layer: Optional[str] = None,
+    in_shape=None,
+    hidden_shape=None,
+    num_layers: Optional[int] = None,
     num_classes: Optional[int] = None,
     out_dim: Optional[int] = None,
     **kwargs,
@@ -193,7 +205,16 @@ def build_model(
         task: One of ``"node_classification"``, ``"node_regression"``,
             ``"graph_classification"``, ``"graph_regression"``,
             ``"edge_prediction"``.
-        layer: GNN layer type (see :func:`tgraphx.layers.factory.make_layer`).
+        layer: GNN layer type (see :func:`tgraphx.layers.factory.make_layer`)
+            or a model-level family name (``"set_transformer"``).
+            ``family=`` is accepted as an alias for this argument.
+            Families with topology source ``"given"`` (conv/gat/sage/gin/
+            linear/legacy_attention) require ``edge_index`` in forward;
+            ``"set_transformer"`` (topology source ``"learned_implicit"``)
+            ignores a supplied ``edge_index`` and warns once (configurable
+            via ``on_edge_index="warn"|"ignore"|"error"``).  Every returned
+            model carries ``model.model_family`` and
+            ``model.topology_source`` attributes.
         in_shape: Per-node input feature shape (no batch dim).
         hidden_shape: Per-node hidden feature shape.  Must be the same rank
             as ``in_shape``.  For GAT with ``concat=True``, ensure
@@ -217,7 +238,23 @@ def build_model(
             ``num_classes`` / ``out_dim`` for the chosen task.
         NotImplementedError: ``link_prediction`` — use ``edge_prediction``.
     """
+    family = kwargs.pop("family", None)
+    if family is not None:
+        if layer is not None and str(layer).lower().strip() != str(family).lower().strip():
+            raise ValueError(
+                f"build_model received both layer={layer!r} and "
+                f"family={family!r}; pass only one (they are aliases)."
+            )
+        layer = family
+    if layer is None:
+        raise ValueError("build_model requires layer= (or its alias family=).")
+    if in_shape is None or hidden_shape is None or num_layers is None:
+        raise ValueError(
+            "build_model requires in_shape, hidden_shape, and num_layers."
+        )
+
     task = task.lower().strip()
+    layer = str(layer).lower().strip()
     in_shape = tuple(in_shape)
     hidden_shape = tuple(hidden_shape)
 
@@ -247,6 +284,48 @@ def build_model(
     if task in ("node_regression", "graph_regression") and out_dim is None:
         raise ValueError(f"out_dim is required for task={task!r}.")
 
+    # ── Model-level families (no per-layer make_layer stacking) ────────── #
+    if layer == "set_transformer":
+        if task == "edge_prediction":
+            raise ValueError(
+                "layer='set_transformer' does not support task="
+                "'edge_prediction': the family does not consume edge_index. "
+                "Use a 'given'-topology layer (conv/gat/sage/gin/linear)."
+            )
+        if len(hidden_shape) != 1:
+            raise ValueError(
+                "layer='set_transformer' expects hidden_shape=(embed_dim,) — "
+                f"a 1-element tuple; got {hidden_shape}."
+            )
+        heads = kwargs.pop("heads", None)
+        num_heads = kwargs.pop("num_heads", None)
+        if heads is not None and num_heads is not None and heads != num_heads:
+            raise ValueError(
+                f"Pass only one of heads={heads!r} / num_heads={num_heads!r}."
+            )
+        resolved_heads = heads if heads is not None else (
+            num_heads if num_heads is not None else 4
+        )
+        model = SetTransformerModel(
+            task=task,
+            in_shape=in_shape,
+            embed_dim=hidden_shape[0],
+            num_layers=num_layers,
+            num_heads=int(resolved_heads),
+            ffn_dim=kwargs.pop("ffn_dim", None),
+            dropout=float(kwargs.pop("dropout", 0.0)),
+            attention_dropout=float(kwargs.pop("attention_dropout", 0.0)),
+            num_classes=num_classes,
+            out_dim=out_dim,
+            pooling=str(kwargs.pop("pooling", "attention")),
+            num_seeds=int(kwargs.pop("num_seeds", 1)),
+            layer_norm=bool(kwargs.pop("layer_norm", True)),
+            encoder=kwargs.pop("encoder", None),
+            encoder_config=kwargs.pop("encoder_config", None),
+            on_edge_index=str(kwargs.pop("on_edge_index", "warn")),
+        )
+        return _tag_model(model, "set_transformer")
+
     pooling = str(kwargs.pop("pooling", "mean"))
     ep_hidden = int(kwargs.pop("edge_predictor_hidden", 64))
 
@@ -268,16 +347,24 @@ def build_model(
             hidden_dim=ep_hidden,
             out_dim=ep_out,
         )
-        return _EdgePredictionModel(gnn_layers=gnn_layers, predictor=predictor)
+        return _tag_model(
+            _EdgePredictionModel(gnn_layers=gnn_layers, predictor=predictor),
+            layer,
+            **layer_kwargs,
+        )
 
     # Node / graph classification and regression
     target_dim = num_classes if task in _classification else out_dim
     out_linear = nn.Linear(hidden_dim, target_dim)  # type: ignore[arg-type]
-    return _FactoryGNNModel(
-        gnn_layers=gnn_layers,
-        task=task,
-        out_linear=out_linear,
-        pooling=pooling,
+    return _tag_model(
+        _FactoryGNNModel(
+            gnn_layers=gnn_layers,
+            task=task,
+            out_linear=out_linear,
+            pooling=pooling,
+        ),
+        layer,
+        **layer_kwargs,
     )
 
 
