@@ -84,6 +84,30 @@ def test_import_models_subpackage():
     )
 
 
+def test_import_v150_platform_names_from_top():
+    from tgraphx import (  # noqa: F401
+        AttentionPooling,
+        DropoutDefaultChangeWarning,
+        LEGACY_CNN_DROPOUT_PROB,
+        SetAttentionBlock,
+        SetTransformerModel,
+        TOPOLOGY_SOURCES,
+        TopologyIgnoredWarning,
+        topology_source_of,
+    )
+
+
+def test_import_v150_platform_names_from_models_subpackage():
+    from tgraphx.models import (  # noqa: F401
+        AttentionPooling,
+        SetAttentionBlock,
+        SetTransformerModel,
+        TOPOLOGY_SOURCES,
+        TopologyIgnoredWarning,
+        topology_source_of,
+    )
+
+
 # ------------------------------------------------------------------ #
 # API-02 / UX-01 / UX-08: new top-level re-exports                    #
 # ------------------------------------------------------------------ #

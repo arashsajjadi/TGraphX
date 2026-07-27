@@ -14,19 +14,30 @@ class GraphClassifier(nn.Module):
         aggr (str): Aggregation type ('sum' or 'mean').
         use_edge_features (bool): Whether to include edge features.
         pooling (str): Pooling method for graph-level readout ('mean', 'sum', or 'max').
+        dropout_prob (float | None): Dropout inside each layer's message
+            aggregator.  Defaults to 0.0 since v1.5.0 (TGraphX <= 1.4.2
+            silently used 0.3); omitting it emits
+            ``tgraphx.DropoutDefaultChangeWarning``.
     """
 
     def __init__(self, in_shape, hidden_shape, num_classes, num_layers=2, aggr='sum', use_edge_features=False,
-                 pooling='mean'):
+                 pooling='mean', dropout_prob=None):
         super(GraphClassifier, self).__init__()
+        from .._compat import resolve_dropout_prob
+        dropout_prob = resolve_dropout_prob(
+            dropout_prob, owner="GraphClassifier", legacy_hint="dropout_prob=0.3",
+        )
+        self.dropout_prob = dropout_prob
         layers = []
         # For volumetric data, always use ConvMessagePassing.
         msg_layer = ConvMessagePassing
         # First layer: from input to hidden
-        layers.append(msg_layer(in_shape, hidden_shape, aggr=aggr, use_edge_features=use_edge_features))
+        layers.append(msg_layer(in_shape, hidden_shape, aggr=aggr, use_edge_features=use_edge_features,
+                                dropout_prob=dropout_prob))
         # Additional layers
         for _ in range(num_layers - 1):
-            layers.append(msg_layer(hidden_shape, hidden_shape, aggr=aggr, use_edge_features=use_edge_features))
+            layers.append(msg_layer(hidden_shape, hidden_shape, aggr=aggr, use_edge_features=use_edge_features,
+                                    dropout_prob=dropout_prob))
         self.layers = nn.ModuleList(layers)
         self.pooling = pooling
         # Final classifier expects input features equal to the channel dimension (hidden_shape[0])

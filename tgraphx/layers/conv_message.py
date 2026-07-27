@@ -31,7 +31,18 @@ from .base import TensorMessagePassingLayer
 
 
 class ConvMessagePassing(TensorMessagePassingLayer):
-    """Convolutional message passing over 2-D or 3-D spatial node features."""
+    """Convolutional message passing over 2-D or 3-D spatial node features.
+
+    Regularization is explicit (v1.5.0): the only dropout in this layer
+    lives inside its :class:`DeepCNNAggregator`.  ``dropout_prob`` (or
+    ``aggregator_params["dropout_prob"]``) defaults to ``0.0``; TGraphX
+    <= 1.4.2 silently used ``0.3``.  Constructing without either emits
+    :class:`tgraphx.DropoutDefaultChangeWarning`.  The aggregator's
+    BatchNorm (``aggregator_params["use_batchnorm"]``, default ``True``)
+    is likewise surfaced in ``repr()``; its usefulness depends on graph
+    density (helpful on dense graphs, harmful when many nodes have zero
+    incoming edges).
+    """
 
     def __init__(
         self,
@@ -41,8 +52,28 @@ class ConvMessagePassing(TensorMessagePassingLayer):
         use_edge_features: bool = False,
         aggregator_params: dict | None = None,
         residual: bool = False,
+        dropout_prob: float | None = None,
     ) -> None:
         super().__init__(in_shape, out_shape, aggr, residual=residual)
+        agg_params = dict(aggregator_params) if aggregator_params else {}
+        if "dropout_prob" in agg_params and agg_params["dropout_prob"] is not None:
+            if dropout_prob is not None and float(dropout_prob) != float(
+                agg_params["dropout_prob"]
+            ):
+                raise ValueError(
+                    "ConvMessagePassing: conflicting dropout settings — "
+                    f"dropout_prob={dropout_prob} but "
+                    f"aggregator_params['dropout_prob']={agg_params['dropout_prob']}. "
+                    "Pass only one of them."
+                )
+        else:
+            from .._compat import resolve_dropout_prob
+
+            agg_params["dropout_prob"] = resolve_dropout_prob(
+                dropout_prob,
+                owner="ConvMessagePassing",
+                legacy_hint="dropout_prob=0.3",
+            )
         self.use_edge_features = use_edge_features
         self.node_channels = in_shape[0]
         self.out_channels = out_shape[0]
@@ -72,14 +103,15 @@ class ConvMessagePassing(TensorMessagePassingLayer):
             conv_in_channels = self.node_channels * 2  # src, dest
         self.conv = Conv(conv_in_channels, self.out_channels, kernel_size=1)
 
-        if aggregator_params is None:
-            aggregator_params = {}
         self.aggregator = DeepCNNAggregator(
             in_channels=self.out_channels,
             out_channels=self.out_channels,
             spatial_rank=spatial_rank,
-            **aggregator_params,
+            **agg_params,
         )
+        # The layer's only dropout lives inside the aggregator; mirror the
+        # effective value so it is visible on the layer itself and in repr().
+        self.dropout_prob = self.aggregator.dropout_prob
 
         # Adaptive spatial pool when out_shape spatial dims differ from in_shape.
         in_spatial = tuple(in_shape[1:])

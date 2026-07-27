@@ -10,7 +10,10 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "1.4.2"
+__version__ = "1.5.0"
+
+# ── Compatibility / configuration-transition helpers ─────────────────────────
+from ._compat import DropoutDefaultChangeWarning, LEGACY_CNN_DROPOUT_PROB
 
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
@@ -62,6 +65,17 @@ from .models.edge_predictor import EdgePredictor
 from .models.regressors import NodeRegressor, GraphRegressor
 from .models.graph_classifier import GraphClassifier
 from .models.node_classifier import NodeClassifier
+# v1.5.0 learned-implicit-relations family + topology-source vocabulary.
+from .models.set_transformer import (
+    AttentionPooling,
+    SetAttentionBlock,
+    SetTransformerModel,
+)
+from .models.topology import (
+    TOPOLOGY_SOURCES,
+    TopologyIgnoredWarning,
+    topology_source_of,
+)
 
 # ── Training utilities ────────────────────────────────────────────────────────
 # These only import torch.nn — no heavy optional dependencies.
@@ -259,6 +273,8 @@ __all__ = [
     "__version__",
     "easy",
     "ux",
+    # v1.5.0 configuration-transition helpers
+    "DropoutDefaultChangeWarning", "LEGACY_CNN_DROPOUT_PROB",
     # v1.4.0 UX layer
     "validate_graph", "assert_tensor_native", "check_graph_invariants",
     "describe", "summary",
@@ -339,6 +355,13 @@ __all__ = [
     "GraphRegressor",
     "GraphClassifier",
     "NodeClassifier",
+    # v1.5.0 learned-implicit-relations family + topology vocabulary
+    "SetTransformerModel",
+    "SetAttentionBlock",
+    "AttentionPooling",
+    "TOPOLOGY_SOURCES",
+    "TopologyIgnoredWarning",
+    "topology_source_of",
     # Training utilities
     "set_seed",
     "count_parameters",

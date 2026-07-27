@@ -99,7 +99,9 @@ def classify_nodes(
         class TensorGCN(nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv = ConvMessagePassing(in_shape=in_shape, out_shape=out_shape)
+                self.conv = ConvMessagePassing(
+                    in_shape=in_shape, out_shape=out_shape, dropout_prob=0.0
+                )
                 self.pool = nn.AdaptiveAvgPool2d(1) if feat_rank == 4 else nn.Identity()
                 flat_dim = out_shape[0] if feat_rank == 4 else math.prod(out_shape)
                 self.head = nn.Linear(flat_dim, n_classes)

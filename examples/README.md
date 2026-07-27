@@ -10,6 +10,7 @@ noted. The `examples/run_all_fast_examples.py` script runs them all.
 | `minimal_spatial_message_passing.py` | Spatial GNN forward + backward |
 | `minimal_graph_classifier.py` | Short training loop |
 | `tensor_gat_minimal.py` | Multi-head GAT with attention sums-to-1 check |
+| `set_transformer_demo.py` | SetTransformer: learned implicit relations, ignores edge_index (v1.5.0) |
 | `tensor_graphsage_minimal.py` | GraphSAGE mean/max/edge-feature variants |
 | `custom_message_passing.py` | Subclassing `TensorMessagePassingLayer` |
 | `gat_chunking_demo.py` | Chunked GAT parity check |

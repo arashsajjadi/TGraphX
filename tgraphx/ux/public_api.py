@@ -7,6 +7,16 @@ from typing import Dict, List, Optional
 
 # Maintained by hand; expanded each minor release.
 _STABILITY: Dict[str, str] = {
+    # v1.5.0 configuration-transition helpers
+    "DropoutDefaultChangeWarning": "stable",
+    "LEGACY_CNN_DROPOUT_PROB": "stable",
+    # v1.5.0 learned-implicit-relations family + topology vocabulary
+    "SetTransformerModel": "stable",
+    "SetAttentionBlock": "stable",
+    "AttentionPooling": "stable",
+    "TOPOLOGY_SOURCES": "stable",
+    "TopologyIgnoredWarning": "stable",
+    "topology_source_of": "stable",
     # Stable core
     "Graph": "stable",
     "GraphBatch": "stable",

@@ -226,7 +226,9 @@
     "rl_callbacks": "from tgraphx.rl import Callback, CallbackList, EarlyStoppingCallback, CSVLoggerCallback",
     "mining": "from tgraphx.mining import analyze_graph",
     "reproducibility": "from tgraphx.reproducibility import set_seed",
-    "io": "from tgraphx.io import write_graphml, read_graphml"
+    "io": "from tgraphx.io import write_graphml, read_graphml",
+    "set_transformer": "from tgraphx import SetTransformerModel, build_model, topology_source_of",
+    "explicit_dropout": "from tgraphx import DropoutDefaultChangeWarning, LEGACY_CNN_DROPOUT_PROB"
   },
   "kg_hpo": {
     "function": "tgraphx.kg.run_kg_hpo(kg, model_names, search_space, metric, strategy, max_trials, epochs, seed, device, dashboard_dir)",
