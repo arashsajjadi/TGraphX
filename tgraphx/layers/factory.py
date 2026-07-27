@@ -31,7 +31,9 @@ aggr               str   "sum"/"mean"/"max"  (conv, sage, linear, legacy_attenti
 heads              int   num_heads           (gat)
 concat             bool  concat_heads        (gat, default True)
 residual           bool  skip connection     (all)
-dropout            float dropout rate        (gat → attn_dropout; linear/attention → dropout_prob)
+dropout            float dropout rate        (conv → aggregator dropout_prob;
+                                              gat → attn_dropout;
+                                              linear/attention → dropout_prob)
 use_edge_features  bool  enable edge input   (all)
 edge_dim           int   edge channel count  (gat, sage, gin)
 edge_features_kind str   "spatial"/"vector"  (sage, gin)
@@ -39,10 +41,16 @@ add_self_loops     bool  self-loops in fwd   (gat)
 negative_slope     float leaky-ReLU slope    (gat)
 normalize          bool  L2-normalise output (sage)
 bias               bool  learnable bias      (gat, sage)
-use_batchnorm      bool  BatchNorm after agg (gin, linear)
+use_batchnorm      bool  BatchNorm after agg (conv aggregator, gin, linear)
+aggregator_params  dict  DeepCNNAggregator kwargs (conv)
 eps                float GIN epsilon         (gin)
 train_eps          bool  learn epsilon       (gin)
 hidden_channels    int   GIN MLP hidden dim  (gin; defaults to out_channels)
+
+Since v1.5.0, ``"conv"`` layers built without ``dropout`` (or an explicit
+``aggregator_params["dropout_prob"]``) default to dropout 0.0 and emit
+``tgraphx.DropoutDefaultChangeWarning`` — TGraphX <= 1.4.2 silently used
+0.3 inside the conv aggregator and ignored the ``dropout`` kwarg.
 """
 from __future__ import annotations
 
@@ -102,6 +110,13 @@ def make_layer(
             f"elements; got {rank} in in_shape={in_shape}."
         )
 
+    if name == "set_transformer":
+        raise ValueError(
+            "'set_transformer' is a model-level family, not a per-layer "
+            "operator: use tgraphx.build_model(task=..., "
+            "layer='set_transformer', ...) or SetTransformerModel directly."
+        )
+
     if name not in _SUPPORTED:
         raise ValueError(
             f"Unknown layer name {name!r}. "
@@ -133,12 +148,19 @@ def make_layer(
     out_ch = out_shape[0]
 
     if name == "conv":
+        agg_params = kwargs.get("aggregator_params") or {}
+        agg_params = dict(agg_params)
+        if "use_batchnorm" in kwargs:
+            agg_params.setdefault("use_batchnorm", bool(kwargs["use_batchnorm"]))
+        dropout = kwargs.get("dropout")
         return ConvMessagePassing(
             in_shape=in_shape,
             out_shape=out_shape,
             aggr=kwargs.get("aggr", "sum"),
             use_edge_features=bool(kwargs.get("use_edge_features", False)),
             residual=bool(kwargs.get("residual", False)),
+            aggregator_params=agg_params or None,
+            dropout_prob=float(dropout) if dropout is not None else None,
         )
 
     if name == "gat":

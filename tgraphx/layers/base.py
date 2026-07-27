@@ -45,6 +45,12 @@ class TensorMessagePassingLayer(nn.Module):
                 )
         self.dropout = nn.Dropout(p=dropout_prob) if dropout_prob > 0 else None
 
+    def extra_repr(self) -> str:
+        return (
+            f"in_shape={tuple(self.in_shape)}, out_shape={tuple(self.out_shape)}, "
+            f"aggr={self.aggr!r}, dropout_prob={self.dropout_prob}, "
+            f"residual={self.residual}, use_batchnorm={self.use_batchnorm}"
+        )
 
     def message(self, src, dest, edge_attr):
         r"""Compute message for each edge.

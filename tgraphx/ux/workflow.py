@@ -201,7 +201,9 @@ def _wf_node_classification(
     class TinyGNN(nn.Module):
         def __init__(self):
             super().__init__()
-            self.c = ConvMessagePassing(in_shape=(1, 14, 14), out_shape=(4, 7, 7))
+            self.c = ConvMessagePassing(
+                in_shape=(1, 14, 14), out_shape=(4, 7, 7), dropout_prob=0.0
+            )
             self.head = nn.Linear(4 * 7 * 7, NC)
         def forward(self, x, ei):
             return self.head(F.relu(self.c(x, ei)).flatten(1))

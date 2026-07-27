@@ -7,6 +7,9 @@ from typing import Dict, List, Optional
 
 # Maintained by hand; expanded each minor release.
 _STABILITY: Dict[str, str] = {
+    # v1.5.0 configuration-transition helpers
+    "DropoutDefaultChangeWarning": "stable",
+    "LEGACY_CNN_DROPOUT_PROB": "stable",
     # Stable core
     "Graph": "stable",
     "GraphBatch": "stable",
