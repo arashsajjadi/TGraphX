@@ -43,6 +43,8 @@ sklearn-like estimators, and benchmark tooling — all in one package.
 | Topic | Doc |
 |-------|-----|
 | Spatial tensor GNN layers | [spatial_tensor_gnn.md](spatial_tensor_gnn.md) |
+| Relation regimes / topology sources (platform guide) | [tensor_relational_platform.md](tensor_relational_platform.md) |
+| SetTransformer — learned implicit relations | [set_transformer.md](set_transformer.md) |
 | Vector GNN layers + model zoo | [vector_gnn.md](vector_gnn.md) |
 | 3-D volumetric support | [volumetric_3d.md](volumetric_3d.md) |
 | Heterogeneous graph layers (RGCN / HAN / HGT) | [hetero_gnns.md](hetero_gnns.md) |

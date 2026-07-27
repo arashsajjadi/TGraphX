@@ -31,6 +31,11 @@ Breaking changes require a major version bump (v2.x) or explicit deprecation cyc
 - `LinearMessagePassing`, `TensorMessagePassingLayer`
 - `AttentionMessagePassing` (legacy, preserved for backward compat)
 
+### Learned implicit relations + topology vocabulary (v1.5.0)
+- `SetTransformerModel`, `SetAttentionBlock`, `AttentionPooling`
+- `TOPOLOGY_SOURCES`, `topology_source_of`, `TopologyIgnoredWarning`
+- `DropoutDefaultChangeWarning`, `LEGACY_CNN_DROPOUT_PROB` (configuration-transition helpers)
+
 ### Vector model zoo
 - `GCNConv`, `GATv2Conv`, `APPNP`
 - `global_mean_pool`, `global_sum_pool`, `global_max_pool`
