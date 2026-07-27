@@ -5,6 +5,114 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.5.0] — 2026-07-27
+
+Tensor-relational platform release: a new learned-implicit-relations
+model family (SetTransformer), an explicit topology-source vocabulary,
+and the elimination of hidden dropout defaults. Backward-compatible
+MINOR release; no existing scientific experiments were rerun for it —
+documentation cites the frozen revised PASTIS-R artifacts.
+
+### Added — SetTransformer / learned implicit relations
+
+- `SetTransformerModel` (+ `SetAttentionBlock`, `AttentionPooling`):
+  set attention over tensor-valued nodes — shared node encoder (MLP for
+  vectors, the package `CNNEncoder` for `[C, H, W]`, a Conv3d encoder
+  for `[C, D, H, W]`, or a custom module), pre-LN multi-head
+  self-attention blocks with key-padding masks (permutation-
+  equivariant), and a permutation-invariant readout (PMA `"attention"`
+  pooling with learned seeds, or `"mean"`/`"sum"`/`"max"`).  Works with
+  the flat `GraphBatch` convention (dense tokens + masks are derived
+  internally), `fit`/`evaluate`, checkpoints, and the experiment runner.
+  Deterministic `config()` / `from_config()` round trip.  CPU/CUDA.
+  No new dependencies (PyTorch primitives only).
+- `build_model` accepts `layer="set_transformer"` and a new `family=`
+  alias for `layer=`; `hidden_shape=(embed_dim,)` sets the token width.
+  `make_layer("set_transformer")` raises with a pointer to
+  `build_model` (it is a model-level family, not a per-layer operator).
+- Topology-source vocabulary: `TOPOLOGY_SOURCES = ("none", "fixed",
+  "given", "learned_implicit", "learned_explicit", "hybrid")`,
+  `topology_source_of(family)`, and `model.model_family` /
+  `model.topology_source` attributes on every `build_model` output.
+- Explicit ignored-topology contract: `SetTransformerModel` never
+  consumes `edge_index`; by default it emits `TopologyIgnoredWarning`
+  once per instance when one is supplied
+  (`on_edge_index="warn"|"ignore"|"error"`).
+
+### Changed — no more hidden dropout (migration: docs/migration_v1_4_to_v1_5.md)
+
+- `CNNEncoder` and `DeepCNNAggregator` no longer default to a silent
+  `dropout_prob=0.3`.  The documented default is now **0.0**; omitting
+  the value emits `DropoutDefaultChangeWarning` (a `UserWarning`
+  subclass) naming the construction site.  Passing any explicit value —
+  including `0.0` — silences it.  Controlled PASTIS-R re-runs measured
+  the hidden 0.3 at ≈ −0.04 to −0.06 validation macro-F1.
+- `ConvMessagePassing` gained an explicit `dropout_prob` parameter
+  (merged into `aggregator_params`; conflicting values raise
+  `ValueError`); `GraphClassifier` gained `dropout_prob`;
+  `CNN_GNN_Model` resolves a missing `cnn_params['dropout_prob']`
+  loudly and no longer mutates the caller's `cnn_params` dict.
+- **Bug fix:** `make_layer("conv", ..., dropout=X)` and
+  `build_model(layer="conv", dropout=X)` previously **ignored** `X`
+  (models silently carried `Dropout2d(p=0.3)` regardless of config).
+  `dropout`, `use_batchnorm`, and `aggregator_params` are now forwarded
+  to the conv aggregator.
+- The effective dropout value is visible everywhere: `repr()`
+  (`extra_repr` on `CNNEncoder`, `DeepCNNAggregator`,
+  `TensorMessagePassingLayer` and subclasses), `.dropout_prob`
+  attributes, and `.config()` dicts on `CNNEncoder` /
+  `DeepCNNAggregator` / `SetTransformerModel`.
+- Legacy behaviour is reconstructible intentionally (no warning):
+  `CNNEncoder.legacy(...)`, `DeepCNNAggregator.legacy(...)`,
+  `LEGACY_CNN_DROPOUT_PROB == 0.3`.
+- Internal easy-mode/ux helper models (`tgx.easy` tensor classifiers,
+  workflow demo models) now pass `dropout_prob=0.0` explicitly — in
+  1.4.2 they silently carried the 0.3 aggregator dropout.
+- `use_batchnorm` / `use_residual` defaults are **unchanged** (they
+  affect checkpoint parameter layout) but are now surfaced in `repr()`
+  and `config()`.  Aggregator BatchNorm is documented as
+  graph-density-dependent (helps dense graphs; harmful with many
+  zero-degree nodes), not universally good or bad.
+
+### Compatibility
+
+- Checkpoints: dropout modules hold no parameters, so `state_dict`
+  layouts are identical across the default change; 1.4.2 checkpoints
+  load unchanged, and eval-mode outputs never depended on dropout.
+  Loaded legacy checkpoints are never silently altered.
+- Training-time behaviour of code that *relied on the silent 0.3*
+  changes (to no dropout) — loudly, via the warning.  Use
+  `dropout_prob=0.3` or `.legacy(...)` to reproduce pre-1.5 training
+  behaviour exactly.
+- All v1.3.x/v1.4.x public APIs keep their signatures; new constructor
+  parameters are keyword-optional additions.
+
+### Documentation
+
+- New: `docs/tensor_relational_platform.md` (operating-regime map +
+  comparison table from the frozen revised PASTIS-R artifacts, with
+  provenance and generalization caveats), `docs/set_transformer.md`,
+  `docs/migration_v1_4_to_v1_5.md`,
+  `docs/reports/TENSOR_RELATIONAL_PLATFORM_UPDATE.md` (internal
+  engineering report), `examples/set_transformer_demo.py`.
+- README gained a v1.5.0 platform overview; `docs/factories.md`,
+  `docs/architecture.md`, `docs/api_stability.md`, `docs/index.md`,
+  `docs/api_cheatsheet.json` updated; `CITATION.cff` version metadata
+  fixed (was stale at 0.1.1).
+
+### Testing
+
+- New suites: `tests/test_explicit_dropout_v150.py` (22 tests) and
+  `tests/test_set_transformer_v150.py` (37 tests, incl. permutation
+  invariance/equivariance, padding-mask isolation, CPU/CUDA parity,
+  config/checkpoint round trips, factory/registry integration, and two
+  tiny synthetic sanity checks that are explicitly not benchmark
+  results).
+- Full suite at release: 3412 passed, 23 skipped (CUDA-dependent tests
+  ran locally on GPU; the count includes them).
+
+---
+
 ## [1.4.2] — 2026-05-23
 
 Audit-fix and release-hardening patch. **No breaking API changes.** All

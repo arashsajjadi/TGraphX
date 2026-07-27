@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "1.4.2"
+__version__ = "1.5.0"
 
 # ── Compatibility / configuration-transition helpers ─────────────────────────
 from ._compat import DropoutDefaultChangeWarning, LEGACY_CNN_DROPOUT_PROB
