@@ -53,6 +53,7 @@ FAST_EXAMPLES = [
     ("minimal_spatial_message_passing.py",  "Minimal spatial message passing",       None),
     ("minimal_graph_classifier.py",         "Minimal graph classifier",              None),
     ("tensor_gat_minimal.py",               "Tensor-aware GAT (minimal)",            None),
+    ("set_transformer_demo.py",             "SetTransformer (learned implicit relations)", None),
     ("tensor_graphsage_minimal.py",         "Tensor-aware GraphSAGE (minimal)",      None),
     ("custom_message_passing.py",           "Custom message-passing layer",          None),
     # Spatial / volumetric node features
