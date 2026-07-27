@@ -12,6 +12,9 @@ Common one-liner imports::
 # Keep this in sync with [project].version in pyproject.toml.
 __version__ = "1.4.2"
 
+# ── Compatibility / configuration-transition helpers ─────────────────────────
+from ._compat import DropoutDefaultChangeWarning, LEGACY_CNN_DROPOUT_PROB
+
 # ── Core data structures ──────────────────────────────────────────────────────
 from .core.graph import Graph, GraphBatch
 from .core.dataloader import GraphDataset, GraphDataLoader
@@ -259,6 +262,8 @@ __all__ = [
     "__version__",
     "easy",
     "ux",
+    # v1.5.0 configuration-transition helpers
+    "DropoutDefaultChangeWarning", "LEGACY_CNN_DROPOUT_PROB",
     # v1.4.0 UX layer
     "validate_graph", "assert_tensor_native", "check_graph_invariants",
     "describe", "summary",

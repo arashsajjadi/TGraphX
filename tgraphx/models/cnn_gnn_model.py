@@ -19,6 +19,9 @@ class CNN_GNN_Model(nn.Module):
 
     Args:
         cnn_params (dict): Keyword arguments forwarded to CNNEncoder (excluding pre_encoder).
+            Since v1.5.0 an omitted ``cnn_params['dropout_prob']`` resolves to
+            0.0 and emits ``tgraphx.DropoutDefaultChangeWarning`` (TGraphX <=
+            1.4.2 silently used 0.3 in the CNN encoder); pass it explicitly.
         gnn_in_dim (tuple): Per-node feature shape entering the first GNN layer, e.g. (C, H, W).
         gnn_hidden_dim (tuple): Per-node feature shape for all subsequent GNN layers.
         num_classes (int): Number of output classes.
@@ -35,6 +38,14 @@ class CNN_GNN_Model(nn.Module):
                  gnn_dropout=0.0, residual=False, aggregator_params=None, pre_encoder=None,
                  skip_cnn_to_classifier=False):
         super().__init__()
+        cnn_params = dict(cnn_params)
+        if cnn_params.get('dropout_prob') is None:
+            from .._compat import resolve_dropout_prob
+            cnn_params['dropout_prob'] = resolve_dropout_prob(
+                None,
+                owner="CNN_GNN_Model",
+                legacy_hint="cnn_params={'dropout_prob': 0.3, ...}",
+            )
         cnn_params['pre_encoder'] = pre_encoder
         self.encoder = CNNEncoder(**cnn_params)
         self.skip_cnn_to_classifier = skip_cnn_to_classifier

@@ -39,10 +39,13 @@ def make_tensor_node_classifier(
     class _TensorNodeClassifier(nn.Module):
         def __init__(self):
             super().__init__()
-            self.conv1 = ConvMessagePassing(in_shape, (hidden_channels, *in_shape[1:]))
+            self.conv1 = ConvMessagePassing(
+                in_shape, (hidden_channels, *in_shape[1:]), dropout_prob=0.0
+            )
             self.conv2 = ConvMessagePassing(
                 (hidden_channels, *in_shape[1:]),
                 (hidden_channels, *in_shape[1:]),
+                dropout_prob=0.0,
             )
             spatial_dims = (1,) * (len(in_shape) - 1)
             if len(in_shape) == 3:
