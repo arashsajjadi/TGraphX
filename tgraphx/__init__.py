@@ -65,6 +65,17 @@ from .models.edge_predictor import EdgePredictor
 from .models.regressors import NodeRegressor, GraphRegressor
 from .models.graph_classifier import GraphClassifier
 from .models.node_classifier import NodeClassifier
+# v1.5.0 learned-implicit-relations family + topology-source vocabulary.
+from .models.set_transformer import (
+    AttentionPooling,
+    SetAttentionBlock,
+    SetTransformerModel,
+)
+from .models.topology import (
+    TOPOLOGY_SOURCES,
+    TopologyIgnoredWarning,
+    topology_source_of,
+)
 
 # ── Training utilities ────────────────────────────────────────────────────────
 # These only import torch.nn — no heavy optional dependencies.
@@ -344,6 +355,13 @@ __all__ = [
     "GraphRegressor",
     "GraphClassifier",
     "NodeClassifier",
+    # v1.5.0 learned-implicit-relations family + topology vocabulary
+    "SetTransformerModel",
+    "SetAttentionBlock",
+    "AttentionPooling",
+    "TOPOLOGY_SOURCES",
+    "TopologyIgnoredWarning",
+    "topology_source_of",
     # Training utilities
     "set_seed",
     "count_parameters",
