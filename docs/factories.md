@@ -92,10 +92,13 @@ out = model(x, edge_index, batch=batch)
 For spatial `[N, C, *spatial]` node features, the factory applies global
 spatial average-pooling → `[N, C]` before the linear head and graph readout.
 
-### Model-level families and topology sources (v1.5.0)
+### Model-level families and topology sources (v1.5.x)
 
 `layer=` also accepts model-level family names that are not per-layer
-operators (`family=` is an alias for `layer=`):
+operators (`family=` is an alias for `layer=`).  For the learned-implicit
+set-attention family (canonical class `TGraphXSetAttention`), the names
+`"set_transformer"`, `"set_attention"`, and `"tgraphx_set_attention"`
+are interchangeable aliases:
 
 ```python
 model = build_model(
@@ -112,7 +115,7 @@ model = build_model(
 ```
 
 Every model returned by `build_model` carries two metadata attributes,
-also stored in `SetTransformerModel.config()`:
+also stored in `TGraphXSetAttention.config()`:
 
 - `model.model_family` — the family name (`"conv"`, `"gat"`, ...,
   `"set_transformer"`);
@@ -121,8 +124,8 @@ also stored in `SetTransformerModel.config()`:
   `"learned_explicit"`, `"hybrid"`.
 
 Families with topology source `"given"` (conv/gat/sage/gin/linear/
-legacy_attention) **require** `edge_index`.  `"set_transformer"`
-(topology source `"learned_implicit"`) **ignores** a supplied
+legacy_attention) **require** `edge_index`.  `"set_transformer"` (and
+its aliases; topology source `"learned_implicit"`) **ignores** a supplied
 `edge_index` and warns once (`TopologyIgnoredWarning`); construct with
 `on_edge_index="ignore"` or `"error"` to change that.  See
 [tensor_relational_platform.md](tensor_relational_platform.md) for
