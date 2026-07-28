@@ -55,7 +55,7 @@ tgraphx/
 ├── core/                     # existing — Graph, GraphBatch, hetero, temporal containers
 ├── layers/                   # existing — tensor-aware + vector layers
 ├── models/                   # existing — Classifier/Regressor/EdgePredictor
-│   ├── set_transformer.py    #   v1.5.0 — learned implicit relations (SetTransformerModel)
+│   ├── set_transformer.py    #   v1.5.x — learned implicit relations (TGraphXSetAttention; alias SetTransformerModel)
 │   └── topology.py           #   v1.5.0 — TOPOLOGY_SOURCES vocabulary + tagging
 ├── graph_builders.py         # existing
 │
