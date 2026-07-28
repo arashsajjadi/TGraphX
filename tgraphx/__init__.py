@@ -70,6 +70,8 @@ from .models.set_transformer import (
     AttentionPooling,
     SetAttentionBlock,
     SetTransformerModel,
+    StridedConvEncoder,
+    TGraphXSetAttention,
 )
 from .models.topology import (
     TOPOLOGY_SOURCES,
@@ -356,9 +358,11 @@ __all__ = [
     "GraphClassifier",
     "NodeClassifier",
     # v1.5.0 learned-implicit-relations family + topology vocabulary
+    "TGraphXSetAttention",
     "SetTransformerModel",
     "SetAttentionBlock",
     "AttentionPooling",
+    "StridedConvEncoder",
     "TOPOLOGY_SOURCES",
     "TopologyIgnoredWarning",
     "topology_source_of",

@@ -38,7 +38,7 @@ import torch.nn.functional as F
 
 from ..layers.factory import make_layer
 from .edge_predictor import EdgePredictor
-from .set_transformer import SetTransformerModel
+from .set_transformer import TGraphXSetAttention
 from .topology import topology_source_of
 
 try:
@@ -56,6 +56,15 @@ _SUPPORTED_TASKS = (
 
 # Families dispatched at the model level (not per-layer via make_layer).
 _MODEL_LEVEL_FAMILIES = ("set_transformer",)
+
+# Factory aliases resolving to the same canonical family.  All of these
+# build a TGraphXSetAttention (family "set_transformer") — the alias
+# never changes the architecture.
+_FAMILY_ALIASES = {
+    "tgraphx_set_attention": "set_transformer",
+    "set_attention": "set_transformer",
+    "set_transformer": "set_transformer",
+}
 
 
 def _tag_model(model: nn.Module, family: str, **layer_kwargs) -> nn.Module:
@@ -206,7 +215,9 @@ def build_model(
             ``"graph_classification"``, ``"graph_regression"``,
             ``"edge_prediction"``.
         layer: GNN layer type (see :func:`tgraphx.layers.factory.make_layer`)
-            or a model-level family name (``"set_transformer"``).
+            or a model-level family name (``"set_transformer"``; the
+            aliases ``"tgraphx_set_attention"`` and ``"set_attention"``
+            resolve to the same family).
             ``family=`` is accepted as an alias for this argument.
             Families with topology source ``"given"`` (conv/gat/sage/gin/
             linear/legacy_attention) require ``edge_index`` in forward;
@@ -255,6 +266,7 @@ def build_model(
 
     task = task.lower().strip()
     layer = str(layer).lower().strip()
+    layer = _FAMILY_ALIASES.get(layer, layer)
     in_shape = tuple(in_shape)
     hidden_shape = tuple(hidden_shape)
 
@@ -306,7 +318,9 @@ def build_model(
         resolved_heads = heads if heads is not None else (
             num_heads if num_heads is not None else 4
         )
-        model = SetTransformerModel(
+        pool_attn_dropout = kwargs.pop("pool_attention_dropout", None)
+        head_hidden = kwargs.pop("head_hidden_dim", None)
+        model = TGraphXSetAttention(
             task=task,
             in_shape=in_shape,
             embed_dim=hidden_shape[0],
@@ -320,6 +334,12 @@ def build_model(
             pooling=str(kwargs.pop("pooling", "attention")),
             num_seeds=int(kwargs.pop("num_seeds", 1)),
             layer_norm=bool(kwargs.pop("layer_norm", True)),
+            norm_order=str(kwargs.pop("norm_order", "pre")),
+            activation=str(kwargs.pop("activation", "gelu")),
+            pool_attention_dropout=(
+                None if pool_attn_dropout is None else float(pool_attn_dropout)
+            ),
+            head_hidden_dim=(None if head_hidden is None else int(head_hidden)),
             encoder=kwargs.pop("encoder", None),
             encoder_config=kwargs.pop("encoder_config", None),
             on_edge_index=str(kwargs.pop("on_edge_index", "warn")),

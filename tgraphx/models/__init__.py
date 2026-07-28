@@ -11,6 +11,8 @@ from .set_transformer import (
     AttentionPooling,
     SetAttentionBlock,
     SetTransformerModel,
+    StridedConvEncoder,
+    TGraphXSetAttention,
 )
 from .topology import (
     TOPOLOGY_SOURCES,
@@ -28,9 +30,11 @@ __all__ = [
     "EdgePredictor",
     "NodeRegressor",
     "GraphRegressor",
+    "TGraphXSetAttention",
     "SetTransformerModel",
     "SetAttentionBlock",
     "AttentionPooling",
+    "StridedConvEncoder",
     "TOPOLOGY_SOURCES",
     "TopologyIgnoredWarning",
     "topology_source_of",
