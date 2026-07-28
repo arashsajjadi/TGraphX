@@ -31,8 +31,10 @@ Breaking changes require a major version bump (v2.x) or explicit deprecation cyc
 - `LinearMessagePassing`, `TensorMessagePassingLayer`
 - `AttentionMessagePassing` (legacy, preserved for backward compat)
 
-### Learned implicit relations + topology vocabulary (v1.5.0)
-- `SetTransformerModel`, `SetAttentionBlock`, `AttentionPooling`
+### Learned implicit relations + topology vocabulary (v1.5.x)
+- `TGraphXSetAttention` (canonical name since 1.5.1), `SetTransformerModel`
+  (stable, permanent compatibility alias — same class object)
+- `SetAttentionBlock`, `AttentionPooling`, `StridedConvEncoder`
 - `TOPOLOGY_SOURCES`, `topology_source_of`, `TopologyIgnoredWarning`
 - `DropoutDefaultChangeWarning`, `LEGACY_CNN_DROPOUT_PROB` (configuration-transition helpers)
 

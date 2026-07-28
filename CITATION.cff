@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use TGraphX in your research, please cite the following."
 type: software
 title: "TGraphX: Tensor-Aware Graph Neural Networks for Multi-Dimensional Feature Learning"
-version: "1.5.0"
+version: "1.5.1"
 date-released: "2026-07-27"
 url: "https://github.com/arashsajjadi/TGraphX"
 repository-code: "https://github.com/arashsajjadi/TGraphX"

@@ -10,10 +10,14 @@ _STABILITY: Dict[str, str] = {
     # v1.5.0 configuration-transition helpers
     "DropoutDefaultChangeWarning": "stable",
     "LEGACY_CNN_DROPOUT_PROB": "stable",
-    # v1.5.0 learned-implicit-relations family + topology vocabulary
+    # v1.5.x learned-implicit-relations family + topology vocabulary
+    # (canonical class name since 1.5.1: TGraphXSetAttention;
+    #  SetTransformerModel remains a stable compatibility alias)
+    "TGraphXSetAttention": "stable",
     "SetTransformerModel": "stable",
     "SetAttentionBlock": "stable",
     "AttentionPooling": "stable",
+    "StridedConvEncoder": "stable",
     "TOPOLOGY_SOURCES": "stable",
     "TopologyIgnoredWarning": "stable",
     "topology_source_of": "stable",
@@ -156,6 +160,9 @@ _ALIASES: Dict[str, List[str]] = {
     "save": ["save_tgraphx", "save_graph"],
     "load": ["load_tgraphx", "load_graph"],
     "reproducible": ["seeded"],
+    # v1.5.1 aliases (canonical set-attention name + factory family names)
+    "TGraphXSetAttention": ["SetTransformerModel", "tgraphx_set_attention",
+                            "set_attention", "set_transformer"],
     # v1.4.1 aliases
     "make_graph": ["build_graph", "graph"],
     "classify_nodes": ["node_classification", "fit_node_classifier",

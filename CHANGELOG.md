@@ -5,6 +5,97 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.5.1] — 2026-07-27
+
+Canonical set-attention naming and exact-reference-configuration
+release. Backward-compatible PATCH release: every existing import,
+config, checkpoint, and pickled model continues to work unchanged; all
+defaults are unchanged.
+
+### Added — canonical name and factory aliases
+
+- `TGraphXSetAttention` is the canonical public class of the
+  learned-implicit-relations family (paper/table label
+  `TGraphX-SetAttn`). `SetTransformerModel` remains a permanent,
+  stable compatibility alias for the **same class object** — imports,
+  `isinstance` checks, `from_config`, state dicts, and pickled models
+  are unaffected. The stable machine/family name in configs and the
+  factory remains `"set_transformer"`.
+- `build_model` family aliases: `"tgraphx_set_attention"` and
+  `"set_attention"` resolve to the same family as `"set_transformer"`
+  (identical architecture and metadata; `topology_source_of` accepts
+  all three).
+- Public-API registry: `TGraphXSetAttention` and `StridedConvEncoder`
+  registered stable; alias table maps `SetTransformerModel` and the
+  factory family names to `TGraphXSetAttention`.
+
+### Added — explicit architecture axes (all defaults unchanged)
+
+- `norm_order="pre"|"post"` on `TGraphXSetAttention` and
+  `SetAttentionBlock`: post-LN follows the
+  `torch.nn.TransformerEncoderLayer` (`norm_first=False`) convention.
+- `activation="gelu"|"relu"` for the block FFNs.
+- `pool_attention_dropout=None|float`: decouples the
+  attention-pooling readout's attention-weight dropout from the block
+  `attention_dropout` (default `None` follows it, as before).
+- `head_hidden_dim=None|int`: optional `Linear → ReLU → Linear` head
+  (default unchanged single linear head).
+- `StridedConvEncoder` + `encoder_config={"architecture": "strided",
+  ...}`: strided channel-growing 3×3 spatial encoder (default schedule
+  32→64→128 via `hidden_channels`/`channel_multiplier`, explicit
+  `channel_schedule` supported; BatchNorm, no residual, adaptive
+  average pool, linear projection). `"cnn"` (the package `CNNEncoder`)
+  remains the default architecture.
+- All new fields appear in `config()`/`repr()`; configs serialized by
+  earlier versions load unchanged (new fields take their defaults,
+  reproducing the earlier architecture exactly).
+
+### Added — evaluated reference configuration
+
+- `TGraphXSetAttention.reference_config(in_shape, num_classes, task=...)`:
+  the exact set-attention architecture evaluated in the TGraphX
+  experiment program, as one explicit machine-readable configuration
+  (strided encoder 32→64→128; two post-LN ReLU blocks with dropout
+  0.1; single-seed attention pooling without attention-weight dropout;
+  linear head). Data sizes are required arguments — nothing is a
+  hidden dataset-specific default.
+- `TGraphXSetAttention.map_reference_state_dict(sd)` /
+  `from_reference_state_dict(sd, ...)`: documented, strict key mapping
+  from the torch-primitives reference layout
+  (`encoder.conv/proj`, `self_attn.layers.N`, `pma`, `head.net`) onto
+  this class.
+- Parity proof against the completed revised experiment: identical
+  parameter count (189,650), strict checkpoint load (0 missing /
+  0 unexpected; all 54 tensors bitwise equal), logits within 2.4e-06
+  on a fixed real validation batch, and **identical predictions on the
+  full validation split for all five seeds**, reproducing every
+  recorded per-seed macro-F1 exactly (5-seed mean 0.7023 ± 0.0146).
+  See `docs/reports/SET_ATTENTION_REFERENCE_PARITY.md` and
+  `tools/verify_set_attention_reference_parity*.py`.
+
+### Changed
+
+- `repr()` of set-attention models now shows the canonical class name
+  `TGraphXSetAttention` and the new `norm_order`/`activation` fields.
+- Documentation (README, set_transformer.md,
+  tensor_relational_platform.md, factories.md, api_stability.md,
+  api_cheatsheet.json, examples) uses the canonical name and explains
+  the alias.
+
+### Testing
+
+- New `tests/test_set_attention_v151.py` (36 tests): canonical/alias
+  identity, factory aliases, new architecture axes, post-norm block ≡
+  `torch.nn.TransformerEncoderLayer` numerical parity, self-contained
+  torch-primitives reference replica mapping + fixed-batch parity,
+  v1.5.0-style config compatibility, checkpoint round trip,
+  permutation invariance/equivariance and padding-mask isolation for
+  the post-norm path, CPU/CUDA parity, and (when the external evidence
+  tree is present) strict mapping of the five completed experiment
+  checkpoints. No existing test was modified or weakened.
+
+---
+
 ## [1.5.0] — 2026-07-27
 
 Tensor-relational platform release: a new learned-implicit-relations

@@ -1,7 +1,8 @@
 """set_transformer_demo.py — learned implicit relations over tensor nodes.
 
-SetTransformerModel (v1.5.0) infers pairwise relations from node content
-by global self-attention instead of consuming a supplied edge_index
+TGraphXSetAttention (canonical name; SetTransformerModel is a permanent
+compatibility alias) infers pairwise relations from node content by
+global self-attention instead of consuming a supplied edge_index
 (topology source "learned_implicit").  CPU-safe, runs in seconds.
 """
 import warnings
@@ -11,15 +12,18 @@ import torch.nn as nn
 
 from tgraphx import (
     SetTransformerModel,
+    TGraphXSetAttention,
     TopologyIgnoredWarning,
     build_model,
     topology_source_of,
 )
 
+assert SetTransformerModel is TGraphXSetAttention  # same class object
+
 torch.manual_seed(0)
 
 print("--- Direct construction: tensor-valued nodes, variable set sizes ---")
-model = SetTransformerModel(
+model = TGraphXSetAttention(
     task="graph_classification",
     in_shape=(3, 8, 8),      # each node is a [3, 8, 8] tensor
     embed_dim=32,
@@ -65,12 +69,19 @@ print(f"  topology_source_of('conv')            = "
 
 print("\n--- Config round trip (deterministic reconstruction) ---")
 cfg = fmodel.config()
-clone = SetTransformerModel.from_config(cfg)
+clone = TGraphXSetAttention.from_config(cfg)
 clone.load_state_dict(fmodel.state_dict())
 clone.eval()
 fmodel.eval()
 same = torch.equal(fmodel(xv, None, batch=bv), clone(xv, None, batch=bv))
 print(f"  reconstructed model output identical: {same}")
+
+print("\n--- The evaluated reference configuration (explicit, no magic) ---")
+ref_cfg = TGraphXSetAttention.reference_config(in_shape=(3, 8, 8), num_classes=4)
+ref = TGraphXSetAttention(**ref_cfg).eval()
+print(f"  encoder: {type(ref.encoder).__name__}  "
+      f"norm_order={ref.norm_order!r}  activation={ref.activation!r}")
+print(f"  logits: {tuple(ref(x, None, batch=batch).shape)}")
 
 print("\n--- One optimization step (sanity, not a benchmark) ---")
 opt = torch.optim.Adam(model.parameters(), lr=1e-3)

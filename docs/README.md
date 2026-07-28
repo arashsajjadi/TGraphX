@@ -16,7 +16,7 @@
 | [batching.md](batching.md) | GraphBatch, GraphDataLoader |
 | [factories.md](factories.md) | make_layer, build_model, configs |
 | [tensor_relational_platform.md](tensor_relational_platform.md) | Relation regimes, topology sources, choosing a family |
-| [set_transformer.md](set_transformer.md) | Learned implicit relations (SetTransformerModel) |
+| [set_transformer.md](set_transformer.md) | Learned implicit relations (TGraphXSetAttention / alias SetTransformerModel) |
 | [migration_v1_4_to_v1_5.md](migration_v1_4_to_v1_5.md) | v1.5.0 explicit-dropout migration |
 | [training_utilities.md](training_utilities.md) | set_seed, checkpoints, CSVLogger |
 | [dashboard.md](dashboard.md) | Local monitoring dashboard |

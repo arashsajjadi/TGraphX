@@ -227,7 +227,7 @@
     "mining": "from tgraphx.mining import analyze_graph",
     "reproducibility": "from tgraphx.reproducibility import set_seed",
     "io": "from tgraphx.io import write_graphml, read_graphml",
-    "set_transformer": "from tgraphx import SetTransformerModel, build_model, topology_source_of",
+    "set_transformer": "from tgraphx import TGraphXSetAttention, build_model, topology_source_of  # alias: SetTransformerModel",
     "explicit_dropout": "from tgraphx import DropoutDefaultChangeWarning, LEGACY_CNN_DROPOUT_PROB"
   },
   "kg_hpo": {

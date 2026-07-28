@@ -89,10 +89,10 @@ Advanced users can always drop down to PyTorch: `result.model`, `result.graph`,
 
 ---
 
-## v1.5.0: a tensor-relational platform — multiple relation regimes
+## v1.5.x: a tensor-relational platform — multiple relation regimes
 
 TGraphX models share one abstraction: **tensor-valued entities +
-relation/fusion operator + readout**. v1.5.0 makes the relation regime an
+relation/fusion operator + readout**. v1.5.0 made the relation regime an
 explicit, first-class choice instead of assuming message passing
 everywhere:
 
@@ -100,27 +100,45 @@ everywhere:
 |---|---|---|
 | Fixed ordered fusion (aligned stacks) | `fixed` | `CNNEncoder` + CNN heads |
 | Supplied graph (trusted `edge_index`) | `given` | `ConvMessagePassing`, `TensorGATLayer`, `TensorGraphSAGELayer`, `TensorGINLayer` |
-| Learned implicit relations (no trusted graph) | `learned_implicit` | **`SetTransformerModel` (new)** |
+| Learned implicit relations (no trusted graph) | `learned_implicit` | **`TGraphXSetAttention`** (alias `SetTransformerModel`) |
 | Learned explicit topology | `learned_explicit` | `tgraphx.learned_graph` + any `given` layer |
 | Hybrid given + learned | `hybrid` | `GraphTransformerLayer(edge_bias=True)`; fuller families on the roadmap |
 
+Since 1.5.1 the canonical class name for the learned-implicit family is
+`TGraphXSetAttention` — global content-based relation learning over
+tensor-valued entities without requiring a supplied edge graph.
+`SetTransformerModel` remains a permanent compatibility alias (same
+class object), and the factory accepts `family="set_transformer"`,
+`"set_attention"`, or `"tgraphx_set_attention"` interchangeably.
+
 ```python
-from tgraphx import build_model
+from tgraphx import build_model, TGraphXSetAttention
 
 # No trusted topology? Learn relations from node content by set attention.
 model = build_model(
-    task="graph_classification", family="set_transformer",
+    task="graph_classification", family="tgraphx_set_attention",
     in_shape=(13, 32, 32), hidden_shape=(64,), num_layers=2,
     num_classes=18, heads=4, dropout=0.0,
 )
 model.topology_source   # "learned_implicit" — supplied edge_index is ignored (warns once)
+
+# The exact set-attention architecture evaluated in the TGraphX
+# experiment program, as an explicit configuration:
+cfg = TGraphXSetAttention.reference_config(in_shape=(13, 32, 32), num_classes=18)
+evaluated = TGraphXSetAttention(**cfg)
 ```
 
 In the revised PASTIS-R validation experiments, learned implicit
 relations were the strongest tested relation mode (macro-F1 0.7023 vs
 0.6326 for corrected explicit-topology message passing), while supplied
 topology still carried measurable signal in matched comparisons (real
-vs shuffled topology +0.059). Details, provenance, and honest caveats:
+vs shuffled topology +0.059). Since 1.5.1 the exact evaluated
+set-attention architecture is representable as an explicit
+`TGraphXSetAttention.reference_config(...)` configuration, and the
+completed experiment checkpoints reconstruct it with identical
+predictions (see
+[docs/reports/SET_ATTENTION_REFERENCE_PARITY.md](docs/reports/SET_ATTENTION_REFERENCE_PARITY.md)).
+Details, provenance, and honest caveats:
 [docs/tensor_relational_platform.md](docs/tensor_relational_platform.md).
 
 v1.5.0 also **eliminates hidden dropout**: TGraphX ≤ 1.4.2 silently

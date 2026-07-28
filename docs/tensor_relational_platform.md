@@ -18,7 +18,7 @@ message-passing operator.
 |---|---|---|---|
 | Fixed entity count, identity, order, and alignment (e.g. co-registered modality stacks) | Fixed ordered fusion: stack tensors along channels and use CNN fusion | `fixed` | `CNNEncoder`, plain CNN heads |
 | Variable entities **with a meaningful, trusted supplied graph** | Explicit tensor message passing over `edge_index` | `given` | `ConvMessagePassing`, `TensorGATLayer`, `TensorGraphSAGELayer`, `TensorGINLayer`, `build_model(layer="conv"/"gat"/...)` |
-| Variable entities **without a trusted supplied graph** | Learned implicit relations: global set attention infers interactions from node content | `learned_implicit` | `SetTransformerModel`, `build_model(family="set_transformer")` |
+| Variable entities **without a trusted supplied graph** | Learned implicit relations: global set attention infers interactions from node content | `learned_implicit` | `TGraphXSetAttention` (alias `SetTransformerModel`), `build_model(family="set_transformer"/"set_attention"/"tgraphx_set_attention")` |
 | Relations should be *constructed* explicitly from content, then message-passed | Learned explicit topology | `learned_explicit` | `tgraphx.learned_graph` (`EdgeScorer`, `top_k_edges_from_scores`, `build_knn_graph_from_embeddings`) + any `given`-topology layer |
 | Partially trusted or incomplete supplied graph | Hybrid given + learned relations | `hybrid` | `GraphTransformerLayer(edge_bias=True)` today; fuller hybrid families are on the roadmap |
 
@@ -34,14 +34,18 @@ model.topology_source                  # set on every build_model output
 
 Conceptual distinctions that matter scientifically:
 
-- **SetTransformer is not "non-relational."** Self-attention learns dense,
-  content-dependent pairwise interactions — it is relation-aware but
-  *explicit-input-topology-blind*: it never consumes `edge_index` (and
-  warns when one is supplied).
-- **SetTransformer is not TensorGAT.** TensorGAT attends only over
-  supplied graph edges; SetTransformer attends over all node pairs.
-- **SetTransformer is not learned explicit topology.** It never builds a
-  discrete edge set; `tgraphx.learned_graph` does.
+- **TGraphXSetAttention is not "non-relational."** Self-attention learns
+  dense, content-dependent pairwise interactions — it is relation-aware
+  but *explicit-input-topology-blind*: it never consumes `edge_index`
+  (and warns when one is supplied).
+- **TGraphXSetAttention is not TensorGAT.** TensorGAT attends only over
+  supplied graph edges; TGraphXSetAttention attends over all node pairs.
+- **TGraphXSetAttention is not learned explicit topology.** It never
+  builds a discrete edge set; `tgraphx.learned_graph` does.
+- Canonical class name since 1.5.1: `TGraphXSetAttention`
+  (`SetTransformerModel` is a permanent compatibility alias; the stable
+  machine/family name in configs and the factory remains
+  `"set_transformer"`).
 
 ## What the revised PASTIS-R evidence shows
 
@@ -94,7 +98,13 @@ re-run**, for this release.
   fixed CNN fusion, DeepSets, and flattened GNN baselines on validation.
 - **Operator-level:** these numbers do **not** show that
   `ConvMessagePassing` or `TensorGAT` is the best operator on every
-  task, and a SetTransformer win is not a message-passing win.
+  task, and a set-attention win is not a message-passing win.  The
+  evaluated set-attention instance is exactly representable as
+  `TGraphXSetAttention.reference_config(...)` since 1.5.1, with strict
+  checkpoint reconstruction and identical predictions
+  ([reports/SET_ATTENTION_REFERENCE_PARITY.md](reports/SET_ATTENTION_REFERENCE_PARITY.md));
+  the class *defaults* (pre-LN, GELU, dropout 0.0, `CNNEncoder`) remain
+  a deliberately different, general-purpose construction.
 
 Generalization caveat: on the frozen geographic test tile, all models
 drop sharply (SetTransformer 0.4272, corrected TGraphX 0.3243), and the

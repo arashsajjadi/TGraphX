@@ -10,7 +10,7 @@ Common one-liner imports::
 """
 
 # Keep this in sync with [project].version in pyproject.toml.
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 
 # ── Compatibility / configuration-transition helpers ─────────────────────────
 from ._compat import DropoutDefaultChangeWarning, LEGACY_CNN_DROPOUT_PROB
@@ -70,6 +70,8 @@ from .models.set_transformer import (
     AttentionPooling,
     SetAttentionBlock,
     SetTransformerModel,
+    StridedConvEncoder,
+    TGraphXSetAttention,
 )
 from .models.topology import (
     TOPOLOGY_SOURCES,
@@ -356,9 +358,11 @@ __all__ = [
     "GraphClassifier",
     "NodeClassifier",
     # v1.5.0 learned-implicit-relations family + topology vocabulary
+    "TGraphXSetAttention",
     "SetTransformerModel",
     "SetAttentionBlock",
     "AttentionPooling",
+    "StridedConvEncoder",
     "TOPOLOGY_SOURCES",
     "TopologyIgnoredWarning",
     "topology_source_of",
