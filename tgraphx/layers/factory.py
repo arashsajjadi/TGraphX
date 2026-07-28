@@ -110,11 +110,12 @@ def make_layer(
             f"elements; got {rank} in in_shape={in_shape}."
         )
 
-    if name == "set_transformer":
+    if name in ("set_transformer", "set_attention", "tgraphx_set_attention"):
         raise ValueError(
-            "'set_transformer' is a model-level family, not a per-layer "
+            f"{name!r} is a model-level family, not a per-layer "
             "operator: use tgraphx.build_model(task=..., "
-            "layer='set_transformer', ...) or SetTransformerModel directly."
+            "layer='set_transformer', ...) or TGraphXSetAttention "
+            "(alias SetTransformerModel) directly."
         )
 
     if name not in _SUPPORTED:

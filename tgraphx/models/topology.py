@@ -51,6 +51,11 @@ family                 topology source       supplied ``edge_index``
 ``set_transformer``    ``learned_implicit``  ignored (warn/error per
                                              ``on_edge_index``)
 =====================  ====================  =============================
+
+``"tgraphx_set_attention"`` and ``"set_attention"`` are factory aliases
+for ``"set_transformer"`` — all three resolve to the same
+learned-implicit family (canonical class
+:class:`tgraphx.TGraphXSetAttention`).
 """
 from __future__ import annotations
 
@@ -79,6 +84,10 @@ _FAMILY_TOPOLOGY = {
     "legacy_attention": "given",
     "graph_transformer": "learned_implicit",
     "set_transformer": "learned_implicit",
+    # Factory aliases for the same learned-implicit set-attention family
+    # (canonical class: TGraphXSetAttention).
+    "set_attention": "learned_implicit",
+    "tgraphx_set_attention": "learned_implicit",
 }
 
 
